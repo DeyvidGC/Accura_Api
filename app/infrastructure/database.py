@@ -5,7 +5,7 @@ from __future__ import annotations
 import importlib
 import warnings
 from collections.abc import Generator
-from urllib.parse import quote_plus
+from urllib.parse import quote, quote_plus
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine.url import make_url
@@ -33,11 +33,57 @@ elif settings.database_ssl_mode:
 
 url = make_url(database_url)
 
-if url.username or url.password:
-    url = url.set(
-        username=quote_plus(url.username) if url.username else None,
-        password=quote_plus(url.password) if url.password else None,
-    )
+
+def _encode_if_non_ascii(value: str | None, *, use_plus: bool = False) -> str | None:
+    """Percent-encode connection string parts that contain non-ASCII characters."""
+
+    if value is None or not any(ord(char) > 127 for char in value):
+        return value
+
+    encoder = quote_plus if use_plus else quote
+    return encoder(value, safe="")
+
+
+username = _encode_if_non_ascii(url.username, use_plus=True)
+password = _encode_if_non_ascii(url.password, use_plus=True)
+database = _encode_if_non_ascii(url.database)
+
+query_updates: dict[str, str | list[str] | tuple[str, ...]] | None = None
+if url.query:
+    has_changes = False
+    encoded_items: dict[str, str | list[str] | tuple[str, ...]] = {}
+    for key, value in url.query.items():
+        if isinstance(value, tuple):
+            encoded_value = tuple(
+                _encode_if_non_ascii(item) or item for item in value
+            )
+        elif isinstance(value, list):
+            encoded_value = [
+                _encode_if_non_ascii(item) or item for item in value
+            ]
+        else:
+            encoded_value = _encode_if_non_ascii(value) or value
+        encoded_items[key] = encoded_value
+        if encoded_value != value:
+            has_changes = True
+    if has_changes:
+        query_updates = encoded_items
+
+updated = False
+if username is not url.username:
+    url = url.set(username=username)
+    updated = True
+if password is not url.password:
+    url = url.set(password=password)
+    updated = True
+if database is not url.database:
+    url = url.set(database=database)
+    updated = True
+if query_updates is not None:
+    url = url.set(query=query_updates)
+    updated = True
+
+if updated:
     database_url = url.render_as_string(hide_password=False)
 
 if url.get_backend_name() == "postgresql":
