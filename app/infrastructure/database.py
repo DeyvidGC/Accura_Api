@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib
 import warnings
 from collections.abc import Generator
+from urllib.parse import quote_plus
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine.url import make_url
@@ -31,6 +32,14 @@ elif settings.database_ssl_mode:
     engine_kwargs["connect_args"] = {"sslmode": settings.database_ssl_mode}
 
 url = make_url(database_url)
+
+if url.username or url.password:
+    url = url.set(
+        username=quote_plus(url.username) if url.username else None,
+        password=quote_plus(url.password) if url.password else None,
+    )
+    database_url = url.render_as_string(hide_password=False)
+
 if url.get_backend_name() == "postgresql":
     drivername = url.drivername
     if drivername in {"postgresql", "postgresql+psycopg"}:
