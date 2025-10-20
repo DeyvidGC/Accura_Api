@@ -1,7 +1,13 @@
 """Application configuration settings."""
 
 from functools import lru_cache
-from pydantic import BaseSettings, Field
+
+try:  # pragma: no cover - compatibility shim for pydantic v1/v2
+    from pydantic_settings import BaseSettings  # type: ignore
+except ModuleNotFoundError:  # pragma: no cover - fallback for pydantic v1
+    from pydantic import BaseSettings  # type: ignore
+
+from pydantic import Field
 
 
 class Settings(BaseSettings):
