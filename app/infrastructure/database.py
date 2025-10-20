@@ -5,7 +5,7 @@ from __future__ import annotations
 import importlib
 import warnings
 from collections.abc import Generator
-from urllib.parse import quote, quote_plus
+from urllib.parse import parse_qsl, quote, quote_plus, urlencode, urlsplit, urlunsplit
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine.url import make_url
@@ -20,6 +20,42 @@ class Base(DeclarativeBase):
 
 settings = get_settings()
 database_url = settings.database_url
+
+
+def _normalize_database_url(raw_url: str) -> str:
+    """Convert alternative URL formats (e.g. JDBC) into SQLAlchemy URLs."""
+
+    raw_url = raw_url.strip()
+    if raw_url.lower().startswith("jdbc:"):
+        jdbc_url = raw_url[5:]
+        split_result = urlsplit(jdbc_url)
+        query_items = dict(parse_qsl(split_result.query, keep_blank_values=True))
+        username = query_items.pop("user", query_items.pop("username", None))
+        password = query_items.pop("password", None)
+        netloc = split_result.netloc
+        if username and "@" not in netloc:
+            auth = quote_plus(username)
+            if password is not None:
+                auth = f"{auth}:{quote_plus(password)}"
+            netloc = f"{auth}@{netloc}"
+        query = urlencode(query_items, doseq=True)
+        jdbc_backend = split_result.scheme or "postgresql+psycopg2"
+        if jdbc_backend.startswith("postgresql") and "+" not in jdbc_backend:
+            jdbc_backend = "postgresql+psycopg2"
+        raw_url = urlunsplit(
+            (
+                jdbc_backend,
+                netloc,
+                split_result.path,
+                query,
+                split_result.fragment,
+            )
+        )
+
+    return raw_url
+
+
+database_url = _normalize_database_url(database_url)
 engine_kwargs: dict[str, object] = {
     "pool_pre_ping": True,
     "pool_size": settings.database_pool_size,
