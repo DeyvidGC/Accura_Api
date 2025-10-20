@@ -7,7 +7,12 @@ from passlib.context import CryptContext
 
 from app.config import get_settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(
+    schemes=["bcrypt_sha256"],
+    deprecated="auto",
+    # opcional: rounds por defecto (coste)
+    bcrypt_sha256__default_rounds=12,
+)
 settings = get_settings()
 
 
