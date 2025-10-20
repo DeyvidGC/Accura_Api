@@ -15,7 +15,7 @@ class Settings(BaseSettings):
 
     database_url: str = Field(
         default=(
-            "postgresql+psycopg://postgres:postgres@localhost:5432/accura_api"
+            "postgresql+psycopg2://postgres:postgres@localhost:5432/accura_api"
         ),
         description=(
             "Database connection URL. Defaults to a local PostgreSQL instance"
