@@ -21,7 +21,7 @@ def login_for_access_token(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
 ):
-    """Authenticate the user and return a JWT token."""
+    """Authenticate the user by email and return a JWT token."""
 
     user = authenticate_user(db, form_data.username, form_data.password)
     if not user:

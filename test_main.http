@@ -1,11 +1,25 @@
-# Test your FastAPI endpoints
+# Create a new user
+POST http://127.0.0.1:8000/users
+Content-Type: application/json
 
-GET http://127.0.0.1:8000/
-Accept: application/json
+{
+  "name": "Demo User",
+  "alias": "demo",
+  "email": "demo@example.com",
+  "password": "supersecure",
+  "must_change_password": false
+}
 
 ###
 
-GET http://127.0.0.1:8000/hello/User
-Accept: application/json
+# Request an access token
+POST http://127.0.0.1:8000/auth/token
+Content-Type: application/x-www-form-urlencoded
+
+username=demo@example.com&password=supersecure
 
 ###
+
+# Retrieve the authenticated user (replace {{token}} with the token from the previous request)
+GET http://127.0.0.1:8000/users/me
+Authorization: Bearer {{token}}
