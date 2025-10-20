@@ -8,7 +8,35 @@ class Settings(BaseSettings):
     """Application configuration values loaded from environment variables."""
 
     database_url: str = Field(
-        default="sqlite:///./app.db", description="Database connection URL"
+        default=(
+            "postgresql+psycopg://postgres:postgres@localhost:5432/accura_api"
+        ),
+        description=(
+            "Database connection URL. Defaults to a local PostgreSQL instance"
+            " suitable for development."
+        ),
+    )
+    database_pool_size: int = Field(
+        default=5,
+        ge=1,
+        description="Base size of the SQLAlchemy connection pool",
+    )
+    database_max_overflow: int = Field(
+        default=10,
+        ge=0,
+        description="Maximum number of additional database connections",
+    )
+    database_pool_timeout: int = Field(
+        default=30,
+        ge=1,
+        description="Seconds to wait when retrieving a connection from the pool",
+    )
+    database_ssl_mode: str | None = Field(
+        default=None,
+        description=(
+            "Optional PostgreSQL sslmode flag (e.g. 'require' for Azure managed"
+            " instances)."
+        ),
     )
     secret_key: str = Field(
         default="change_this_secret", description="Secret key for signing JWT tokens"
