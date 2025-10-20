@@ -19,56 +19,34 @@ class UserRepository:
         return [self._to_entity(model) for model in query.all()]
 
     def get(self, user_id: int) -> User | None:
-        model = self.session.query(UserModel).filter(UserModel.id == user_id).first()
-        if not model:
-            return None
-        return self._to_entity(model)
+        model = self._get_model(id=user_id)
+        return self._to_entity(model) if model else None
 
     def get_by_email(self, email: str) -> User | None:
-        model = self.session.query(UserModel).filter(UserModel.email == email).first()
-        if not model:
-            return None
-        return self._to_entity(model)
+        model = self._get_model(email=email)
+        return self._to_entity(model) if model else None
 
     def create(self, user: User) -> User:
-        model = UserModel(
-            name=user.name,
-            alias=user.alias,
-            email=user.email,
-            password=user.password,
-            must_change_password=user.must_change_password,
-            last_login=user.last_login,
-            created_by=user.created_by,
-            updated_by=user.updated_by,
-            is_active=user.is_active,
-        )
+        model = UserModel()
+        self._apply_entity_to_model(model, user, include_creation_fields=True)
         self.session.add(model)
         self.session.commit()
         self.session.refresh(model)
         return self._to_entity(model)
 
     def update(self, user: User) -> User:
-        model = self.session.query(UserModel).filter(UserModel.id == user.id).first()
+        model = self._get_model(id=user.id)
         if not model:
             msg = f"User with id {user.id} not found"
             raise ValueError(msg)
-
-        model.name = user.name
-        model.alias = user.alias
-        model.email = user.email
-        model.password = user.password
-        model.must_change_password = user.must_change_password
-        model.last_login = user.last_login
-        model.updated_by = user.updated_by
-        model.is_active = user.is_active
-
+        self._apply_entity_to_model(model, user, include_creation_fields=False)
         self.session.add(model)
         self.session.commit()
         self.session.refresh(model)
         return self._to_entity(model)
 
     def delete(self, user_id: int) -> None:
-        model = self.session.query(UserModel).filter(UserModel.id == user_id).first()
+        model = self._get_model(id=user_id)
         if not model:
             msg = f"User with id {user_id} not found"
             raise ValueError(msg)
@@ -92,3 +70,22 @@ class UserRepository:
             updated_at=model.updated_at,
             is_active=model.is_active,
         )
+
+    def _get_model(self, **filters) -> UserModel | None:
+        return self.session.query(UserModel).filter_by(**filters).first()
+
+    @staticmethod
+    def _apply_entity_to_model(
+        model: UserModel, user: User, *, include_creation_fields: bool
+    ) -> None:
+        if include_creation_fields:
+            model.created_by = user.created_by
+            model.created_at = user.created_at
+        model.name = user.name
+        model.alias = user.alias
+        model.email = user.email
+        model.password = user.password
+        model.must_change_password = user.must_change_password
+        model.last_login = user.last_login
+        model.updated_by = user.updated_by
+        model.is_active = user.is_active

@@ -11,10 +11,6 @@ def authenticate_user(session: Session, email: str, password: str):
 
     repository = UserRepository(session)
     user = repository.get_by_email(email)
-    if not user:
-        return None
-    if not user.is_active:
-        return None
-    if not verify_password(password, user.password):
+    if not user or not user.is_active or not verify_password(password, user.password):
         return None
     return user
