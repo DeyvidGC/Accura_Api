@@ -81,13 +81,13 @@ url = make_url(database_url)
 def _encode_if_non_ascii(value: str | None, *, use_plus: bool = False) -> str | None:
     """Percent-encode connection string parts that contain non-ASCII characters.
 
-    On Windows environments it is relatively common to copy connection strings
-    from administrative tools that still emit Latin-1 encoded passwords.
-    ``psycopg2`` expects UTF-8 encoded credentials and raises ``UnicodeDecodeError``
-    when it encounters raw bytes such as ``0xF3`` (``ó``) in the DSN.  To make the
-    application resilient we normalise these fragments by decoding any percent
-    encoded data, falling back to Latin-1 when UTF-8 decoding fails, and then
-    percent-encoding the Unicode string using UTF-8.
+    ``psycopg2`` expects the DSN to be UTF-8 encoded, however credentials copied
+    from Windows administration tools are often Latin-1 encoded.  When these
+    bytes are passed directly to the driver the import step fails with a
+    ``UnicodeDecodeError`` (for example when the password contains ``ó`` or ``ñ``).
+    To keep the configuration flexible we decode any percent-encoded fragments,
+    fall back to Latin-1 if UTF-8 decoding fails, and finally ensure the result
+    only contains ASCII characters by percent-encoding the Unicode value.
     """
 
     if value is None or value == "":
@@ -95,31 +95,24 @@ def _encode_if_non_ascii(value: str | None, *, use_plus: bool = False) -> str | 
 
     encoder = quote_plus if use_plus else quote
 
-    try:
-        contains_non_ascii = any(ord(char) > 127 for char in value)
-    except TypeError:  # pragma: no cover - extremely defensive
-        return value
-
-    decoded_value = value
+    # Decode percent-encoded sequences first so we can re-encode them safely.
     if "%" in value:
         try:
             raw_bytes = unquote_to_bytes(value)
         except ValueError:
             raw_bytes = None
-        if raw_bytes:
+        if raw_bytes is not None:
             try:
-                decoded_value = raw_bytes.decode("utf-8")
+                value = raw_bytes.decode("utf-8")
             except UnicodeDecodeError:
-                decoded_value = raw_bytes.decode("latin-1")
-            else:
-                contains_non_ascii = contains_non_ascii or any(
-                    ord(char) > 127 for char in decoded_value
-                )
+                value = raw_bytes.decode("latin-1")
 
-    if not contains_non_ascii and decoded_value is value:
-        return value
+    try:
+        value.encode("ascii")
+    except UnicodeEncodeError:
+        return encoder(value, safe="")
 
-    return encoder(decoded_value, safe="")
+    return value
 
 
 username = _encode_if_non_ascii(url.username, use_plus=True)
