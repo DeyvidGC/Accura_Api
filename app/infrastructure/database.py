@@ -13,9 +13,16 @@ class Base(DeclarativeBase):
 
 
 settings = get_settings()
-engine_kwargs: dict[str, object] = {"pool_pre_ping": True}
+engine_kwargs: dict[str, object] = {
+    "pool_pre_ping": True,
+    "pool_size": settings.database_pool_size,
+    "max_overflow": settings.database_max_overflow,
+    "pool_timeout": settings.database_pool_timeout,
+}
 if settings.database_url.startswith("sqlite"):
     engine_kwargs["connect_args"] = {"check_same_thread": False}
+elif settings.database_ssl_mode:
+    engine_kwargs["connect_args"] = {"sslmode": settings.database_ssl_mode}
 
 engine = create_engine(settings.database_url, **engine_kwargs)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
