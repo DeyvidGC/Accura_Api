@@ -4,16 +4,16 @@ from datetime import datetime
 
 from sqlalchemy.orm import Session
 
-from app.infrastructure.models import UserModel
+from app.infrastructure.repositories import UserRepository
 
 
 def record_login(session: Session, user_id: int) -> None:
     """Persist the last login timestamp for the given user."""
 
-    model = session.query(UserModel).filter(UserModel.id == user_id).first()
-    if not model:
+    repository = UserRepository(session)
+    user = repository.get(user_id)
+    if not user:
         return
 
-    model.last_login = datetime.utcnow()
-    session.add(model)
-    session.commit()
+    user.last_login = datetime.utcnow()
+    repository.update(user)

@@ -20,17 +20,9 @@ router = APIRouter(prefix="/users", tags=["users"])
 
 
 def _to_read_model(user: User) -> UserRead:
-    return UserRead(
-        id=user.id,
-        name=user.name,
-        alias=user.alias,
-        email=user.email,
-        must_change_password=user.must_change_password,
-        last_login=user.last_login,
-        created_at=user.created_at,
-        updated_at=user.updated_at,
-        is_active=user.is_active,
-    )
+    if hasattr(UserRead, "model_validate"):
+        return UserRead.model_validate(user)
+    return UserRead.from_orm(user)
 
 
 @router.get("/", response_model=list[UserRead])
