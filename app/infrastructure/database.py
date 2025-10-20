@@ -5,7 +5,7 @@ from __future__ import annotations
 import importlib
 import warnings
 from collections.abc import Generator
-from urllib.parse import quote_plus
+from urllib.parse import quote, urlsplit, urlunsplit
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine.url import make_url
@@ -31,14 +31,44 @@ if database_url.startswith("sqlite"):
 elif settings.database_ssl_mode:
     engine_kwargs["connect_args"] = {"sslmode": settings.database_ssl_mode}
 
-url = make_url(database_url)
+def _percent_encode_credentials(raw_url: str) -> str:
+    """Percent-encode username and password components of a database URL."""
 
-if url.username or url.password:
-    url = url.set(
-        username=quote_plus(url.username) if url.username else None,
-        password=quote_plus(url.password) if url.password else None,
+    split_url = urlsplit(raw_url)
+    netloc = split_url.netloc
+
+    if "@" not in netloc:
+        return raw_url
+
+    userinfo, hostinfo = netloc.rsplit("@", 1)
+    username, separator, password = userinfo.partition(":")
+    encoded_username = quote(username, safe="") if username else ""
+
+    if separator:
+        encoded_password = quote(password, safe="") if password else ""
+        auth_part = f"{encoded_username}:{encoded_password}"
+    else:
+        auth_part = encoded_username
+
+    encoded_netloc = f"{auth_part}@{hostinfo}" if auth_part else hostinfo
+    return urlunsplit(
+        (
+            split_url.scheme,
+            encoded_netloc,
+            split_url.path,
+            split_url.query,
+            split_url.fragment,
+        )
     )
-    database_url = url.render_as_string(hide_password=False)
+
+
+try:
+    url = make_url(database_url)
+except ValueError:
+    database_url = _percent_encode_credentials(database_url)
+    url = make_url(database_url)
+
+database_url = url.render_as_string(hide_password=False)
 
 if url.get_backend_name() == "postgresql":
     drivername = url.drivername
