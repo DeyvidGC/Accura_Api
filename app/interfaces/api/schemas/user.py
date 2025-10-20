@@ -21,14 +21,6 @@ class UserCreate(UserBase):
     password: str = Field(..., min_length=8)
 
 
-class UserUpdate(BaseModel):
-    name: str | None = Field(default=None, max_length=50)
-    alias: str | None = Field(default=None, max_length=50)
-    email: EmailStr | None = None
-    password: str | None = Field(default=None, min_length=8)
-    must_change_password: bool | None = None
-
-
 class UserRead(BaseModel):
     id: int
     name: str
