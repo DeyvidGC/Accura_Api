@@ -100,23 +100,24 @@ def _encode_if_non_ascii(value: str | None, *, use_plus: bool = False) -> str | 
     except TypeError:  # pragma: no cover - extremely defensive
         return value
 
+    needs_encoding = contains_non_ascii
     decoded_value = value
+
     if "%" in value:
         try:
             raw_bytes = unquote_to_bytes(value)
         except ValueError:
             raw_bytes = None
-        if raw_bytes:
-            try:
-                decoded_value = raw_bytes.decode("utf-8")
-            except UnicodeDecodeError:
-                decoded_value = raw_bytes.decode("latin-1")
-            else:
-                contains_non_ascii = contains_non_ascii or any(
-                    ord(char) > 127 for char in decoded_value
-                )
+        if raw_bytes is not None:
+            if any(byte > 127 for byte in raw_bytes):
+                needs_encoding = True
+            if needs_encoding:
+                try:
+                    decoded_value = raw_bytes.decode("utf-8")
+                except UnicodeDecodeError:
+                    decoded_value = raw_bytes.decode("latin-1")
 
-    if not contains_non_ascii and decoded_value is value:
+    if not needs_encoding:
         return value
 
     return encoder(decoded_value, safe="")
