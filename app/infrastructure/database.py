@@ -5,7 +5,15 @@ from __future__ import annotations
 import importlib
 import warnings
 from collections.abc import Generator
-from urllib.parse import parse_qsl, quote, quote_plus, urlencode, urlsplit, urlunsplit
+from urllib.parse import (
+    parse_qsl,
+    quote,
+    quote_plus,
+    unquote_to_bytes,
+    urlencode,
+    urlsplit,
+    urlunsplit,
+)
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine.url import make_url
@@ -71,13 +79,47 @@ url = make_url(database_url)
 
 
 def _encode_if_non_ascii(value: str | None, *, use_plus: bool = False) -> str | None:
-    """Percent-encode connection string parts that contain non-ASCII characters."""
+    """Percent-encode connection string parts that contain non-ASCII characters.
 
-    if value is None or not any(ord(char) > 127 for char in value):
+    On Windows environments it is relatively common to copy connection strings
+    from administrative tools that still emit Latin-1 encoded passwords.
+    ``psycopg2`` expects UTF-8 encoded credentials and raises ``UnicodeDecodeError``
+    when it encounters raw bytes such as ``0xF3`` (``ó``) in the DSN.  To make the
+    application resilient we normalise these fragments by decoding any percent
+    encoded data, falling back to Latin-1 when UTF-8 decoding fails, and then
+    percent-encoding the Unicode string using UTF-8.
+    """
+
+    if value is None or value == "":
         return value
 
     encoder = quote_plus if use_plus else quote
-    return encoder(value, safe="")
+
+    try:
+        contains_non_ascii = any(ord(char) > 127 for char in value)
+    except TypeError:  # pragma: no cover - extremely defensive
+        return value
+
+    decoded_value = value
+    if "%" in value:
+        try:
+            raw_bytes = unquote_to_bytes(value)
+        except ValueError:
+            raw_bytes = None
+        if raw_bytes:
+            try:
+                decoded_value = raw_bytes.decode("utf-8")
+            except UnicodeDecodeError:
+                decoded_value = raw_bytes.decode("latin-1")
+            else:
+                contains_non_ascii = contains_non_ascii or any(
+                    ord(char) > 127 for char in decoded_value
+                )
+
+    if not contains_non_ascii and decoded_value is value:
+        return value
+
+    return encoder(decoded_value, safe="")
 
 
 username = _encode_if_non_ascii(url.username, use_plus=True)
