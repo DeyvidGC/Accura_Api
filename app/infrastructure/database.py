@@ -58,6 +58,13 @@ engine = create_engine(database_url, **engine_kwargs)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
+def initialize_database() -> None:
+    """Ensure all ORM models have corresponding database tables."""
+
+    importlib.import_module("app.infrastructure.models")
+    Base.metadata.create_all(bind=engine, checkfirst=True)
+
+
 def get_db() -> Generator:
     """Yield a database session and close it afterwards."""
 
@@ -66,3 +73,6 @@ def get_db() -> Generator:
         yield db
     finally:
         db.close()
+
+
+initialize_database()
