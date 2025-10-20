@@ -1,8 +1,13 @@
 """Database configuration and session management."""
 
+from __future__ import annotations
+
+import importlib
+import warnings
 from collections.abc import Generator
 
 from sqlalchemy import create_engine
+from sqlalchemy.engine.url import make_url
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 from app.config import get_settings
@@ -13,11 +18,43 @@ class Base(DeclarativeBase):
 
 
 settings = get_settings()
-engine_kwargs: dict[str, object] = {"pool_pre_ping": True}
-if settings.database_url.startswith("sqlite"):
+database_url = settings.database_url
+engine_kwargs: dict[str, object] = {
+    "pool_pre_ping": True,
+    "pool_size": settings.database_pool_size,
+    "max_overflow": settings.database_max_overflow,
+    "pool_timeout": settings.database_pool_timeout,
+}
+if database_url.startswith("sqlite"):
     engine_kwargs["connect_args"] = {"check_same_thread": False}
+elif settings.database_ssl_mode:
+    engine_kwargs["connect_args"] = {"sslmode": settings.database_ssl_mode}
 
-engine = create_engine(settings.database_url, **engine_kwargs)
+url = make_url(database_url)
+if url.get_backend_name() == "postgresql":
+    drivername = url.drivername
+    if drivername in {"postgresql", "postgresql+psycopg"}:
+        try:
+            importlib.import_module("psycopg")
+        except ImportError as psycopg_error:
+            try:
+                importlib.import_module("psycopg2")
+            except ImportError as fallback_error:  # pragma: no cover - environment specific
+                raise ImportError(
+                    "Unable to load the 'psycopg' PostgreSQL driver and no fallback driver "
+                    "is available. Install the 'psycopg[binary]' extra or the 'psycopg2-binary' "
+                    "package, or update DATABASE_URL to point to an installed driver."
+                ) from fallback_error
+            else:
+                fallback_url = url.set(drivername="postgresql+psycopg2")
+                database_url = fallback_url.render_as_string(hide_password=False)
+                warnings.warn(
+                    "PostgreSQL driver 'psycopg' is unavailable; falling back to 'psycopg2'. "
+                    "Install psycopg[binary] or adjust DATABASE_URL to silence this warning.",
+                    stacklevel=1,
+                )
+
+engine = create_engine(database_url, **engine_kwargs)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
