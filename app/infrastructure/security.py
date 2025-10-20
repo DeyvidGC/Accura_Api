@@ -18,10 +18,8 @@ else:
         bcrypt.__about__ = SimpleNamespace(__version__=version)  # type: ignore[attr-defined]
 
 pwd_context = CryptContext(
-    schemes=["bcrypt_sha256"],
+    schemes=["bcrypt"],
     deprecated="auto",
-    # opcional: rounds por defecto (coste)
-    bcrypt_sha256__default_rounds=12,
 )
 settings = get_settings()
 
