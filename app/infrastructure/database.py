@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import pkgutil
 import warnings
 from collections.abc import Generator
 from urllib.parse import (
@@ -187,7 +188,21 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 def initialize_database() -> None:
     """Ensure all ORM models have corresponding database tables."""
 
-    importlib.import_module("app.infrastructure.models")
+    package_name = f"{__package__}.models" if __package__ else "app.infrastructure.models"
+
+    try:
+        models_package = importlib.import_module(package_name)
+    except ModuleNotFoundError as exc:  # pragma: no cover - configuration error
+        msg = (
+            "Unable to import the ORM models package. Verify that 'app' is on the "
+            "Python path and that the package contains an __init__ module."
+        )
+        raise RuntimeError(msg) from exc
+
+    if hasattr(models_package, "__path__"):
+        for module_info in pkgutil.walk_packages(models_package.__path__, f"{package_name}."):
+            importlib.import_module(module_info.name)
+
     Base.metadata.create_all(bind=engine, checkfirst=True)
 
 
