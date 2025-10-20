@@ -1,6 +1,7 @@
 """Security utilities for password hashing and JWT tokens."""
 
 from datetime import datetime, timedelta
+from hashlib import sha256
 from types import SimpleNamespace
 
 from jose import JWTError, jwt
@@ -17,19 +18,41 @@ else:
         version = getattr(bcrypt, "__version__", "")
         bcrypt.__about__ = SimpleNamespace(__version__=version)  # type: ignore[attr-defined]
 
+
+def _normalize_password(password: str) -> str:
+    """Return a deterministic short representation of ``password``."""
+
+    digest = sha256(password.encode("utf-8")).hexdigest()
+    return digest
+
+
 pwd_context = CryptContext(
-    schemes=["bcrypt"],
+    schemes=["bcrypt_sha256", "bcrypt"],
     deprecated="auto",
+    # opcional: rounds por defecto (coste)
+    bcrypt_sha256__default_rounds=12,
+    bcrypt__default_rounds=12,
 )
 settings = get_settings()
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
+    scheme = pwd_context.identify(hashed_password) or "bcrypt_sha256"
+    if scheme == "bcrypt":
+        normalized_password = _normalize_password(plain_password)
+        return pwd_context.verify(normalized_password, hashed_password)
     return pwd_context.verify(plain_password, hashed_password)
 
 
 def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+    try:
+        return pwd_context.hash(password)
+    except ValueError as exc:
+        message = str(exc)
+        if "password cannot be longer than 72 bytes" not in message:
+            raise
+        normalized_password = _normalize_password(password)
+        return pwd_context.hash(normalized_password, scheme="bcrypt")
 
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
