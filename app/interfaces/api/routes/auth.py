@@ -13,6 +13,7 @@ from app.infrastructure.security import create_access_token
 from app.interfaces.api.schemas import Token
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+settings = get_settings()
 
 
 @router.post("/token", response_model=Token)
@@ -30,7 +31,6 @@ def login_for_access_token(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    settings = get_settings()
     access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
     access_token = create_access_token(
         data={"sub": user.email}, expires_delta=access_token_expires
