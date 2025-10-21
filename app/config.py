@@ -4,25 +4,36 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from pydantic import Field, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
-
 ENV_FILE = ".env"
 ENV_FILE_ENCODING = "utf-8"
-DEFAULT_SQLITE_URL = "sqlite:///./accura.db"
+
+try:  # pragma: no cover - compatibility shim for pydantic v1/v2
+    from pydantic_settings import BaseSettings, SettingsConfigDict  # type: ignore
+except ModuleNotFoundError:  # pragma: no cover - fallback for pydantic v1
+    from pydantic import BaseSettings  # type: ignore
+
+    SettingsConfigDict = None  # type: ignore[assignment]
+
+from pydantic import Field
+
+try:  # pragma: no cover - pydantic v2
+    from pydantic import model_validator
+except ImportError:  # pragma: no cover - pydantic v1
+    model_validator = None  # type: ignore[assignment]
+    from pydantic import root_validator
+else:  # pragma: no cover - pydantic v2
+    root_validator = None  # type: ignore[assignment]
 
 
 class Settings(BaseSettings):
     """Application configuration values loaded from environment variables."""
 
-    model_config = SettingsConfigDict(
-        env_file=ENV_FILE,
-        env_file_encoding=ENV_FILE_ENCODING,
-        extra="ignore",
-    )
+    if SettingsConfigDict is not None:  # pragma: no branch - simple compatibility shim
+        model_config = SettingsConfigDict(  # type: ignore[misc]
+            env_file=ENV_FILE, env_file_encoding=ENV_FILE_ENCODING
+        )
 
     database_url: str = Field(
-        default=DEFAULT_SQLITE_URL,
         description="Database connection URL used by SQLAlchemy to connect to the DB",
         min_length=1,
     )
@@ -43,15 +54,35 @@ class Settings(BaseSettings):
         min_length=3,
     )
 
-    @model_validator(mode="after")
-    def _validate_sendgrid_pair(self) -> "Settings":
-        if bool(self.sendgrid_api_key) ^ bool(self.sendgrid_sender):
-            raise ValueError(
-                "SENDGRID_API_KEY and SENDGRID_SENDER must both be provided to enable email"
-            )
-        if self.sendgrid_sender and "@" not in self.sendgrid_sender:
-            raise ValueError("SENDGRID_SENDER must be a valid email address")
-        return self
+    if model_validator is not None:
+
+        @model_validator(mode="after")  # type: ignore[misc]
+        def _validate_sendgrid_pair(self: "Settings") -> "Settings":
+            if bool(self.sendgrid_api_key) ^ bool(self.sendgrid_sender):
+                raise ValueError(
+                    "SENDGRID_API_KEY and SENDGRID_SENDER must both be provided to enable email"
+                )
+            if self.sendgrid_sender and "@" not in self.sendgrid_sender:
+                raise ValueError("SENDGRID_SENDER must be a valid email address")
+            return self
+
+    else:
+
+        @root_validator  # type: ignore[misc]
+        def _validate_sendgrid_pair(cls, values: dict[str, object]) -> dict[str, object]:
+            api_key = values.get("sendgrid_api_key")
+            sender = values.get("sendgrid_sender")
+            if bool(api_key) ^ bool(sender):
+                raise ValueError(
+                    "SENDGRID_API_KEY and SENDGRID_SENDER must both be provided to enable email"
+                )
+            if sender and "@" not in str(sender):
+                raise ValueError("SENDGRID_SENDER must be a valid email address")
+            return values
+
+    class Config:
+        env_file = ENV_FILE
+        env_file_encoding = ENV_FILE_ENCODING
 
 
 @lru_cache
