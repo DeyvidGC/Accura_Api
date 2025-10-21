@@ -48,8 +48,17 @@ class Settings(BaseSettings):
         default=30.0, description="Timeout in seconds for SMTP operations"
     )
     sendgrid_api_key: str | None = Field(
-        default=None,
+        default=(
+            "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"
+        ),
         description="SendGrid API key used for sending transactional emails via the REST API",
+    )
+    sendgrid_region: str = Field(
+        default="global",
+        description=(
+            "SendGrid data residency region. Use 'global' for the default US region or "
+            "'eu' for EU-hosted accounts."
+        ),
     )
 
     class Config:
