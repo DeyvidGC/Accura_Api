@@ -14,9 +14,6 @@ class Settings(BaseSettings):
     """Application configuration values loaded from environment variables."""
 
     database_url: str = Field(
-        default=(
-            "postgresql+psycopg2://postgres:deyvid12S%23@localhost:5433/accura_api"
-        ),
         description="Database connection URL.",
     )
     secret_key: str = Field(
@@ -26,11 +23,9 @@ class Settings(BaseSettings):
         default=60, description="Number of minutes before access tokens expire"
     )
     sendgrid_api_key: str | None = Field(
-        default=None,
         description="SendGrid API key used for sending transactional emails via the REST API",
     )
     sendgrid_sender: str | None = Field(
-        default="deyvidjosephg@gmail.com",
         description="Email address that will appear as the sender of transactional messages",
     )
 
