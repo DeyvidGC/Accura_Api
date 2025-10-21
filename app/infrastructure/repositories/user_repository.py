@@ -88,4 +88,5 @@ class UserRepository:
         model.must_change_password = user.must_change_password
         model.last_login = user.last_login
         model.updated_by = user.updated_by
+        model.updated_at = user.updated_at
         model.is_active = user.is_active
