@@ -26,10 +26,11 @@ class Settings(BaseSettings):
         default=60, description="Number of minutes before access tokens expire"
     )
     sendgrid_api_key: str | None = Field(
+        default="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",
         description="SendGrid API key used for sending transactional emails via the REST API",
     )
     sendgrid_sender: str | None = Field(
-        default=None,
+        default="deyvidjosephg@gmail.com",
         description="Email address that will appear as the sender of transactional messages",
     )
 
