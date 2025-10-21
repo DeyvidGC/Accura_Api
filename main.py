@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.interfaces.api.routes import register_routes
-from app.infrastructure.database import get_engine, initialize_database
+from app.infrastructure.database import initialize_database, engine
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -10,7 +10,7 @@ async def lifespan(app: FastAPI):
     initialize_database()
     yield
     # 👉 libera conexiones
-    get_engine().dispose()
+    engine.dispose()
 
 def create_app() -> FastAPI:
     app = FastAPI(lifespan=lifespan)
