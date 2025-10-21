@@ -47,6 +47,10 @@ class Settings(BaseSettings):
     smtp_timeout: float = Field(
         default=30.0, description="Timeout in seconds for SMTP operations"
     )
+    sendgrid_api_key: str | None = Field(
+        default=None,
+        description="SendGrid API key used for sending transactional emails via the REST API",
+    )
 
     class Config:
         env_file = ".env"
