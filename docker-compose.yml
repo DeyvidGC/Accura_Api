@@ -4,6 +4,8 @@ services:
   api:
     build: .
     env_file: .env
+    environment:
+      DATABASE_URL: "postgresql+psycopg2://postgres:deyvid12S%23@db:5432/accura_api"
     ports:
       - "8000:8000"
     depends_on:
@@ -13,7 +15,7 @@ services:
     image: postgres:17-alpine
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: deyvid12S#
+      POSTGRES_PASSWORD: "deyvid12S#"
       POSTGRES_DB: accura_api
     ports:
       - "5432:5432"
