@@ -10,13 +10,13 @@ services:
       - db
 
   db:
-    image: postgres:15-alpine
+    image: postgres:17-alpine
     environment:
-      POSTGRES_USER: accura
-      POSTGRES_PASSWORD: accura
-      POSTGRES_DB: accura
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: deyvid12S%23
+      POSTGRES_DB: accura_api
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
