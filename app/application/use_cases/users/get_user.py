@@ -13,5 +13,7 @@ def get_user(session: Session, user_id: int) -> User:
     user = repository.get(user_id)
     if user is None:
         raise ValueError("Usuario no encontrado")
+    if not user.is_active:
+        raise ValueError("Usuario inactivo")
     return user
 
