@@ -7,7 +7,7 @@ from app.infrastructure.database import initialize_database, engine
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # 👉 crea tablas si no existen
-    #initialize_database()
+    # initialize_database()
     yield
     # 👉 libera conexiones
     engine.dispose()
