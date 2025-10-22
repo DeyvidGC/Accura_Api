@@ -24,9 +24,7 @@ class UserModel(Base):
     created_by = Column(Integer, nullable=True)
     created_at = Column(DateTime, nullable=False, server_default=func.now())
     updated_by = Column(Integer, nullable=True)
-    updated_at = Column(
-        DateTime, nullable=False, server_default=func.now(), onupdate=func.now()
-    )
+    updated_at = Column(DateTime, nullable=True, onupdate=func.now())
     is_active = Column(Boolean, nullable=False, default=True)
     role = relationship("RoleModel", lazy="joined")
 

@@ -18,6 +18,7 @@ class UserRepository:
         query = (
             self.session.query(UserModel)
             .options(joinedload(UserModel.role))
+            .filter(UserModel.is_active.is_(True))
             .offset(skip)
             .limit(limit)
         )
@@ -99,8 +100,9 @@ class UserRepository:
         model.password = user.password
         model.must_change_password = user.must_change_password
         model.last_login = user.last_login
-        model.updated_by = user.updated_by
-        model.updated_at = user.updated_at
+        if not include_creation_fields:
+            model.updated_by = user.updated_by
+            model.updated_at = user.updated_at
         model.is_active = user.is_active
 
     @staticmethod

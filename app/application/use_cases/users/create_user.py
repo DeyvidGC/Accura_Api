@@ -46,8 +46,8 @@ def create_user(
         last_login=None,
         created_by=created_by,
         created_at=now,
-        updated_by=created_by,
-        updated_at=now,
+        updated_by=None,
+        updated_at=None,
         is_active=True,
     )
 
