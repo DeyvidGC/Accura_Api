@@ -10,6 +10,18 @@ except ImportError:  # pragma: no cover - compatibility path for pydantic v1
     ConfigDict = None  # type: ignore[misc]
 
 
+class RoleRead(BaseModel):
+    id: int
+    name: str
+    alias: str
+
+    if ConfigDict is not None:  # pragma: no branch - runtime configuration
+        model_config = ConfigDict(from_attributes=True)
+    else:  # pragma: no cover - compatibility path for pydantic v1
+        class Config:
+            orm_mode = True
+
+
 class UserBase(BaseModel):
     name: str = Field(..., max_length=50)
     alias: str | None = Field(default=None, max_length=50)
@@ -19,11 +31,23 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str = Field(..., min_length=8)
+    role_id: int = Field(..., ge=1)
 
 
-class UserUpdate(UserBase):
+class UserUpdate(BaseModel):
+    name: str | None = Field(default=None, max_length=50)
+    alias: str | None = Field(default=None, max_length=50)
+    email: EmailStr | None = None
+    must_change_password: bool | None = None
     password: str | None = Field(default=None, min_length=8)
-    is_active: bool = True
+    is_active: bool | None = None
+    role_id: int | None = None
+
+    if ConfigDict is not None:  # pragma: no branch - runtime configuration
+        model_config = ConfigDict(extra="forbid")
+    else:  # pragma: no cover - compatibility path for pydantic v1
+        class Config:
+            extra = "forbid"
 
 
 class UserRead(BaseModel):
@@ -36,6 +60,7 @@ class UserRead(BaseModel):
     created_at: datetime | None
     updated_at: datetime | None
     is_active: bool
+    role: RoleRead
 
     if ConfigDict is not None:  # pragma: no branch - runtime configuration
         model_config = ConfigDict(from_attributes=True)

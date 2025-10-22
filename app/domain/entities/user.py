@@ -4,11 +4,15 @@ from dataclasses import dataclass
 from datetime import datetime
 
 
+from .role import Role
+
+
 @dataclass
 class User:
     """Core attributes describing an application user."""
 
     id: int | None
+    role: Role
     name: str
     alias: str | None
     email: str
@@ -20,3 +24,13 @@ class User:
     updated_by: int | None
     updated_at: datetime | None
     is_active: bool
+
+    def has_role(self, alias: str) -> bool:
+        """Return ``True`` when the user's role alias matches ``alias``."""
+
+        return self.role.alias.lower() == alias.lower()
+
+    def is_admin(self) -> bool:
+        """Return ``True`` when the user is an administrator."""
+
+        return self.has_role("admin")

@@ -5,7 +5,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from app.domain.entities import User
-from app.infrastructure.repositories import UserRepository
+from app.infrastructure.repositories import RoleRepository, UserRepository
 from app.infrastructure.security import get_password_hash
 
 
@@ -13,6 +13,7 @@ def create_user(
     session: Session,
     *,
     name: str,
+    role_id: int,
     email: str,
     password: str,
     alias: str | None = None,
@@ -22,15 +23,21 @@ def create_user(
     """Create a new user ensuring unique email addresses."""
 
     repository = UserRepository(session)
+    role_repository = RoleRepository(session)
 
     if repository.get_by_email(email):
         msg = "El correo electrónico ya está registrado"
         raise ValueError(msg)
 
+    role = role_repository.get(role_id)
+    if role is None:
+        raise ValueError("Rol no encontrado")
+
     hashed_password = get_password_hash(password)
     now = datetime.utcnow()
     user = User(
         id=None,
+        role=role,
         name=name,
         alias=alias,
         email=email,
