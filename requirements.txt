@@ -9,5 +9,6 @@ bcrypt
 sendgrid
 python-multipart
 psycopg
+psycopg2
 python-dotenv
 email-validator
