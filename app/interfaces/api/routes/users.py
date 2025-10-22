@@ -14,7 +14,7 @@ from app.application.use_cases.users import (
 from app.domain.entities import User
 from app.infrastructure.database import get_db
 from app.infrastructure.email import send_new_user_credentials_email
-from app.interfaces.api.dependencies import get_current_active_user
+from app.interfaces.api.dependencies import get_current_active_user, require_admin
 from app.interfaces.api.schemas import UserCreate, UserRead, UserUpdate
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -28,17 +28,23 @@ def _to_read_model(user: User) -> UserRead:
 
 
 @router.post("/", response_model=UserRead, status_code=status.HTTP_201_CREATED)
-def register_user(user_in: UserCreate, db: Session = Depends(get_db)):
+def register_user(
+    user_in: UserCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
     """Create a new user that can authenticate with the API."""
 
     try:
         user = create_user_uc(
             db,
             name=user_in.name,
+            role_id=user_in.role_id,
             email=user_in.email,
             password=user_in.password,
             alias=user_in.alias,
             must_change_password=user_in.must_change_password,
+            created_by=current_user.id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
@@ -61,7 +67,7 @@ def list_users(
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_active_user),
+    _: User = Depends(require_admin),
 ):
     """Return a paginated list of users."""
 
@@ -73,7 +79,7 @@ def list_users(
 def read_user(
     user_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_active_user),
+    _: User = Depends(require_admin),
 ):
     """Return the user identified by ``user_id``."""
 
@@ -94,15 +100,69 @@ def update_user(
     """Update an existing user."""
 
     try:
+        target_user = get_user_uc(db, user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    if hasattr(user_in, "model_dump"):
+        update_data = user_in.model_dump(exclude_unset=True)
+    else:  # pragma: no cover - compatibility path for pydantic v1
+        update_data = user_in.dict(exclude_unset=True)
+
+    is_admin = current_user.is_admin()
+    if not is_admin:
+        if user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No autorizado",
+            )
+        if "email" in update_data and update_data["email"] != target_user.email:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="El cliente no puede cambiar su correo electrónico",
+            )
+        if "role_id" in update_data:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="El cliente no puede cambiar su rol",
+            )
+        if "is_active" in update_data:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="El cliente no puede cambiar su estado",
+            )
+        if "must_change_password" in update_data:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="El cliente no puede cambiar esta configuración",
+            )
+
+    name = update_data.get("name", target_user.name)
+    alias = update_data["alias"] if "alias" in update_data else target_user.alias
+    email = update_data.get("email", target_user.email)
+    must_change_password = (
+        update_data["must_change_password"]
+        if "must_change_password" in update_data
+        else target_user.must_change_password
+    )
+    is_active = update_data["is_active"] if "is_active" in update_data else target_user.is_active
+    role_id = update_data.get("role_id") if "role_id" in update_data else None
+    password = update_data.get("password")
+
+    if "password" in update_data and "must_change_password" not in update_data:
+        must_change_password = False
+
+    try:
         user = update_user_uc(
             db,
             user_id=user_id,
-            name=user_in.name,
-            email=user_in.email,
-            alias=user_in.alias,
-            must_change_password=user_in.must_change_password,
-            is_active=user_in.is_active,
-            password=user_in.password,
+            name=name,
+            email=email,
+            alias=alias,
+            must_change_password=must_change_password,
+            is_active=is_active,
+            role_id=role_id,
+            password=password,
             updated_by=current_user.id,
         )
     except ValueError as exc:
@@ -117,7 +177,7 @@ def update_user(
 def delete_user(
     user_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_active_user),
+    _: User = Depends(require_admin),
 ):
     """Delete the specified user."""
 
