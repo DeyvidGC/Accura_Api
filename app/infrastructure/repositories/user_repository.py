@@ -2,9 +2,9 @@
 
 from collections.abc import Sequence
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
-from app.domain.entities import User
+from app.domain.entities import Role, User
 from app.infrastructure.models import UserModel
 
 
@@ -15,7 +15,13 @@ class UserRepository:
         self.session = session
 
     def list(self, skip: int = 0, limit: int = 100) -> Sequence[User]:
-        query = self.session.query(UserModel).offset(skip).limit(limit)
+        query = (
+            self.session.query(UserModel)
+            .options(joinedload(UserModel.role))
+            .filter(UserModel.is_active.is_(True))
+            .offset(skip)
+            .limit(limit)
+        )
         return [self._to_entity(model) for model in query.all()]
 
     def get(self, user_id: int) -> User | None:
@@ -32,6 +38,8 @@ class UserRepository:
         self.session.add(model)
         self.session.commit()
         self.session.refresh(model)
+        if model.role is None:
+            self.session.refresh(model, attribute_names=["role"])
         return self._to_entity(model)
 
     def update(self, user: User) -> User:
@@ -43,6 +51,8 @@ class UserRepository:
         self.session.add(model)
         self.session.commit()
         self.session.refresh(model)
+        if model.role is None:
+            self.session.refresh(model, attribute_names=["role"])
         return self._to_entity(model)
 
     def delete(self, user_id: int) -> None:
@@ -58,6 +68,7 @@ class UserRepository:
     def _to_entity(model: UserModel) -> User:
         return User(
             id=model.id,
+            role=UserRepository._role_to_entity(model.role),
             name=model.name,
             alias=model.alias,
             email=model.email,
@@ -72,7 +83,8 @@ class UserRepository:
         )
 
     def _get_model(self, **filters) -> UserModel | None:
-        return self.session.query(UserModel).filter_by(**filters).first()
+        query = self.session.query(UserModel).options(joinedload(UserModel.role))
+        return query.filter_by(**filters).first()
 
     @staticmethod
     def _apply_entity_to_model(
@@ -81,12 +93,21 @@ class UserRepository:
         if include_creation_fields:
             model.created_by = user.created_by
             model.created_at = user.created_at
+        model.role_id = user.role.id
         model.name = user.name
         model.alias = user.alias
         model.email = user.email
         model.password = user.password
         model.must_change_password = user.must_change_password
         model.last_login = user.last_login
-        model.updated_by = user.updated_by
-        model.updated_at = user.updated_at
+        if not include_creation_fields:
+            model.updated_by = user.updated_by
+            model.updated_at = user.updated_at
         model.is_active = user.is_active
+
+    @staticmethod
+    def _role_to_entity(model_role) -> Role:
+        if model_role is None:
+            msg = "User role is not set"
+            raise ValueError(msg)
+        return Role(id=model_role.id, name=model_role.name, alias=model_role.alias)

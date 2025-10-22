@@ -2,7 +2,8 @@
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, Integer, String, func
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy.orm import relationship
 
 from app.infrastructure.database import Base
 
@@ -13,6 +14,7 @@ class UserModel(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
+    role_id = Column(Integer, ForeignKey("roles.id"), nullable=False, index=True)
     name = Column(String(50), nullable=False)
     alias = Column(String(50), nullable=True)
     email = Column(String(120), unique=True, nullable=False, index=True)
@@ -22,10 +24,9 @@ class UserModel(Base):
     created_by = Column(Integer, nullable=True)
     created_at = Column(DateTime, nullable=False, server_default=func.now())
     updated_by = Column(Integer, nullable=True)
-    updated_at = Column(
-        DateTime, nullable=False, server_default=func.now(), onupdate=func.now()
-    )
+    updated_at = Column(DateTime, nullable=True, onupdate=func.now())
     is_active = Column(Boolean, nullable=False, default=True)
+    role = relationship("RoleModel", lazy="joined")
 
     def touch_last_login(self) -> None:
         """Update the last login timestamp to now."""
