@@ -17,10 +17,10 @@ class Settings(BaseSettings):
         description="Database connection URL.",
     )
     secret_key: str = Field(
-        default="change_this_secret", description="Secret key for signing JWT tokens"
+        description="Secret key for signing JWT tokens"
     )
     access_token_expire_minutes: int = Field(
-        default=60, description="Number of minutes before access tokens expire"
+        description="Number of minutes before access tokens expire"
     )
     sendgrid_api_key: str | None = Field(
         description="SendGrid API key used for sending transactional emails via the REST API",
