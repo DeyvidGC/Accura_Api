@@ -2,35 +2,25 @@
 
 from datetime import datetime, timedelta
 from jose import jwt, JWTError
+from passlib.context import CryptContext
 from app.config import get_settings
 
-# 👉 Parchea bcrypt ANTES de importar passlib
-try:
-    import bcrypt  # type: ignore
-except ImportError:
-    bcrypt = None  # type: ignore
-else:
-    # En bcrypt>=4 ya no viene __about__; Passlib viejo lo busca.
-    if bcrypt is not None and not hasattr(bcrypt, "__about__"):
-        class _About: __version__ = getattr(bcrypt, "__version__", "")
-        bcrypt.__about__ = _About()  # type: ignore[attr-defined]
-
-from passlib.context import CryptContext  # <-- ahora sí
-
-# ---- Hashing recomendado ----
+# ---- Hashing con UNA SOLA LIBRERÍA (passlib) ----
+# Ajusta "rounds" según tu presupuesto de CPU. 310000 es una buena base hoy.
 pwd_context = CryptContext(
-    schemes=["bcrypt_sha256", "bcrypt"],  # bcrypt_sha256 por defecto
+    schemes=["pbkdf2_sha256"],
     deprecated="auto",
-    bcrypt_sha256__default_rounds=12,
-    bcrypt__truncate_error=False,         # evita el error de 72 bytes si algo usa bcrypt “puro”
+    pbkdf2_sha256__rounds=310_000,
 )
 
 def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password, scheme="bcrypt_sha256")
+    return pwd_context.hash(password)  # usa pbkdf2_sha256
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
+def needs_rehash(hashed_password: str) -> bool:
+    return pwd_context.needs_update(hashed_password)
 # ---- JWT ----
 settings = get_settings()
 

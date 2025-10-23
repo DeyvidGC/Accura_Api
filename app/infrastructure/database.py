@@ -43,4 +43,4 @@ def get_db() -> Generator:
         db.close()
 
 
-#initialize_database()
+initialize_database()
