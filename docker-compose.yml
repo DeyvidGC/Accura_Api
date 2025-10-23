@@ -4,8 +4,6 @@ services:
   api:
     build: .
     env_file: .env
-    environment:
-      DATABASE_URL: "postgresql+psycopg2://postgres:deyvid12S%23@localhost:5432/accura_api"
     ports:
       - "8000:8000"
     depends_on:
