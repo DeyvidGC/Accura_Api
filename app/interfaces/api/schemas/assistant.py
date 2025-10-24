@@ -6,7 +6,7 @@ import re
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, Field, root_validator
+from pydantic import BaseModel, Field, model_validator
 
 
 class AssistantMessageRequest(BaseModel):
@@ -48,10 +48,10 @@ class AssistantMessageResponse(BaseModel):
         allow_population_by_field_name = True
         populate_by_name = True
 
-    @root_validator
-    def validate_regla(cls, values: dict[str, Any]) -> dict[str, Any]:
-        tipo: TipoDatoEnum | None = values.get("tipo_de_dato")
-        regla: Any = values.get("regla")
+    @model_validator(mode="after")
+    def validate_regla(self) -> "AssistantMessageResponse":
+        tipo: TipoDatoEnum | None = self.tipo_de_dato
+        regla: Any = self.regla
 
         if not isinstance(regla, dict):
             raise ValueError("El campo 'Regla' debe ser un objeto JSON.")
@@ -182,4 +182,4 @@ class AssistantMessageResponse(BaseModel):
         else:  # pragma: no cover - defensive fallback
             raise ValueError("Tipo de dato no soportado para la validación de la regla.")
 
-        return values
+        return self
