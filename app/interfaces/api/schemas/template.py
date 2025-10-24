@@ -77,6 +77,16 @@ class TemplateUpdate(BaseModel):
             extra = "forbid"
 
 
+class TemplateStatusUpdate(BaseModel):
+    status: TemplateStatus
+
+    if ConfigDict is not None:  # pragma: no branch - runtime configuration
+        model_config = ConfigDict(extra="forbid")
+    else:  # pragma: no cover - compatibility path for pydantic v1
+        class Config:
+            extra = "forbid"
+
+
 class TemplateRead(BaseModel):
     id: int
     user_id: int

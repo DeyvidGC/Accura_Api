@@ -16,6 +16,7 @@ from app.application.use_cases.templates import (
     get_template as get_template_uc,
     list_templates as list_templates_uc,
     update_template as update_template_uc,
+    update_template_status as update_template_status_uc,
 )
 from app.domain.entities import Template, TemplateColumn, User
 from app.infrastructure.database import get_db
@@ -28,6 +29,7 @@ from app.interfaces.api.schemas import (
     TemplateCreate,
     TemplateRead,
     TemplateUpdate,
+    TemplateStatusUpdate,
 )
 
 router = APIRouter(prefix="/templates", tags=["templates"])
@@ -126,6 +128,32 @@ def update_template(
             status=update_data.get("status"),
             table_name=update_data.get("table_name"),
             is_active=update_data.get("is_active"),
+            updated_by=current_user.id,
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        status_code = status.HTTP_400_BAD_REQUEST
+        if detail in {"Plantilla no encontrada"}:
+            status_code = status.HTTP_404_NOT_FOUND
+        raise HTTPException(status_code=status_code, detail=detail) from exc
+
+    return _template_to_read_model(template)
+
+
+@router.patch("/{template_id}/status", response_model=TemplateRead)
+def update_template_status(
+    template_id: int,
+    status_in: TemplateStatusUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+) -> TemplateRead:
+    """Update only the status of an existing template."""
+
+    try:
+        template = update_template_status_uc(
+            db,
+            template_id=template_id,
+            status=status_in.status,
             updated_by=current_user.id,
         )
     except ValueError as exc:
