@@ -112,6 +112,8 @@ class TemplateRepository:
         if include_creation_fields:
             model.created_by = template.created_by
             model.created_at = template.created_at
+            model.updated_by = None
+            model.updated_at = None
         model.user_id = template.user_id
         model.name = template.name
         model.status = template.status
