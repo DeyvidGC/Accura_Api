@@ -1,5 +1,7 @@
 """Persistence layer for audit log records."""
 
+from typing import Iterable
+
 from sqlalchemy.orm import Session
 
 from app.domain.entities import AuditLog
@@ -19,6 +21,39 @@ class AuditLogRepository:
         self.session.commit()
         self.session.refresh(model)
         return self._to_entity(model)
+
+    def get(self, entry_id: int) -> AuditLog | None:
+        """Return an audit entry by its primary key, if present."""
+
+        model = self.session.get(AuditLogModel, entry_id)
+        if model is None:
+            return None
+        return self._to_entity(model)
+
+    def list(self, *, template_name: str | None = None) -> list[AuditLog]:
+        """Return audit entries, optionally filtered by template name."""
+
+        query = self.session.query(AuditLogModel)
+        if template_name is not None:
+            query = query.filter(AuditLogModel.template_name == template_name)
+
+        models: Iterable[AuditLogModel] = query.order_by(AuditLogModel.id).all()
+        return [self._to_entity(model) for model in models]
+
+    def delete(self, entry_id: int) -> bool:
+        """Delete an audit entry by id.
+
+        Returns ``True`` when a record was removed and ``False`` when the
+        requested entry was not found.
+        """
+
+        model = self.session.get(AuditLogModel, entry_id)
+        if model is None:
+            return False
+
+        self.session.delete(model)
+        self.session.commit()
+        return True
 
     @staticmethod
     def _to_entity(model: AuditLogModel) -> AuditLog:
