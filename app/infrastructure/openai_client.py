@@ -70,29 +70,48 @@ class StructuredChatService:
         """
         Envía un mensaje y devuelve JSON validado por el modelo, usando JSON Schema estricto.
         """
-        # OJO: mantengo tus claves exactas, incluso "regla generales"
         json_schema_definition = {
             "type": "object",
             "additionalProperties": False,
             "properties": {
-                "Nombre columna": {"type": "string"},
-                "Tipo de dato": {"type": "string"},
-                "Campo obligatorio": {"type": "boolean"},
-                "regla generales": {
+                "summary": {"type": "string"},
+                "user_needs": {
                     "type": "array",
-                    "minItems": 1,
-                    "items": {
-                        "type": "object",
-                        "additionalProperties": False,
-                        "properties": {
-                            "valor mínimo": {"type": ["number", "null"]},
-                            "valor máximo": {"type": ["number", "null"]}
+                    "items": {"type": "string"},
+                    "default": [],
+                },
+                "response_guidance": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "allowed_topics": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "minItems": 1,
                         },
-                        "required": ["valor mínimo", "valor máximo"]
-                    }
-                }
+                        "tone": {"type": "string"},
+                        "formatting": {"type": "string"},
+                        "helpful_phrases": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "default": [],
+                        },
+                    },
+                    "required": ["allowed_topics", "tone", "formatting"],
+                },
+                "suggested_reply": {"type": "string"},
+                "follow_up_questions": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "default": [],
+                },
             },
-            "required": ["Nombre columna", "Tipo de dato", "Campo obligatorio", "regla generales"]
+            "required": [
+                "summary",
+                "user_needs",
+                "response_guidance",
+                "suggested_reply",
+            ],
         }
 
         system_prompt = (
@@ -101,9 +120,9 @@ class StructuredChatService:
         )
 
         instruction = (
-            "Genera el objeto JSON solicitado con las siguientes claves EXACTAS:\n"
-            '"Nombre columna", "Tipo de dato", "Campo obligatorio", "regla generales" '
-            "(con 'valor mínimo' y 'valor máximo' en cada regla)."
+            "Analiza el mensaje del usuario y responde con un JSON que cumpla EXACTAMENTE con las "
+            "siguientes claves: summary, user_needs, response_guidance, suggested_reply y, opcional, "
+            "follow_up_questions. Describe lo que necesita el usuario y cómo debe responder el asistente."
         )
         if not self._supports_response_format:
             schema_text = json.dumps(json_schema_definition, ensure_ascii=False)
@@ -165,24 +184,40 @@ class StructuredChatService:
                 raise OpenAIServiceError("La respuesta de OpenAI no es un JSON válido.") from exc
 
         # Validaciones extra (por si cambias el schema arriba en el futuro)
-        required_keys = {
-            "Nombre columna": str,
-            "Tipo de dato": str,
-            "Campo obligatorio": bool,
-            "regla generales": list,
-        }
-        for k, t in required_keys.items():
-            if k not in payload or not isinstance(payload[k], t):
-                raise OpenAIServiceError(f"La respuesta de OpenAI no contiene '{k}' con el tipo esperado.")
+        if "summary" not in payload or not isinstance(payload["summary"], str):
+            raise OpenAIServiceError("La respuesta de OpenAI no contiene 'summary' válido.")
 
-        if not payload["regla generales"]:
-            raise OpenAIServiceError("La respuesta de OpenAI debe incluir al menos una regla general.")
+        if "suggested_reply" not in payload or not isinstance(payload["suggested_reply"], str):
+            raise OpenAIServiceError("La respuesta de OpenAI no contiene 'suggested_reply' válido.")
 
-        for regla in payload["regla generales"]:
-            if not isinstance(regla, dict):
-                raise OpenAIServiceError("Cada elemento de 'regla generales' debe ser un objeto JSON.")
-            for bk in ("valor mínimo", "valor máximo"):
-                if bk not in regla:
-                    raise OpenAIServiceError("Las reglas deben incluir 'valor mínimo' y 'valor máximo'.")
+        user_needs = payload.get("user_needs")
+        if not isinstance(user_needs, list) or not all(isinstance(x, str) for x in user_needs):
+            raise OpenAIServiceError("'user_needs' debe ser una lista de cadenas.")
+
+        follow_up = payload.setdefault("follow_up_questions", [])
+        if not isinstance(follow_up, list) or not all(isinstance(x, str) for x in follow_up):
+            raise OpenAIServiceError("'follow_up_questions' debe ser una lista de cadenas.")
+
+        guidance = payload.get("response_guidance")
+        if not isinstance(guidance, dict):
+            raise OpenAIServiceError("'response_guidance' debe ser un objeto JSON.")
+
+        for key in ("allowed_topics", "tone", "formatting"):
+            if key not in guidance:
+                raise OpenAIServiceError(f"'response_guidance' debe incluir '{key}'.")
+
+        allowed_topics = guidance.get("allowed_topics")
+        if not isinstance(allowed_topics, list) or not all(isinstance(x, str) for x in allowed_topics):
+            raise OpenAIServiceError("'allowed_topics' debe ser una lista de cadenas.")
+        if not allowed_topics:
+            raise OpenAIServiceError("'allowed_topics' debe contener al menos un elemento.")
+
+        for key in ("tone", "formatting"):
+            if not isinstance(guidance.get(key), str):
+                raise OpenAIServiceError(f"'{key}' debe ser una cadena dentro de 'response_guidance'.")
+
+        helpful = guidance.setdefault("helpful_phrases", [])
+        if not isinstance(helpful, list) or not all(isinstance(x, str) for x in helpful):
+            raise OpenAIServiceError("'helpful_phrases' debe ser una lista de cadenas.")
 
         return payload
