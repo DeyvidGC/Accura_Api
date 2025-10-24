@@ -36,7 +36,6 @@ def analyze_message(
         serialized_rules = [
             {
                 "id": rule.id,
-                "name": rule.name,
                 "rule": rule.rule,
             }
             for rule in recent_rules
