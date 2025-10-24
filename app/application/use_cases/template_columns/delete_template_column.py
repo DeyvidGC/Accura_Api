@@ -2,14 +2,17 @@
 
 from sqlalchemy.orm import Session
 
-from app.infrastructure.dynamic_tables import create_template_table, drop_template_table
 from app.infrastructure.repositories import TemplateColumnRepository, TemplateRepository
 
 
 def delete_template_column(
     session: Session, *, template_id: int, column_id: int
 ) -> None:
-    """Delete a template column and update the physical table if needed."""
+    """Delete a template column.
+
+    Raises:
+        ValueError: If the template does not exist, is published or the column is missing.
+    """
 
     column_repository = TemplateColumnRepository(session)
     template_repository = TemplateRepository(session)
@@ -18,16 +21,11 @@ def delete_template_column(
     if template is None:
         raise ValueError("Plantilla no encontrada")
 
+    if template.status == "published":
+        raise ValueError("No se pueden modificar las columnas de una plantilla publicada")
+
     column = column_repository.get(column_id)
     if column is None or column.template_id != template_id:
         raise ValueError("Columna no encontrada")
 
     column_repository.delete(column_id)
-
-    if template.status == "published":
-        updated_template = template_repository.get(template_id)
-        try:
-            drop_template_table(template.table_name)
-            create_template_table(updated_template.table_name, updated_template.columns)
-        except RuntimeError as exc:
-            raise ValueError(str(exc)) from exc

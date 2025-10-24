@@ -9,8 +9,6 @@ from app.infrastructure.dynamic_tables import (
     IdentifierError,
     ensure_data_type,
     ensure_identifier,
-    create_template_table,
-    drop_template_table,
 )
 from app.infrastructure.repositories import (
     TemplateColumnRepository,
@@ -28,7 +26,11 @@ def create_template_column(
     rule_id: int | None = None,
     created_by: int | None = None,
 ) -> TemplateColumn:
-    """Create a new column inside a template."""
+    """Create a new column inside a template.
+
+    Raises:
+        ValueError: If the template does not exist or is already published.
+    """
 
     column_repository = TemplateColumnRepository(session)
     template_repository = TemplateRepository(session)
@@ -36,6 +38,9 @@ def create_template_column(
     template = template_repository.get(template_id)
     if template is None:
         raise ValueError("Plantilla no encontrada")
+
+    if template.status == "published":
+        raise ValueError("No se pueden modificar las columnas de una plantilla publicada")
 
     try:
         safe_name = ensure_identifier(name, kind="column")
@@ -67,13 +72,5 @@ def create_template_column(
     )
 
     saved_column = column_repository.create(column)
-
-    if template.status == "published":
-        updated_template = template_repository.get(template_id)
-        try:
-            drop_template_table(template.table_name)
-            create_template_table(updated_template.table_name, updated_template.columns)
-        except RuntimeError as exc:
-            raise ValueError(str(exc)) from exc
 
     return saved_column

@@ -10,8 +10,6 @@ from app.infrastructure.dynamic_tables import (
     IdentifierError,
     ensure_data_type,
     ensure_identifier,
-    create_template_table,
-    drop_template_table,
 )
 from app.infrastructure.repositories import (
     TemplateColumnRepository,
@@ -31,7 +29,11 @@ def update_template_column(
     is_active: bool | None = None,
     updated_by: int | None = None,
 ) -> TemplateColumn:
-    """Update an existing template column."""
+    """Update an existing template column.
+
+    Raises:
+        ValueError: If the template does not exist, is published or the column is missing.
+    """
 
     column_repository = TemplateColumnRepository(session)
     template_repository = TemplateRepository(session)
@@ -39,6 +41,9 @@ def update_template_column(
     template = template_repository.get(template_id)
     if template is None:
         raise ValueError("Plantilla no encontrada")
+
+    if template.status == "published":
+        raise ValueError("No se pueden modificar las columnas de una plantilla publicada")
 
     current = column_repository.get(column_id)
     if current is None or current.template_id != template_id:
@@ -77,14 +82,4 @@ def update_template_column(
         updated_at=datetime.utcnow(),
     )
 
-    saved_column = column_repository.update(updated_column)
-
-    if template.status == "published":
-        updated_template = template_repository.get(template_id)
-        try:
-            drop_template_table(template.table_name)
-            create_template_table(updated_template.table_name, updated_template.columns)
-        except RuntimeError as exc:
-            raise ValueError(str(exc)) from exc
-
-    return saved_column
+    return column_repository.update(updated_column)
