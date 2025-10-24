@@ -153,27 +153,52 @@ class StructuredChatService:
                 "No se pudo determinar el modelo de OpenAI configurado.",
             )
 
+        request_messages = [
+            {
+                "role": "system",
+                "content": [{"type": "text", "text": system_prompt}],
+            },
+            {
+                "role": "user",
+                "content": [{"type": "text", "text": user_message}],
+            },
+        ]
+
+        schema_name = "structured_assistant_reply"
+        modern_response_format = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": schema_name,
+                "schema": json_schema_definition,
+            },
+        }
+
         try:
             response = client.responses.create(
                 model=model,
-                input=[
-                    {
-                        "role": "system",
-                        "content": [{"type": "text", "text": system_prompt}],
-                    },
-                    {
-                        "role": "user",
-                        "content": [{"type": "text", "text": user_message}],
-                    },
-                ],
-                response_format={
-                    "type": "json_schema",
-                    "json_schema": {
-                        "name": "structured_assistant_reply",
-                        "schema": json_schema_definition,
-                    },
-                },
+                input=request_messages,
+                response_format=modern_response_format,
             )
+        except TypeError as exc:
+            if "response_format" not in str(exc):  # pragma: no cover - defensive guard
+                raise OpenAIServiceError("No se pudo generar la respuesta usando OpenAI.") from exc
+
+            legacy_text_format = {
+                "format": {
+                    "type": "json_schema",
+                    "name": schema_name,
+                    "schema": json_schema_definition,
+                }
+            }
+
+            try:
+                response = client.responses.create(
+                    model=model,
+                    input=request_messages,
+                    text=legacy_text_format,
+                )
+            except (OpenAIError, TypeError) as legacy_exc:  # pragma: no cover - depends on external service
+                raise OpenAIServiceError("No se pudo generar la respuesta usando OpenAI.") from legacy_exc
         except OpenAIError as exc:  # pragma: no cover - depends on external service
             raise OpenAIServiceError("No se pudo generar la respuesta usando OpenAI.") from exc
 
