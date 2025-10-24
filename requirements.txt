@@ -11,3 +11,4 @@ psycopg
 psycopg2
 python-dotenv
 email-validator
+openai>=1.0.0
