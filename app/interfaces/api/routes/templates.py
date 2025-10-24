@@ -1,6 +1,7 @@
 """Routes for managing templates and their columns."""
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.application.use_cases.template_columns import (
@@ -14,6 +15,7 @@ from app.application.use_cases.templates import (
     create_template as create_template_uc,
     delete_template as delete_template_uc,
     get_template as get_template_uc,
+    get_template_excel as get_template_excel_uc,
     list_templates as list_templates_uc,
     update_template as update_template_uc,
     update_template_status as update_template_status_uc,
@@ -294,3 +296,27 @@ def delete_template_column(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/{template_id}/excel")
+def download_template_excel(
+    template_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    """Return the generated Excel file for a template."""
+
+    try:
+        path = get_template_excel_uc(db, template_id=template_id)
+    except ValueError as exc:
+        detail = str(exc)
+        status_code = status.HTTP_404_NOT_FOUND
+        if detail not in {"Plantilla no encontrada", "Archivo de plantilla no encontrado"}:
+            status_code = status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=status_code, detail=detail) from exc
+
+    return FileResponse(
+        path,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename=path.name,
+    )

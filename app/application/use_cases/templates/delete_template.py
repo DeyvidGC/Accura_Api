@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.domain.entities import AuditLog
 from app.infrastructure.dynamic_tables import drop_template_table
+from app.infrastructure.template_files import delete_template_excel
 from app.infrastructure.repositories import AuditLogRepository, TemplateRepository
 
 
@@ -26,6 +27,8 @@ def delete_template(
             drop_template_table(template.table_name)
         except RuntimeError as exc:
             raise ValueError(str(exc)) from exc
+
+        delete_template_excel(template.id, template.name)
 
         audit_repository = AuditLogRepository(session)
         audit_repository.create(

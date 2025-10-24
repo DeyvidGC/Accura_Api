@@ -12,6 +12,10 @@ from app.infrastructure.dynamic_tables import (
     drop_template_table,
     ensure_identifier,
 )
+from app.infrastructure.template_files import (
+    create_template_excel,
+    delete_template_excel,
+)
 from app.infrastructure.repositories import AuditLogRepository, TemplateRepository
 
 ALLOWED_STATUSES = {"unpublished", "published"}
@@ -111,8 +115,16 @@ def update_template(
                 )
             )
 
+        if current.status == "published" and (status_changed or table_changed):
+            delete_template_excel(current.id, current.name)
+
         if saved_template.status == "published" and (status_changed or table_changed):
             create_template_table(saved_template.table_name, saved_template.columns)
+            create_template_excel(
+                saved_template.id,
+                saved_template.name,
+                saved_template.columns,
+            )
             operation = "insercion"
             if drop_performed and table_changed:
                 operation = "actualizacion"
