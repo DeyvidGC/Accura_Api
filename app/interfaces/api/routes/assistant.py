@@ -1,12 +1,19 @@
 """Routes for interacting with the OpenAI powered assistant."""
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
 
+from app.application.use_cases.rules import list_recent_rules as list_recent_rules_uc
+from app.domain.entities import User
+from app.infrastructure.database import get_db
 from app.infrastructure.openai_client import (
     OpenAIServiceError,
     StructuredChatService,
 )
-from app.interfaces.api.dependencies import get_structured_chat_service
+from app.interfaces.api.dependencies import (
+    get_structured_chat_service,
+    require_admin,
+)
 from app.interfaces.api.schemas import (
     AssistantMessageRequest,
     AssistantMessageResponse,
@@ -18,12 +25,26 @@ router = APIRouter(prefix="/assistant", tags=["assistant"])
 @router.post("/analyze", response_model=AssistantMessageResponse)
 def analyze_message(
     payload: AssistantMessageRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
     assistant: StructuredChatService = Depends(get_structured_chat_service),
 ) -> AssistantMessageResponse:
     """Generate a structured reply describing how to respond to the user message."""
 
     try:
-        raw_response = assistant.generate_structured_response(payload.message)
+        recent_rules = list_recent_rules_uc(db, limit=5)
+        serialized_rules = [
+            {
+                "id": rule.id,
+                "name": rule.name,
+                "rule": rule.rule,
+            }
+            for rule in recent_rules
+        ]
+        raw_response = assistant.generate_structured_response(
+            payload.message,
+            recent_rules=serialized_rules or None,
+        )
     except OpenAIServiceError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
