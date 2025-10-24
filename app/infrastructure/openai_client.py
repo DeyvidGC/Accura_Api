@@ -22,18 +22,46 @@ class StructuredChatService:
     """Service responsible for producing structured assistant replies."""
 
     def __init__(self, client: OpenAI | None = None) -> None:
+        self._client: OpenAI | None = client
+        self._model: str | None = None
+        self._is_configured = False
+        self._configure_from_settings()
+
+    def _configure_from_settings(self) -> None:
+        """Load OpenAI settings and lazily initialize the SDK client."""
+
+        if self._is_configured:
+            return
+
         settings = get_settings()
-        if not settings.openai_api_key:
+        if not settings.openai_api_key and self._client is None:
             raise OpenAIConfigurationError(
                 "La clave de API de OpenAI no está configurada. Define OPENAI_API_KEY en las variables de entorno.",
             )
 
-        client_kwargs: dict[str, Any] = {"api_key": settings.openai_api_key}
-        if settings.openai_base_url:
-            client_kwargs["base_url"] = settings.openai_base_url
+        if self._client is None:
+            client_kwargs: dict[str, Any] = {"api_key": settings.openai_api_key}
+            if settings.openai_base_url:
+                base_url = settings.openai_base_url.rstrip("/")
+                if base_url.endswith("/responses"):
+                    base_url = base_url[: -len("/responses")].rstrip("/")
+                if base_url:
+                    client_kwargs["base_url"] = base_url
 
-        self._client = client or OpenAI(**client_kwargs)
+            self._client = OpenAI(**client_kwargs)
+
         self._model = settings.openai_model
+        self._is_configured = True
+
+    def _get_client(self) -> OpenAI:
+        """Return an initialized OpenAI client instance."""
+
+        self._configure_from_settings()
+        if self._client is None:  # pragma: no cover - defensive guard
+            raise OpenAIConfigurationError(
+                "No se pudo inicializar el cliente de OpenAI. Verifica la configuración proporcionada.",
+            )
+        return self._client
 
     def generate_structured_response(self, user_message: str) -> dict[str, Any]:
         """Return a structured JSON response for the given user message."""
@@ -107,9 +135,16 @@ class StructuredChatService:
             },
         }
 
+        client = self._get_client()
+        model = self._model
+        if model is None:  # pragma: no cover - defensive guard
+            raise OpenAIConfigurationError(
+                "No se pudo determinar el modelo de OpenAI configurado.",
+            )
+
         try:
-            response = self._client.responses.create(
-                model=self._model,
+            response = client.responses.create(
+                model=model,
                 input=[
                     {
                         "role": "system",
