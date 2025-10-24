@@ -6,7 +6,7 @@ import re
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class AssistantMessageRequest(BaseModel):
@@ -44,9 +44,10 @@ class AssistantMessageResponse(BaseModel):
         ..., alias="Regla", description="Configuración específica de la regla según el tipo de dato"
     )
 
-    class Config:
-        allow_population_by_field_name = True
-        populate_by_name = True
+    model_config = ConfigDict(
+        validate_by_name=True,
+        populate_by_name=True,
+    )
 
     @model_validator(mode="after")
     def validate_regla(self) -> "AssistantMessageResponse":
