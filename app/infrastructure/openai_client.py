@@ -1,4 +1,4 @@
-"""Utilities for interacting with the OpenAI API."""
+"""Cliente sencillo para probar la conexión con la API de OpenAI."""
 
 from __future__ import annotations
 
@@ -11,204 +11,75 @@ from app.config import get_settings
 
 
 class OpenAIConfigurationError(RuntimeError):
-    """Raised when the OpenAI client is misconfigured."""
+    """Error lanzado cuando faltan datos básicos de configuración."""
 
 
 class OpenAIServiceError(RuntimeError):
-    """Raised when the OpenAI service returns an unexpected response."""
+    """Error lanzado cuando la API de OpenAI no responde como se espera."""
 
 
 class StructuredChatService:
-    """Service responsible for producing structured assistant replies."""
+    """Servicio muy simple para verificar la conexión con OpenAI."""
 
-    def __init__(self, client: OpenAI | None = None) -> None:
-        self._client: OpenAI | None = client
-        self._model: str | None = None
-        self._is_configured = False
-        self._configure_from_settings()
-
-    def _configure_from_settings(self) -> None:
-        """Load OpenAI settings and lazily initialize the SDK client."""
-
-        if self._is_configured:
-            return
-
+    def __init__(self) -> None:
         settings = get_settings()
-        if not settings.openai_api_key and self._client is None:
+
+        api_key = (settings.openai_api_key or "").strip()
+        if not api_key:
             raise OpenAIConfigurationError(
-                "La clave de API de OpenAI no está configurada. Define OPENAI_API_KEY en las variables de entorno.",
+                "OPENAI_API_KEY no está definido en las variables de entorno.",
             )
 
-        if self._client is None:
-            client_kwargs: dict[str, Any] = {"api_key": settings.openai_api_key}
-            sanitized_base_url = self._sanitize_base_url(settings.openai_base_url)
-            if sanitized_base_url:
-                client_kwargs["base_url"] = sanitized_base_url
+        base_url = (settings.openai_base_url or "").strip()
+        model = (settings.openai_model or "gpt-4.1-mini").strip() or "gpt-4.1-mini"
 
-            self._client = OpenAI(**client_kwargs)
+        client_kwargs: dict[str, Any] = {"api_key": api_key}
+        if base_url:
+            client_kwargs["base_url"] = base_url
 
-        self._model = settings.openai_model
-        self._is_configured = True
-
-    @staticmethod
-    def _sanitize_base_url(raw_base_url: str | None) -> str | None:
-        """Normalize optional base URL values provided via configuration."""
-
-        if not raw_base_url:
-            return None
-
-        base_url = raw_base_url.strip().rstrip("/")
-        if not base_url:
-            return None
-
-        if base_url.endswith("/responses"):
-            base_url = base_url[: -len("/responses")].rstrip("/")
-
-        # Avoid redundantly setting the official API base when matching defaults.
-        if base_url in {"https://api.openai.com", "https://api.openai.com/v1"}:
-            return None
-
-        return base_url
-
-    def _get_client(self) -> OpenAI:
-        """Return an initialized OpenAI client instance."""
-
-        self._configure_from_settings()
-        if self._client is None:  # pragma: no cover - defensive guard
-            raise OpenAIConfigurationError(
-                "No se pudo inicializar el cliente de OpenAI. Verifica la configuración proporcionada.",
-            )
-        return self._client
+        self._client = OpenAI(**client_kwargs)
+        self._model = model
 
     def generate_structured_response(self, user_message: str) -> dict[str, Any]:
-        """Return a structured JSON response for the given user message."""
+        """Envía un mensaje de prueba y devuelve el JSON generado por el modelo."""
 
-        system_prompt = (
-            "Eres un asistente que analiza la solicitud del usuario y responde únicamente con JSON. "
-            "El JSON debe describir lo que el usuario necesita y cómo debe responder el asistente."
+        instruction = (
+            "Responde ÚNICAMENTE con JSON válido usando esta estructura exacta: "
+            "{\n"
+            '  "summary": string en español,\n'
+            '  "user_needs": lista de strings,\n'
+            '  "response_guidance": {\n'
+            '    "allowed_topics": lista de strings,\n'
+            '    "tone": string,\n'
+            '    "formatting": string,\n'
+            '    "helpful_phrases": lista de strings\n'
+            "  },\n"
+            '  "suggested_reply": string,\n'
+            '  "follow_up_questions": lista de strings\n'
+            "}\n"
+            "No agregues texto adicional fuera del JSON."
         )
 
-        json_schema_definition = {
-            "type": "object",
-            "additionalProperties": False,
-            "properties": {
-                "summary": {
-                    "type": "string",
-                    "description": "Resumen breve en español de la petición del usuario.",
-                },
-                "user_needs": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "Lista de elementos concretos que el usuario solicita o espera.",
-                    "minItems": 1,
-                },
-                "response_guidance": {
-                    "type": "object",
-                    "additionalProperties": False,
-                    "properties": {
-                        "allowed_topics": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                            "description": "Temas que el asistente puede abordar en su respuesta.",
-                            "minItems": 1,
-                        },
-                        "tone": {
-                            "type": "string",
-                            "description": "Indicaciones sobre el tono apropiado de la respuesta.",
-                        },
-                        "formatting": {
-                            "type": "string",
-                            "description": "Formato o estructura sugerida para responder (por ejemplo, viñetas, pasos, etc.).",
-                        },
-                        "helpful_phrases": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                            "description": "Frases concretas que podrían ser útiles en la respuesta.",
-                        },
-                    },
-                    "required": ["allowed_topics", "tone", "formatting"],
-                },
-                "suggested_reply": {
-                    "type": "string",
-                    "description": "Propuesta de respuesta redactada que siga las indicaciones dadas.",
-                },
-                "follow_up_questions": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "Preguntas adicionales que ayudarían a completar la asistencia.",
-                },
-            },
-            "required": [
-                "summary",
-                "user_needs",
-                "response_guidance",
-                "suggested_reply",
-            ],
-        }
-
-        client = self._get_client()
-        model = self._model
-        if model is None:  # pragma: no cover - defensive guard
-            raise OpenAIConfigurationError(
-                "No se pudo determinar el modelo de OpenAI configurado.",
-            )
-
-        request_messages = [
-            {
-                "role": "system",
-                "content": [{"type": "text", "text": system_prompt}],
-            },
-            {
-                "role": "user",
-                "content": [{"type": "text", "text": user_message}],
-            },
-        ]
-
-        schema_name = "structured_assistant_reply"
-        modern_response_format = {
-            "type": "json_schema",
-            "json_schema": {
-                "name": schema_name,
-                "schema": json_schema_definition,
-            },
-        }
+        prompt = f"{instruction}\n\nUsuario: {user_message}"
 
         try:
-            response = client.responses.create(
-                model=model,
-                input=request_messages,
-                response_format=modern_response_format,
+            response = self._client.responses.create(
+                model=self._model,
+                input=prompt,
             )
-        except TypeError as exc:
-            if "response_format" not in str(exc):  # pragma: no cover - defensive guard
-                raise OpenAIServiceError("No se pudo generar la respuesta usando OpenAI.") from exc
+        except OpenAIError as exc:
+            raise OpenAIServiceError("No se pudo realizar la solicitud a OpenAI.") from exc
 
-            # Some versions of the SDK still expose the Responses API but without
-            # accepting the ``response_format`` parameter. When that happens we
-            # fall back to a plain request and rely on the prompts to obtain a
-            # JSON payload that matches the expected schema.
+        text = getattr(response, "output_text", None)
+        if not text:
             try:
-                response = client.responses.create(
-                    model=model,
-                    input=request_messages,
-                )
-            except (OpenAIError, TypeError) as legacy_exc:  # pragma: no cover - depends on external service
-                raise OpenAIServiceError("No se pudo generar la respuesta usando OpenAI.") from legacy_exc
-        except OpenAIError as exc:  # pragma: no cover - depends on external service
-            raise OpenAIServiceError("No se pudo generar la respuesta usando OpenAI.") from exc
-
-        raw_text = getattr(response, "output_text", None)
-        if not raw_text:
-            try:
-                first_output = response.output[0]
-                content_block = first_output.content[0]
-                raw_text = getattr(content_block, "text", None)
-            except (AttributeError, IndexError, TypeError) as exc:  # pragma: no cover
-                raise OpenAIServiceError("La respuesta de OpenAI no contiene texto utilizable.") from exc
+                text = response.output[0].content[0].text
+            except (AttributeError, IndexError, TypeError) as exc:
+                raise OpenAIServiceError(
+                    "La respuesta de OpenAI no contiene texto utilizable.",
+                ) from exc
 
         try:
-            payload = json.loads(raw_text)
+            return json.loads(text)
         except json.JSONDecodeError as exc:
             raise OpenAIServiceError("La respuesta de OpenAI no es un JSON válido.") from exc
-
-        return payload
