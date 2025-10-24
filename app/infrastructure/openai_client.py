@@ -45,16 +45,15 @@ class StructuredChatService:
         instruction = (
             "Responde ÚNICAMENTE con JSON válido usando esta estructura exacta: "
             "{\n"
-            '  "summary": string en español,\n'
-            '  "user_needs": lista de strings,\n'
-            '  "response_guidance": {\n'
-            '    "allowed_topics": lista de strings,\n'
-            '    "tone": string,\n'
-            '    "formatting": string,\n'
-            '    "helpful_phrases": lista de strings\n'
-            "  },\n"
-            '  "suggested_reply": string,\n'
-            '  "follow_up_questions": lista de strings\n'
+            '  "Nombre columna": string,\n'
+            '  "Tipo de dato": string,\n'
+            '  "Campo obligatorio": booleano,\n'
+            '  "regla generales": [\n'
+            '    {\n'
+            '      "valor mínimo": número o null,\n'
+            '      "valor máximo": número o null\n'
+            '    }\n'
+            '  ]\n'
             "}\n"
             "No agregues texto adicional fuera del JSON."
         )
@@ -79,6 +78,43 @@ class StructuredChatService:
                 ) from exc
 
         try:
-            return json.loads(text)
+            payload = json.loads(text)
         except json.JSONDecodeError as exc:
             raise OpenAIServiceError("La respuesta de OpenAI no es un JSON válido.") from exc
+
+        required_keys = {
+            "Nombre columna": str,
+            "Tipo de dato": str,
+            "Campo obligatorio": bool,
+            "regla generales": list,
+        }
+
+        for key, expected_type in required_keys.items():
+            if key not in payload:
+                raise OpenAIServiceError(
+                    f"La respuesta de OpenAI no incluye el campo obligatorio '{key}'."
+                )
+            if not isinstance(payload[key], expected_type):
+                raise OpenAIServiceError(
+                    "La respuesta de OpenAI no coincide con el tipo esperado para "
+                    f"'{key}'."
+                )
+
+        reglas = payload["regla generales"]
+        if not reglas:
+            raise OpenAIServiceError(
+                "La respuesta de OpenAI debe incluir al menos una regla general."
+            )
+
+        for regla in reglas:
+            if not isinstance(regla, dict):
+                raise OpenAIServiceError(
+                    "Cada elemento de 'regla generales' debe ser un objeto JSON."
+                )
+            for bound_key in ("valor mínimo", "valor máximo"):
+                if bound_key not in regla:
+                    raise OpenAIServiceError(
+                        "Las reglas generales deben incluir 'valor mínimo' y 'valor máximo'."
+                    )
+
+        return payload
