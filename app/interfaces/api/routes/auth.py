@@ -8,9 +8,15 @@ from sqlalchemy.orm import Session
 
 from app.application.use_cases.users import authenticate_user, record_login
 from app.config import get_settings
+from app.domain.entities import User
 from app.infrastructure.database import get_db
-from app.infrastructure.security import create_access_token
-from app.interfaces.api.schemas import Token
+from app.infrastructure.security import create_access_token, get_password_hash
+from app.interfaces.api.dependencies import require_admin
+from app.interfaces.api.schemas import (
+    PasswordHashRequest,
+    PasswordHashResponse,
+    Token,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 settings = get_settings()
@@ -42,3 +48,14 @@ def login_for_access_token(
         "token_type": "bearer",
         "role": user.role.alias,
     }
+
+
+@router.post("/hash-password", response_model=PasswordHashResponse)
+def generate_password_hash(
+    payload: PasswordHashRequest,
+    _: User = Depends(require_admin),
+) -> PasswordHashResponse:
+    """Return a hashed version of the provided password for administrator use."""
+
+    hashed_password = get_password_hash(payload.password)
+    return PasswordHashResponse(hashed_password=hashed_password)

@@ -2,6 +2,7 @@
 
 from collections.abc import Sequence
 
+from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from app.domain.entities import Rule
@@ -16,6 +17,10 @@ class RuleRepository:
 
     def list(self, skip: int = 0, limit: int = 100) -> Sequence[Rule]:
         query = self.session.query(RuleModel).offset(skip).limit(limit)
+        return [self._to_entity(model) for model in query.all()]
+
+    def list_recent(self, limit: int = 5) -> Sequence[Rule]:
+        query = self.session.query(RuleModel).order_by(desc(RuleModel.id)).limit(limit)
         return [self._to_entity(model) for model in query.all()]
 
     def get(self, rule_id: int) -> Rule | None:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import inspect
 import json
-import os
+from collections.abc import Sequence
 from typing import Any
 
 from openai import OpenAI, OpenAIError
@@ -67,7 +67,12 @@ class StructuredChatService:
             self._supports_response_format = False
         self._model = model
 
-    def generate_structured_response(self, user_message: str) -> dict[str, Any]:
+    def generate_structured_response(
+        self,
+        user_message: str,
+        *,
+        recent_rules: Sequence[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
         """
         Envía un mensaje y devuelve JSON validado por el modelo, usando JSON Schema estricto.
         """
@@ -105,8 +110,29 @@ class StructuredChatService:
         messages = [
             {"role": "system", "content": [{"type": "input_text", "text": system_prompt}]},
             {"role": "user", "content": [{"type": "input_text", "text": instruction}]},
-            {"role": "user", "content": [{"type": "input_text", "text": user_message}]},
         ]
+
+        if recent_rules:
+            recent_rules_payload = json.dumps(recent_rules, ensure_ascii=False, indent=2)
+            messages.append(
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": (
+                                "Estas son las reglas de validación más recientes registradas en el sistema. "
+                                "Úsalas como conocimiento previo para mantener consistencia y evitar duplicados:\n"
+                                f"{recent_rules_payload}"
+                            ),
+                        }
+                    ],
+                }
+            )
+
+        messages.append(
+            {"role": "user", "content": [{"type": "input_text", "text": user_message}]}
+        )
 
         response_format = {
             "type": "json_schema",
