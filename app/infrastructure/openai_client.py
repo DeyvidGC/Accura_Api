@@ -88,68 +88,62 @@ class StructuredChatService:
             "El JSON debe describir lo que el usuario necesita y cómo debe responder el asistente."
         )
 
-        text_config = {
-            "format": {
-                "type": "json_schema",
-                "name": "structured_assistant_reply",
-                "schema": {
+        json_schema_definition = {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "summary": {
+                    "type": "string",
+                    "description": "Resumen breve en español de la petición del usuario.",
+                },
+                "user_needs": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Lista de elementos concretos que el usuario solicita o espera.",
+                    "minItems": 1,
+                },
+                "response_guidance": {
                     "type": "object",
                     "additionalProperties": False,
                     "properties": {
-                        "summary": {
-                            "type": "string",
-                            "description": "Resumen breve en español de la petición del usuario.",
-                        },
-                        "user_needs": {
+                        "allowed_topics": {
                             "type": "array",
                             "items": {"type": "string"},
-                            "description": "Lista de elementos concretos que el usuario solicita o espera.",
+                            "description": "Temas que el asistente puede abordar en su respuesta.",
                             "minItems": 1,
                         },
-                        "response_guidance": {
-                            "type": "object",
-                            "additionalProperties": False,
-                            "properties": {
-                                "allowed_topics": {
-                                    "type": "array",
-                                    "items": {"type": "string"},
-                                    "description": "Temas que el asistente puede abordar en su respuesta.",
-                                    "minItems": 1,
-                                },
-                                "tone": {
-                                    "type": "string",
-                                    "description": "Indicaciones sobre el tono apropiado de la respuesta.",
-                                },
-                                "formatting": {
-                                    "type": "string",
-                                    "description": "Formato o estructura sugerida para responder (por ejemplo, viñetas, pasos, etc.).",
-                                },
-                                "helpful_phrases": {
-                                    "type": "array",
-                                    "items": {"type": "string"},
-                                    "description": "Frases concretas que podrían ser útiles en la respuesta.",
-                                },
-                            },
-                            "required": ["allowed_topics", "tone", "formatting"],
-                        },
-                        "suggested_reply": {
+                        "tone": {
                             "type": "string",
-                            "description": "Propuesta de respuesta redactada que siga las indicaciones dadas.",
+                            "description": "Indicaciones sobre el tono apropiado de la respuesta.",
                         },
-                        "follow_up_questions": {
+                        "formatting": {
+                            "type": "string",
+                            "description": "Formato o estructura sugerida para responder (por ejemplo, viñetas, pasos, etc.).",
+                        },
+                        "helpful_phrases": {
                             "type": "array",
                             "items": {"type": "string"},
-                            "description": "Preguntas adicionales que ayudarían a completar la asistencia.",
+                            "description": "Frases concretas que podrían ser útiles en la respuesta.",
                         },
                     },
-                    "required": [
-                        "summary",
-                        "user_needs",
-                        "response_guidance",
-                        "suggested_reply",
-                    ],
+                    "required": ["allowed_topics", "tone", "formatting"],
+                },
+                "suggested_reply": {
+                    "type": "string",
+                    "description": "Propuesta de respuesta redactada que siga las indicaciones dadas.",
+                },
+                "follow_up_questions": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Preguntas adicionales que ayudarían a completar la asistencia.",
                 },
             },
+            "required": [
+                "summary",
+                "user_needs",
+                "response_guidance",
+                "suggested_reply",
+            ],
         }
 
         client = self._get_client()
@@ -172,7 +166,13 @@ class StructuredChatService:
                         "content": [{"type": "text", "text": user_message}],
                     },
                 ],
-                text=text_config,
+                response_format={
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "structured_assistant_reply",
+                        "schema": json_schema_definition,
+                    },
+                },
             )
         except OpenAIError as exc:  # pragma: no cover - depends on external service
             raise OpenAIServiceError("No se pudo generar la respuesta usando OpenAI.") from exc
