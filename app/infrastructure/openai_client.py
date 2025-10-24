@@ -79,12 +79,18 @@ class StructuredChatService:
         )
 
         instruction = (
-            "Analiza el mensaje del usuario y construye una definición de regla de validación para campos "
-            "de formularios. Debes responder con un JSON que cumpla EXACTAMENTE con el esquema 'Regla de "
-            "Campo'. Asegúrate de definir todas las propiedades requeridas y de que 'Regla' siga las "
-            "restricciones correspondientes según el tipo de dato. Si el mensaje del usuario no especifica "
-            "algún valor requerido, dedúcelo o propón uno coherente con la intención descrita; nunca "
-            "uses textos genéricos como 'N/A', 'Por definir' ni dejes campos vacíos."
+                "Analiza el mensaje del usuario y construye una definición de regla de validación para campos de "
+                "formularios usados en el sector InsurTech (tecnología aplicada a seguros). "
+                "Ten en cuenta que en este sector los formularios suelen incluir datos de pólizas, clientes, "
+                "riesgos, coberturas, siniestros, y entidades aseguradoras. "
+                "Debes responder con un JSON que cumpla EXACTAMENTE con el esquema 'Regla de Campo'. "
+                "Asegúrate de definir todas las propiedades requeridas y de que 'Regla' siga las restricciones "
+                "correspondientes según el tipo de dato. "
+                "Si el mensaje del usuario no especifica algún valor requerido, dedúcelo o propón uno coherente "
+                "con las prácticas y terminología del sector asegurador, manteniendo consistencia con casos de uso reales "
+                "de validación de datos en InsurTech (por ejemplo: verificación de formatos de pólizas, número de documento, "
+                "fechas de vigencia, montos asegurados, o nombres de aseguradoras). "
+                "Nunca uses textos genéricos como 'N/A', 'Por definir' ni dejes campos vacíos. "
         )
         if not self._supports_response_format:
             schema_text = json.dumps(json_schema_definition, ensure_ascii=False)
@@ -115,6 +121,12 @@ class StructuredChatService:
             request_kwargs: dict[str, Any] = {
                 "model": self._model,
                 "input": messages,
+                # ⬇️ Controles de “libertad” / creatividad:
+                "temperature": 0.25,  # 0 = determinista, 1+ = más creativo
+                "top_p": 0.9,  # núcleo de prob.; baja si quieres aún más control
+                "frequency_penalty": 0.2,  # penaliza repeticiones de tokens
+                "presence_penalty": 0.0,  # empuja a introducir temas nuevos
+                "max_output_tokens": 600,  # límite de tokens de salida (ajústalo a tu schema)
             }
             if self._supports_response_format:
                 request_kwargs["response_format"] = response_format
