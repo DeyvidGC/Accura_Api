@@ -20,7 +20,6 @@ from app.application.use_cases.templates import (
 )
 from app.domain.entities import Template, TemplateColumn, User
 from app.infrastructure.database import get_db
-from app.infrastructure.repositories import UserRepository
 from app.interfaces.api.dependencies import require_admin
 from app.interfaces.api.schemas import (
     TemplateColumnCreate,
@@ -55,17 +54,10 @@ def register_template(
 ) -> TemplateRead:
     """Create a new template definition."""
 
-    user_repository = UserRepository(db)
-    if user_repository.get(template_in.user_id) is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Usuario asociado no encontrado",
-        )
-
     try:
         template = create_template_uc(
             db,
-            user_id=template_in.user_id,
+            user_id=current_user.id,
             name=template_in.name,
             table_name=template_in.table_name,
             description=template_in.description,

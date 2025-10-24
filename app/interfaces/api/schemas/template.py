@@ -53,7 +53,6 @@ class TemplateColumnRead(TemplateColumnBase):
 
 
 class TemplateBase(BaseModel):
-    user_id: int = Field(..., ge=1)
     name: str = Field(..., max_length=50)
     table_name: str = Field(..., max_length=63)
     description: str | None = Field(default=None, max_length=255)

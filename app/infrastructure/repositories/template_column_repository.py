@@ -89,6 +89,8 @@ class TemplateColumnRepository:
         if include_creation_fields:
             model.created_by = column.created_by
             model.created_at = column.created_at
+            model.updated_by = None
+            model.updated_at = None
         model.template_id = column.template_id
         model.rule_id = column.rule_id
         model.name = column.name
