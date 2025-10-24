@@ -183,19 +183,14 @@ class StructuredChatService:
             if "response_format" not in str(exc):  # pragma: no cover - defensive guard
                 raise OpenAIServiceError("No se pudo generar la respuesta usando OpenAI.") from exc
 
-            legacy_text_format = {
-                "format": {
-                    "type": "json_schema",
-                    "name": schema_name,
-                    "schema": json_schema_definition,
-                }
-            }
-
+            # Some versions of the SDK still expose the Responses API but without
+            # accepting the ``response_format`` parameter. When that happens we
+            # fall back to a plain request and rely on the prompts to obtain a
+            # JSON payload that matches the expected schema.
             try:
                 response = client.responses.create(
                     model=model,
                     input=request_messages,
-                    text=legacy_text_format,
                 )
             except (OpenAIError, TypeError) as legacy_exc:  # pragma: no cover - depends on external service
                 raise OpenAIServiceError("No se pudo generar la respuesta usando OpenAI.") from legacy_exc
