@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import json
+import os
 from typing import Any
 
 from openai import OpenAI, OpenAIError
-
-from app.config import get_settings
 
 
 class OpenAIConfigurationError(RuntimeError):
