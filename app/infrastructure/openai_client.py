@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import json
 import os
 from typing import Any
@@ -55,6 +56,14 @@ class StructuredChatService:
             )
 
         self._responses = responses_client
+        self._supports_response_format = False
+        try:  # pragma: no cover - defensive for exotic SDKs
+            params = inspect.signature(self._responses.create).parameters
+            self._supports_response_format = "response_format" in params
+        except (TypeError, ValueError):
+            # Algunos SDK personalizados pueden no exponer la firma completa.
+            # En ese caso asumimos que no soportan response_format.
+            self._supports_response_format = False
         self._model = model
 
     def generate_structured_response(self, user_message: str) -> dict[str, Any]:
@@ -96,6 +105,14 @@ class StructuredChatService:
             '"Nombre columna", "Tipo de dato", "Campo obligatorio", "regla generales" '
             "(con 'valor mínimo' y 'valor máximo' en cada regla)."
         )
+        if not self._supports_response_format:
+            schema_text = json.dumps(json_schema_definition, ensure_ascii=False)
+            instruction += (
+                "\nEl SDK actual de OpenAI no soporta `response_format`, así que debes "
+                "asegurarte manualmente de que la respuesta sea un JSON válido que "
+                "cumpla EXACTAMENTE con este JSON Schema: "
+                f"{schema_text}."
+            )
 
         # Mensajes en formato Responses API (content blocks con input_text)
         messages = [
@@ -114,14 +131,14 @@ class StructuredChatService:
         }
 
         try:
-            resp = self._responses.create(
-                model=self._model,
-                input=messages,
-                response_format=response_format,
-                # Opcionales útiles:
-                # temperature=0,  # para mayor determinismo
-                # max_output_tokens=256,
-            )
+            request_kwargs: dict[str, Any] = {
+                "model": self._model,
+                "input": messages,
+            }
+            if self._supports_response_format:
+                request_kwargs["response_format"] = response_format
+
+            resp = self._responses.create(**request_kwargs)
         except OpenAIError as exc:
             raise OpenAIServiceError("No se pudo realizar la solicitud a OpenAI.") from exc
 
