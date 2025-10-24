@@ -13,6 +13,7 @@ try:  # pragma: no cover - compat import for older SDKs
 except Exception:  # pragma: no cover - keep runtime dependency optional
     Responses = None  # type: ignore[misc, assignment]
 from app.config import get_settings
+from app.schemas import load_regla_de_campo_schema
 
 class OpenAIConfigurationError(RuntimeError):
     """Error lanzado cuando faltan datos básicos de configuración."""
@@ -70,49 +71,7 @@ class StructuredChatService:
         """
         Envía un mensaje y devuelve JSON validado por el modelo, usando JSON Schema estricto.
         """
-        json_schema_definition = {
-            "type": "object",
-            "additionalProperties": False,
-            "properties": {
-                "summary": {"type": "string"},
-                "user_needs": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "default": [],
-                },
-                "response_guidance": {
-                    "type": "object",
-                    "additionalProperties": False,
-                    "properties": {
-                        "allowed_topics": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                            "minItems": 1,
-                        },
-                        "tone": {"type": "string"},
-                        "formatting": {"type": "string"},
-                        "helpful_phrases": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                            "default": [],
-                        },
-                    },
-                    "required": ["allowed_topics", "tone", "formatting"],
-                },
-                "suggested_reply": {"type": "string"},
-                "follow_up_questions": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "default": [],
-                },
-            },
-            "required": [
-                "summary",
-                "user_needs",
-                "response_guidance",
-                "suggested_reply",
-            ],
-        }
+        json_schema_definition = load_regla_de_campo_schema()
 
         system_prompt = (
             "Eres un asistente que responde ÚNICAMENTE con JSON válido según el schema dado. "
@@ -120,9 +79,12 @@ class StructuredChatService:
         )
 
         instruction = (
-            "Analiza el mensaje del usuario y responde con un JSON que cumpla EXACTAMENTE con las "
-            "siguientes claves: summary, user_needs, response_guidance, suggested_reply y, opcional, "
-            "follow_up_questions. Describe lo que necesita el usuario y cómo debe responder el asistente."
+            "Analiza el mensaje del usuario y construye una definición de regla de validación para campos "
+            "de formularios. Debes responder con un JSON que cumpla EXACTAMENTE con el esquema 'Regla de "
+            "Campo'. Asegúrate de definir todas las propiedades requeridas y de que 'Regla' siga las "
+            "restricciones correspondientes según el tipo de dato. Si el mensaje del usuario no especifica "
+            "algún valor requerido, dedúcelo o propón uno coherente con la intención descrita; nunca "
+            "uses textos genéricos como 'N/A', 'Por definir' ni dejes campos vacíos."
         )
         if not self._supports_response_format:
             schema_text = json.dumps(json_schema_definition, ensure_ascii=False)
@@ -184,40 +146,45 @@ class StructuredChatService:
                 raise OpenAIServiceError("La respuesta de OpenAI no es un JSON válido.") from exc
 
         # Validaciones extra (por si cambias el schema arriba en el futuro)
-        if "summary" not in payload or not isinstance(payload["summary"], str):
-            raise OpenAIServiceError("La respuesta de OpenAI no contiene 'summary' válido.")
+        required_fields = [
+            "Nombre de la regla",
+            "Tipo de dato",
+            "Campo obligatorio",
+            "Mensaje de error",
+            "Descripción",
+            "Ejemplo",
+            "Regla",
+        ]
+        for field in required_fields:
+            if field not in payload:
+                raise OpenAIServiceError(f"La respuesta de OpenAI no contiene el campo obligatorio '{field}'.")
 
-        if "suggested_reply" not in payload or not isinstance(payload["suggested_reply"], str):
-            raise OpenAIServiceError("La respuesta de OpenAI no contiene 'suggested_reply' válido.")
+        if not isinstance(payload["Nombre de la regla"], str) or not payload["Nombre de la regla"].strip():
+            raise OpenAIServiceError("'Nombre de la regla' debe ser una cadena no vacía.")
 
-        user_needs = payload.get("user_needs")
-        if not isinstance(user_needs, list) or not all(isinstance(x, str) for x in user_needs):
-            raise OpenAIServiceError("'user_needs' debe ser una lista de cadenas.")
+        tipo = payload.get("Tipo de dato")
+        allowed_types = {
+            "Texto",
+            "Número",
+            "Documento",
+            "Lista",
+            "Telefono",
+            "Correo",
+            "Fecha",
+            "Dependencia",
+            "Validación conjunta",
+        }
+        if not isinstance(tipo, str) or tipo not in allowed_types:
+            raise OpenAIServiceError("'Tipo de dato' no es válido o no coincide con los valores permitidos.")
 
-        follow_up = payload.setdefault("follow_up_questions", [])
-        if not isinstance(follow_up, list) or not all(isinstance(x, str) for x in follow_up):
-            raise OpenAIServiceError("'follow_up_questions' debe ser una lista de cadenas.")
+        if not isinstance(payload["Campo obligatorio"], bool):
+            raise OpenAIServiceError("'Campo obligatorio' debe ser booleano.")
 
-        guidance = payload.get("response_guidance")
-        if not isinstance(guidance, dict):
-            raise OpenAIServiceError("'response_guidance' debe ser un objeto JSON.")
+        for field in ("Mensaje de error", "Descripción"):
+            if not isinstance(payload[field], str) or not payload[field].strip():
+                raise OpenAIServiceError(f"'{field}' debe ser una cadena no vacía.")
 
-        for key in ("allowed_topics", "tone", "formatting"):
-            if key not in guidance:
-                raise OpenAIServiceError(f"'response_guidance' debe incluir '{key}'.")
-
-        allowed_topics = guidance.get("allowed_topics")
-        if not isinstance(allowed_topics, list) or not all(isinstance(x, str) for x in allowed_topics):
-            raise OpenAIServiceError("'allowed_topics' debe ser una lista de cadenas.")
-        if not allowed_topics:
-            raise OpenAIServiceError("'allowed_topics' debe contener al menos un elemento.")
-
-        for key in ("tone", "formatting"):
-            if not isinstance(guidance.get(key), str):
-                raise OpenAIServiceError(f"'{key}' debe ser una cadena dentro de 'response_guidance'.")
-
-        helpful = guidance.setdefault("helpful_phrases", [])
-        if not isinstance(helpful, list) or not all(isinstance(x, str) for x in helpful):
-            raise OpenAIServiceError("'helpful_phrases' debe ser una lista de cadenas.")
+        if not isinstance(payload.get("Regla"), dict):
+            raise OpenAIServiceError("'Regla' debe ser un objeto JSON.")
 
         return payload
