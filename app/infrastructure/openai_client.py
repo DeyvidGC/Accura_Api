@@ -41,17 +41,34 @@ class StructuredChatService:
 
         if self._client is None:
             client_kwargs: dict[str, Any] = {"api_key": settings.openai_api_key}
-            if settings.openai_base_url:
-                base_url = settings.openai_base_url.rstrip("/")
-                if base_url.endswith("/responses"):
-                    base_url = base_url[: -len("/responses")].rstrip("/")
-                if base_url:
-                    client_kwargs["base_url"] = base_url
+            sanitized_base_url = self._sanitize_base_url(settings.openai_base_url)
+            if sanitized_base_url:
+                client_kwargs["base_url"] = sanitized_base_url
 
             self._client = OpenAI(**client_kwargs)
 
         self._model = settings.openai_model
         self._is_configured = True
+
+    @staticmethod
+    def _sanitize_base_url(raw_base_url: str | None) -> str | None:
+        """Normalize optional base URL values provided via configuration."""
+
+        if not raw_base_url:
+            return None
+
+        base_url = raw_base_url.strip().rstrip("/")
+        if not base_url:
+            return None
+
+        if base_url.endswith("/responses"):
+            base_url = base_url[: -len("/responses")].rstrip("/")
+
+        # Avoid redundantly setting the official API base when matching defaults.
+        if base_url in {"https://api.openai.com", "https://api.openai.com/v1"}:
+            return None
+
+        return base_url
 
     def _get_client(self) -> OpenAI:
         """Return an initialized OpenAI client instance."""
