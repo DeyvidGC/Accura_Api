@@ -28,12 +28,34 @@ def update_template(
     is_active: bool | None = None,
     updated_by: int | None = None,
 ) -> Template:
-    """Update a template and manage its dynamic table lifecycle."""
+    """Update a template and manage its dynamic table lifecycle.
+
+    Raises:
+        ValueError: If the template does not exist or if immutable fields are modified
+            while the template is published.
+    """
 
     repository = TemplateRepository(session)
     current = repository.get(template_id)
     if current is None:
         raise ValueError("Plantilla no encontrada")
+
+    if current.status == "published":
+        invalid_updates: dict[str, object | None] = {
+            "name": name,
+            "description": description,
+            "table_name": table_name,
+            "is_active": is_active,
+        }
+        attempted_changes = [
+            field
+            for field, value in invalid_updates.items()
+            if value is not None and value != getattr(current, field)
+        ]
+        if attempted_changes:
+            raise ValueError(
+                "Solo se puede cambiar el estado de una plantilla publicada"
+            )
 
     new_table_name = current.table_name
     if table_name is not None and table_name != current.table_name:
