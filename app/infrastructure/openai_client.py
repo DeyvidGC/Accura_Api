@@ -21,14 +21,16 @@ class StructuredChatService:
     """Servicio muy simple para verificar la conexión con OpenAI."""
 
     def __init__(self) -> None:
-        api_key = (os.getenv("OPENAI_API_KEY") or "").strip()
+        settings = get_settings()
+
+        api_key = (settings.openai_api_key or "").strip()
         if not api_key:
             raise OpenAIConfigurationError(
                 "OPENAI_API_KEY no está definido en las variables de entorno.",
             )
 
-        base_url = (os.getenv("OPENAI_BASE_URL") or "").strip()
-        model = (os.getenv("OPENAI_MODEL") or "gpt-4.1-mini").strip() or "gpt-4.1-mini"
+        base_url = (settings.openai_base_url or "").strip()
+        model = (settings.openai_model or "gpt-4.1-mini").strip() or "gpt-4.1-mini"
 
         client_kwargs: dict[str, Any] = {"api_key": api_key}
         if base_url:
