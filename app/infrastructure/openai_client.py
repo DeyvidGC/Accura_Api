@@ -7,6 +7,10 @@ import os
 from typing import Any
 
 from openai import OpenAI, OpenAIError
+try:  # pragma: no cover - compat import for older SDKs
+    from openai.resources.responses import Responses  # type: ignore
+except Exception:  # pragma: no cover - keep runtime dependency optional
+    Responses = None  # type: ignore[misc, assignment]
 from app.config import get_settings
 
 class OpenAIConfigurationError(RuntimeError):
@@ -37,6 +41,20 @@ class StructuredChatService:
             client_kwargs["base_url"] = base_url
 
         self._client = OpenAI(**client_kwargs)
+        responses_client = getattr(self._client, "responses", None)
+        if responses_client is None and Responses is not None:
+            # Algunas versiones antiguas del SDK no inicializan automáticamente
+            # el cliente de Responses. Creamos la instancia manualmente para
+            # mantener compatibilidad con openai>=1.0.<X>.
+            responses_client = Responses(self._client)
+
+        if responses_client is None:
+            raise OpenAIConfigurationError(
+                "La librería 'openai' instalada no expone la API 'responses'. "
+                "Actualiza a la versión 1.3.0 o superior.",
+            )
+
+        self._responses = responses_client
         self._model = model
 
     def generate_structured_response(self, user_message: str) -> dict[str, Any]:
@@ -96,7 +114,7 @@ class StructuredChatService:
         }
 
         try:
-            resp = self._client.responses.create(
+            resp = self._responses.create(
                 model=self._model,
                 input=messages,
                 response_format=response_format,
