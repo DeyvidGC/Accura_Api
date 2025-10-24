@@ -170,12 +170,12 @@ def update_template_status(
 def delete_template(
     template_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    current_user: User = Depends(require_admin),
 ) -> Response:
     """Delete a template and its dynamic table."""
 
     try:
-        delete_template_uc(db, template_id)
+        delete_template_uc(db, template_id, deleted_by=current_user.id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -5,14 +5,14 @@ from datetime import datetime
 
 from sqlalchemy.orm import Session
 
-from app.domain.entities import Template
+from app.domain.entities import AuditLog, Template
 from app.infrastructure.dynamic_tables import (
     IdentifierError,
     create_template_table,
     drop_template_table,
     ensure_identifier,
 )
-from app.infrastructure.repositories import TemplateRepository
+from app.infrastructure.repositories import AuditLogRepository, TemplateRepository
 
 ALLOWED_STATUSES = {"unpublished", "published"}
 
@@ -88,15 +88,46 @@ def update_template(
 
     saved_template = repository.update(updated_template)
 
+    audit_repository = AuditLogRepository(session)
+
     status_changed = current.status != saved_template.status
     table_changed = current.table_name != saved_template.table_name
 
     try:
+        drop_performed = False
         if current.status == "published" and (status_changed or table_changed):
             drop_template_table(current.table_name)
+            drop_performed = True
+            audit_repository.create(
+                AuditLog(
+                    id=None,
+                    template_name=current.name,
+                    columns=[column.name for column in current.columns],
+                    operation="eliminacion",
+                    created_by=updated_template.updated_by,
+                    created_at=datetime.utcnow(),
+                    updated_by=None,
+                    updated_at=None,
+                )
+            )
 
         if saved_template.status == "published" and (status_changed or table_changed):
             create_template_table(saved_template.table_name, saved_template.columns)
+            operation = "insercion"
+            if drop_performed and table_changed:
+                operation = "actualizacion"
+            audit_repository.create(
+                AuditLog(
+                    id=None,
+                    template_name=saved_template.name,
+                    columns=[column.name for column in saved_template.columns],
+                    operation=operation,
+                    created_by=updated_template.updated_by,
+                    created_at=datetime.utcnow(),
+                    updated_by=None,
+                    updated_at=None,
+                )
+            )
     except RuntimeError as exc:
         raise ValueError(str(exc)) from exc
 

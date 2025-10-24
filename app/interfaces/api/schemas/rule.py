@@ -1,5 +1,6 @@
 """Schemas for validation rule endpoints."""
 
+from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel
@@ -19,9 +20,12 @@ class RuleBase(BaseModel):
 class RuleCreate(RuleBase):
     """Payload required to create a rule."""
 
+    is_active: bool = True
+
 
 class RuleUpdate(BaseModel):
     rule: JSONType | None = None
+    is_active: bool | None = None
 
     if ConfigDict is not None:  # pragma: no branch - runtime configuration
         model_config = ConfigDict(extra="forbid")
@@ -32,6 +36,11 @@ class RuleUpdate(BaseModel):
 
 class RuleRead(RuleBase):
     id: int
+    created_by: int | None
+    created_at: datetime | None
+    updated_by: int | None
+    updated_at: datetime | None
+    is_active: bool
 
     if ConfigDict is not None:  # pragma: no branch - runtime configuration
         model_config = ConfigDict(from_attributes=True)

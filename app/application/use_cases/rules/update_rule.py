@@ -1,5 +1,7 @@
 """Use case for updating validation rules."""
 
+from dataclasses import replace
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -13,6 +15,8 @@ def update_rule(
     *,
     rule_id: int,
     rule: dict[str, Any] | list[Any] | None = None,
+    is_active: bool | None = None,
+    updated_by: int | None = None,
 ) -> Rule:
     """Update a validation rule."""
 
@@ -23,5 +27,12 @@ def update_rule(
 
     new_rule = rule if rule is not None else current.rule
 
-    entity = Rule(id=rule_id, rule=new_rule)
-    return repository.update(entity)
+    updated_rule = replace(
+        current,
+        rule=new_rule,
+        is_active=is_active if is_active is not None else current.is_active,
+        updated_by=updated_by if updated_by is not None else current.updated_by,
+        updated_at=datetime.utcnow(),
+    )
+
+    return repository.update(updated_rule)
