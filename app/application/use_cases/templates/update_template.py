@@ -58,7 +58,7 @@ def update_template(
         ]
         if attempted_changes:
             raise ValueError(
-                "Solo se puede cambiar el estado de una plantilla publicada"
+                "Solo se puede cambiar el estado de una plantilla no publicada"
             )
 
     new_table_name = current.table_name

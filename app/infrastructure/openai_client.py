@@ -147,12 +147,6 @@ class StructuredChatService:
             request_kwargs: dict[str, Any] = {
                 "model": self._model,
                 "input": messages,
-                # ⬇️ Controles de “libertad” / creatividad:
-                "temperature": 0.25,  # 0 = determinista, 1+ = más creativo
-                "top_p": 0.9,  # núcleo de prob.; baja si quieres aún más control
-                "frequency_penalty": 0.2,  # penaliza repeticiones de tokens
-                "presence_penalty": 0.0,  # empuja a introducir temas nuevos
-                "max_output_tokens": 600,  # límite de tokens de salida (ajústalo a tu schema)
             }
             if self._supports_response_format:
                 request_kwargs["response_format"] = response_format
