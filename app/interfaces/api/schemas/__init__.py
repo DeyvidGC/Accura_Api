@@ -9,6 +9,7 @@ from .template import (
     TemplateColumnRead,
     TemplateColumnUpdate,
     TemplateCreate,
+    TemplateStatusUpdate,
     TemplateRead,
     TemplateUpdate,
 )
@@ -27,6 +28,7 @@ __all__ = [
     "TemplateColumnRead",
     "TemplateColumnUpdate",
     "TemplateCreate",
+    "TemplateStatusUpdate",
     "TemplateRead",
     "TemplateUpdate",
     "RoleRead",
