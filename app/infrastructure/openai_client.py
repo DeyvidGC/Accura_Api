@@ -43,9 +43,9 @@ class StructuredChatService:
             "El JSON debe describir lo que el usuario necesita y cómo debe responder el asistente."
         )
 
-        response_format = {
-            "type": "json_schema",
-            "json_schema": {
+        text_config = {
+            "format": {
+                "type": "json_schema",
                 "name": "structured_assistant_reply",
                 "schema": {
                     "type": "object",
@@ -120,7 +120,7 @@ class StructuredChatService:
                         "content": [{"type": "text", "text": user_message}],
                     },
                 ],
-                response_format=response_format,
+                text=text_config,
             )
         except OpenAIError as exc:  # pragma: no cover - depends on external service
             raise OpenAIServiceError("No se pudo generar la respuesta usando OpenAI.") from exc
