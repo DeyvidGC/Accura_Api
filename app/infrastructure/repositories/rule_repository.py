@@ -56,7 +56,15 @@ class RuleRepository:
 
     @staticmethod
     def _to_entity(model: RuleModel) -> Rule:
-        return Rule(id=model.id, rule=model.rule)
+        return Rule(
+            id=model.id,
+            rule=model.rule,
+            created_by=model.created_by,
+            created_at=model.created_at,
+            updated_by=model.updated_by,
+            updated_at=model.updated_at,
+            is_active=model.is_active,
+        )
 
     def _get_model(self, **filters) -> RuleModel | None:
         return self.session.query(RuleModel).filter_by(**filters).first()
@@ -64,6 +72,12 @@ class RuleRepository:
     @staticmethod
     def _apply_entity_to_model(model: RuleModel, rule: Rule) -> None:
         model.rule = rule.rule
+        model.created_by = rule.created_by
+        if rule.created_at is not None:
+            model.created_at = rule.created_at
+        model.updated_by = rule.updated_by
+        model.updated_at = rule.updated_at
+        model.is_active = rule.is_active
 
 
 __all__ = ["RuleRepository"]

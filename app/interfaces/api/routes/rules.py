@@ -28,12 +28,17 @@ def _to_read_model(rule: Rule) -> RuleRead:
 def register_rule(
     rule_in: RuleCreate,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    current_user: User = Depends(require_admin),
 ) -> RuleRead:
     """Create a new validation rule."""
 
     try:
-        rule = create_rule_uc(db, rule=rule_in.rule)
+        rule = create_rule_uc(
+            db,
+            rule=rule_in.rule,
+            created_by=current_user.id,
+            is_active=rule_in.is_active,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     return _to_read_model(rule)
@@ -72,7 +77,7 @@ def update_rule(
     rule_id: int,
     rule_in: RuleUpdate,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    current_user: User = Depends(require_admin),
 ) -> RuleRead:
     """Update an existing validation rule."""
 
@@ -82,12 +87,15 @@ def update_rule(
         update_data = rule_in.dict(exclude_unset=True)
 
     rule_body = update_data.get("rule")
+    is_active = update_data.get("is_active")
 
     try:
         rule = update_rule_uc(
             db,
             rule_id=rule_id,
             rule=rule_body,
+            is_active=is_active,
+            updated_by=current_user.id,
         )
     except ValueError as exc:
         status_code = status.HTTP_400_BAD_REQUEST
