@@ -27,10 +27,6 @@ class RuleRepository:
         model = self._get_model(id=rule_id)
         return self._to_entity(model) if model else None
 
-    def get_by_name(self, name: str) -> Rule | None:
-        model = self._get_model(name=name)
-        return self._to_entity(model) if model else None
-
     def create(self, rule: Rule) -> Rule:
         model = RuleModel()
         self._apply_entity_to_model(model, rule)
@@ -60,14 +56,13 @@ class RuleRepository:
 
     @staticmethod
     def _to_entity(model: RuleModel) -> Rule:
-        return Rule(id=model.id, name=model.name, rule=model.rule)
+        return Rule(id=model.id, rule=model.rule)
 
     def _get_model(self, **filters) -> RuleModel | None:
         return self.session.query(RuleModel).filter_by(**filters).first()
 
     @staticmethod
     def _apply_entity_to_model(model: RuleModel, rule: Rule) -> None:
-        model.name = rule.name
         model.rule = rule.rule
 
 

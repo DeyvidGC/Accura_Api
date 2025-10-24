@@ -1,6 +1,6 @@
 """SQLAlchemy model for validation rules."""
 
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, Integer
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.types import JSON
 
@@ -15,7 +15,6 @@ class RuleModel(Base):
     __tablename__ = "rules"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(50), nullable=False, unique=True)
     rule = Column(_rule_json_type, nullable=False)
 
 

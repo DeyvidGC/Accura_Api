@@ -33,7 +33,7 @@ def register_rule(
     """Create a new validation rule."""
 
     try:
-        rule = create_rule_uc(db, name=rule_in.name, rule=rule_in.rule)
+        rule = create_rule_uc(db, rule=rule_in.rule)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     return _to_read_model(rule)
@@ -81,14 +81,12 @@ def update_rule(
     else:  # pragma: no cover - compatibility path for pydantic v1
         update_data = rule_in.dict(exclude_unset=True)
 
-    name = update_data.get("name")
     rule_body = update_data.get("rule")
 
     try:
         rule = update_rule_uc(
             db,
             rule_id=rule_id,
-            name=name,
             rule=rule_body,
         )
     except ValueError as exc:

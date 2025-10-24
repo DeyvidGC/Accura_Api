@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 try:  # Pydantic v2
     from pydantic import ConfigDict
@@ -13,7 +13,6 @@ JSONType = dict[str, Any] | list[Any]
 
 
 class RuleBase(BaseModel):
-    name: str = Field(..., max_length=50)
     rule: JSONType
 
 
@@ -22,7 +21,6 @@ class RuleCreate(RuleBase):
 
 
 class RuleUpdate(BaseModel):
-    name: str | None = Field(default=None, max_length=50)
     rule: JSONType | None = None
 
     if ConfigDict is not None:  # pragma: no branch - runtime configuration
