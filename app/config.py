@@ -28,6 +28,18 @@ class Settings(BaseSettings):
     sendgrid_sender: str | None = Field(
         description="Email address that will appear as the sender of transactional messages",
     )
+    openai_api_key: str | None = Field(
+        default=None,
+        description="OpenAI API key used to authenticate requests to the language model service",
+    )
+    openai_model: str = Field(
+        default="gpt-4.1-mini",
+        description="Default OpenAI model identifier used for structured assistant responses",
+    )
+    openai_base_url: str | None = Field(
+        default=None,
+        description="Optional custom base URL for the OpenAI compatible API",
+    )
 
     class Config:
         env_file = ".env"

@@ -8,6 +8,10 @@ from app.domain.entities import User
 from app.infrastructure.database import get_db
 from app.infrastructure.repositories import UserRepository
 from app.infrastructure.security import decode_access_token
+from app.infrastructure.openai_client import (
+    OpenAIConfigurationError,
+    StructuredChatService,
+)
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
 
@@ -65,3 +69,15 @@ def require_admin(current_user: User = Depends(get_current_active_user)) -> User
             detail="No autorizado",
         )
     return current_user
+
+
+def get_structured_chat_service() -> StructuredChatService:
+    """Return a configured instance of :class:`StructuredChatService`."""
+
+    try:
+        return StructuredChatService()
+    except OpenAIConfigurationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
