@@ -1,6 +1,6 @@
 """Schemas for template user access management."""
 
-from datetime import datetime
+from datetime import date
 
 from pydantic import BaseModel, Field
 
@@ -12,8 +12,8 @@ except ImportError:  # pragma: no cover - fallback for pydantic v1
 
 class TemplateUserAccessCreate(BaseModel):
     user_id: int = Field(..., ge=1)
-    start_date: datetime | None = None
-    end_date: datetime | None = None
+    start_date: date | None = None
+    end_date: date | None = None
 
     if ConfigDict is not None:  # pragma: no branch
         model_config = ConfigDict(extra="forbid")
@@ -26,8 +26,8 @@ class TemplateUserAccessRead(BaseModel):
     id: int
     template_id: int
     user_id: int
-    start_date: datetime
-    end_date: datetime | None
+    start_date: date
+    end_date: date | None
     revoked_at: datetime | None
     revoked_by: int | None
     created_at: datetime | None

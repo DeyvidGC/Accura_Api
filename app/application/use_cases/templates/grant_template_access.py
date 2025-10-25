@@ -1,6 +1,6 @@
 """Use case for assigning template access to a user."""
 
-from datetime import datetime
+from datetime import date, datetime, time
 
 from sqlalchemy.orm import Session
 
@@ -17,8 +17,8 @@ def grant_template_access(
     *,
     template_id: int,
     user_id: int,
-    start_date: datetime | None = None,
-    end_date: datetime | None = None,
+    start_date: date | datetime | None = None,
+    end_date: date | datetime | None = None,
 ) -> TemplateUserAccess:
     """Grant access for ``user_id`` to use the template identified by ``template_id``."""
 
@@ -32,8 +32,9 @@ def grant_template_access(
 
     access_repository = TemplateUserAccessRepository(session)
 
-    effective_start = start_date or datetime.utcnow()
-    if end_date is not None and end_date <= effective_start:
+    effective_start = _normalize_date(start_date) or _current_utc_day_start()
+    normalized_end = _normalize_date(end_date)
+    if normalized_end is not None and normalized_end <= effective_start:
         raise ValueError("La fecha de finalización debe ser posterior a la fecha de inicio")
 
     existing_access = access_repository.get_active_access(
@@ -49,7 +50,7 @@ def grant_template_access(
         template_id=template_id,
         user_id=user_id,
         start_date=effective_start,
-        end_date=end_date,
+        end_date=normalized_end,
         revoked_at=None,
         revoked_by=None,
         created_at=None,
@@ -57,6 +58,23 @@ def grant_template_access(
     )
 
     return access_repository.create(access)
+
+
+def _normalize_date(value: date | datetime | None) -> datetime | None:
+    """Return a ``datetime`` value normalized to the start of the day."""
+
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        value = value.date()
+    return datetime.combine(value, time.min)
+
+
+def _current_utc_day_start() -> datetime:
+    """Return the UTC start-of-day ``datetime`` for the current day."""
+
+    now = datetime.utcnow()
+    return datetime.combine(now.date(), time.min)
 
 
 __all__ = ["grant_template_access"]
