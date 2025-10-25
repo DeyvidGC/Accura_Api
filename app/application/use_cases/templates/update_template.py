@@ -5,7 +5,7 @@ from datetime import datetime
 
 from sqlalchemy.orm import Session
 
-from app.domain.entities import AuditLog, Template
+from app.domain.entities import AuditLog, DigitalFile, Template
 from app.infrastructure.dynamic_tables import (
     IdentifierError,
     create_template_table,
@@ -15,8 +15,13 @@ from app.infrastructure.dynamic_tables import (
 from app.infrastructure.template_files import (
     create_template_excel,
     delete_template_excel,
+    relative_to_project_root,
 )
-from app.infrastructure.repositories import AuditLogRepository, TemplateRepository
+from app.infrastructure.repositories import (
+    AuditLogRepository,
+    DigitalFileRepository,
+    TemplateRepository,
+)
 
 ALLOWED_STATUSES = {"unpublished", "published"}
 
@@ -93,6 +98,7 @@ def update_template(
     saved_template = repository.update(updated_template)
 
     audit_repository = AuditLogRepository(session)
+    digital_file_repository = DigitalFileRepository(session)
 
     status_changed = current.status != saved_template.status
     table_changed = current.table_name != saved_template.table_name
@@ -117,14 +123,43 @@ def update_template(
 
         if current.status == "published" and (status_changed or table_changed):
             delete_template_excel(current.id, current.name)
+            digital_file_repository.delete_by_template_id(current.id)
 
         if saved_template.status == "published" and (status_changed or table_changed):
             create_template_table(saved_template.table_name, saved_template.columns)
-            create_template_excel(
+            excel_path = create_template_excel(
                 saved_template.id,
                 saved_template.name,
                 saved_template.columns,
             )
+            relative_path = relative_to_project_root(excel_path)
+            digital_file = digital_file_repository.get_by_template_id(saved_template.id)
+            description = saved_template.description
+            now = datetime.utcnow()
+            if digital_file is None:
+                digital_file_repository.create(
+                    DigitalFile(
+                        id=None,
+                        template_id=saved_template.id,
+                        name=excel_path.name,
+                        description=description,
+                        path=relative_path,
+                        created_by=updated_template.updated_by,
+                        created_at=now,
+                        updated_by=None,
+                        updated_at=None,
+                    )
+                )
+            else:
+                updated_digital_file = replace(
+                    digital_file,
+                    name=excel_path.name,
+                    description=description,
+                    path=relative_path,
+                    updated_by=updated_template.updated_by,
+                    updated_at=now,
+                )
+                digital_file_repository.update(updated_digital_file)
             operation = "insercion"
             if drop_performed and table_changed:
                 operation = "actualizacion"

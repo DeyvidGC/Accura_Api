@@ -7,7 +7,11 @@ from sqlalchemy.orm import Session
 from app.domain.entities import AuditLog
 from app.infrastructure.dynamic_tables import drop_template_table
 from app.infrastructure.template_files import delete_template_excel
-from app.infrastructure.repositories import AuditLogRepository, TemplateRepository
+from app.infrastructure.repositories import (
+    AuditLogRepository,
+    DigitalFileRepository,
+    TemplateRepository,
+)
 
 
 def delete_template(
@@ -29,6 +33,8 @@ def delete_template(
             raise ValueError(str(exc)) from exc
 
         delete_template_excel(template.id, template.name)
+        digital_file_repository = DigitalFileRepository(session)
+        digital_file_repository.delete_by_template_id(template.id)
 
         audit_repository = AuditLogRepository(session)
         audit_repository.create(
