@@ -2,6 +2,7 @@
 
 from .audit_log import AuditLog
 from .digital_file import DigitalFile
+from .load import Load
 from .role import Role
 from .rule import Rule
 from .template import Template
@@ -12,6 +13,7 @@ from .user import User
 __all__ = [
     "AuditLog",
     "DigitalFile",
+    "Load",
     "Role",
     "Rule",
     "Template",

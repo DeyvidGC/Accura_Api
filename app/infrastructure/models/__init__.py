@@ -2,6 +2,7 @@
 
 from .audit_log import AuditLogModel
 from .digital_file import DigitalFileModel
+from .load import LoadModel
 from .role import RoleModel
 from .rule import RuleModel
 from .template import TemplateModel
@@ -12,6 +13,7 @@ from .user import UserModel
 __all__ = [
     "AuditLogModel",
     "DigitalFileModel",
+    "LoadModel",
     "RoleModel",
     "RuleModel",
     "TemplateModel",

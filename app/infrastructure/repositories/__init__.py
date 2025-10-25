@@ -2,6 +2,7 @@
 
 from .audit_log_repository import AuditLogRepository
 from .digital_file_repository import DigitalFileRepository
+from .load_repository import LoadRepository
 from .role_repository import RoleRepository
 from .rule_repository import RuleRepository
 from .template_column_repository import TemplateColumnRepository
@@ -12,6 +13,7 @@ from .user_repository import UserRepository
 __all__ = [
     "AuditLogRepository",
     "DigitalFileRepository",
+    "LoadRepository",
     "RoleRepository",
     "RuleRepository",
     "TemplateColumnRepository",
