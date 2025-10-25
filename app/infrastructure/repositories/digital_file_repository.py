@@ -24,11 +24,12 @@ class DigitalFileRepository:
         query = self.session.query(DigitalFileModel)
         if template_id is not None:
             query = query.filter(DigitalFileModel.template_id == template_id)
+        query = query.order_by(DigitalFileModel.created_at.desc())
         if skip:
             query = query.offset(skip)
         if limit is not None:
             query = query.limit(limit)
-        models = query.order_by(DigitalFileModel.created_at.desc()).all()
+        models = query.all()
         return [self._to_entity(model) for model in models]
 
     def get(self, digital_file_id: int) -> DigitalFile | None:
