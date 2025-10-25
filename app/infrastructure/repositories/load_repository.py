@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Sequence
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.domain.entities import Load
@@ -59,6 +60,22 @@ class LoadRepository:
         self.session.commit()
         self.session.refresh(model)
         return self._to_entity(model)
+
+    def count_completed_by_user_and_template(
+        self, *, user_id: int, template_id: int
+    ) -> int:
+        """Return the number of completed loads for ``user_id`` and ``template_id``."""
+
+        total = (
+            self.session.query(func.count(LoadModel.id))
+            .filter(
+                LoadModel.user_id == user_id,
+                LoadModel.template_id == template_id,
+                LoadModel.status == "completed",
+            )
+            .scalar()
+        )
+        return int(total or 0)
 
     @staticmethod
     def _to_entity(model: LoadModel) -> Load:

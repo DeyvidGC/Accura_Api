@@ -19,17 +19,18 @@ from sqlalchemy import MetaData, Table, insert
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.domain.entities import Load, Template, TemplateColumn, User
+from app.domain.entities import Load, LoadedFile, Template, TemplateColumn, User
 from app.infrastructure.database import engine
 from app.infrastructure.repositories import (
     LoadRepository,
+    LoadedFileRepository,
     RuleRepository,
     TemplateRepository,
     TemplateUserAccessRepository,
 )
 from app.infrastructure.template_files import relative_to_project_root
 
-_REPORT_DIRECTORY = Path(__file__).resolve().parents[2] / "Files" / "loads"
+_REPORT_DIRECTORY = Path(__file__).resolve().parents[2] / "Files" / "Reports"
 
 _SUPPORTED_EXTENSIONS = {".xlsx", ".xls", ".csv"}
 
@@ -88,13 +89,14 @@ def upload_template_load(
 
         inserted_rows = _persist_valid_rows(validated_df, row_is_valid, template.table_name)
 
-        report_path = _generate_report(load.id, validated_df)
+        report_path = _generate_report(load.id, validated_df, template.table_name)
 
         total_rows = len(validated_df.index)
         error_rows = total_rows - inserted_rows
 
         final_status = "completed"
         finished_at = datetime.utcnow()
+        relative_report_path = relative_to_project_root(report_path)
         load = load_repo.update(
             Load(
                 id=load.id,
@@ -104,11 +106,21 @@ def upload_template_load(
                 file_name=load.file_name,
                 total_rows=total_rows,
                 error_rows=error_rows,
-                report_path=relative_to_project_root(report_path),
+                report_path=relative_report_path,
                 created_at=load.created_at,
                 started_at=load.started_at,
                 finished_at=finished_at,
             )
+        )
+
+        _register_loaded_file(
+            session,
+            load_repo=load_repo,
+            load=load,
+            template=template,
+            user=user,
+            report_path=report_path,
+            relative_report_path=relative_report_path,
         )
     except Exception as exc:  # pragma: no cover - defensive path
         _mark_load_as_failed(load_repo, load, str(exc))
@@ -163,11 +175,15 @@ def get_load_report(
     """Return the filesystem path to the report generated for ``load_id``."""
 
     load = get_load(session, load_id=load_id, current_user=current_user)
-    if load.report_path is None:
+    loaded_file = LoadedFileRepository(session).get_latest_by_load(load.id)
+    if loaded_file is None:
         raise FileNotFoundError("Reporte no disponible para esta carga")
 
+    if not current_user.is_admin() and loaded_file.created_user_id != current_user.id:
+        raise PermissionError("No autorizado")
+
     project_root = Path(__file__).resolve().parents[2]
-    path = project_root / load.report_path
+    path = project_root / loaded_file.path
     if not path.exists():
         raise FileNotFoundError("Reporte no encontrado en el sistema de archivos")
     return load, path
@@ -341,11 +357,41 @@ def _persist_valid_rows(
     return len(records)
 
 
-def _generate_report(load_id: int, dataframe: DataFrame) -> Path:
-    _REPORT_DIRECTORY.mkdir(parents=True, exist_ok=True)
-    report_path = _REPORT_DIRECTORY / f"load_{load_id}_reporte.xlsx"
+def _generate_report(load_id: int, dataframe: DataFrame, table_name: str) -> Path:
+    report_directory = _REPORT_DIRECTORY / table_name
+    report_directory.mkdir(parents=True, exist_ok=True)
+    report_path = report_directory / f"load_{load_id}_reporte.xlsx"
     dataframe.to_excel(report_path, index=False)
     return report_path
+
+
+def _register_loaded_file(
+    session: Session,
+    *,
+    load_repo: LoadRepository,
+    load: Load,
+    template: Template,
+    user: User,
+    report_path: Path,
+    relative_report_path: str,
+) -> None:
+    loaded_file_repo = LoadedFileRepository(session)
+    num_load = load_repo.count_completed_by_user_and_template(
+        user_id=user.id, template_id=template.id
+    )
+    size_bytes = report_path.stat().st_size if report_path.exists() else 0
+    loaded_file_repo.create(
+        LoadedFile(
+            id=None,
+            load_id=load.id,
+            name=report_path.name,
+            path=relative_report_path,
+            size_bytes=size_bytes,
+            num_load=num_load,
+            created_user_id=user.id,
+            created_at=None,
+        )
+    )
 
 
 def _mark_load_as_failed(repository: LoadRepository, load: Load, message: str) -> None:
