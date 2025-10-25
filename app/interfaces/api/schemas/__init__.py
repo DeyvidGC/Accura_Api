@@ -15,6 +15,7 @@ from .template import (
     TemplateRead,
     TemplateUpdate,
 )
+from .template_user_access import TemplateUserAccessCreate, TemplateUserAccessRead
 from .user import RoleRead, UserCreate, UserRead, UserUpdate
 
 __all__ = [
@@ -35,6 +36,8 @@ __all__ = [
     "TemplateStatusUpdate",
     "TemplateRead",
     "TemplateUpdate",
+    "TemplateUserAccessCreate",
+    "TemplateUserAccessRead",
     "RoleRead",
     "UserCreate",
     "UserRead",

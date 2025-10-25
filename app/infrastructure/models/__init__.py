@@ -6,6 +6,7 @@ from .role import RoleModel
 from .rule import RuleModel
 from .template import TemplateModel
 from .template_column import TemplateColumnModel
+from .template_user_access import TemplateUserAccessModel
 from .user import UserModel
 
 __all__ = [
@@ -15,5 +16,6 @@ __all__ = [
     "RuleModel",
     "TemplateModel",
     "TemplateColumnModel",
+    "TemplateUserAccessModel",
     "UserModel",
 ]

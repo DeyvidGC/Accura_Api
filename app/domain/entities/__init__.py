@@ -6,6 +6,7 @@ from .role import Role
 from .rule import Rule
 from .template import Template
 from .template_column import TemplateColumn
+from .template_user_access import TemplateUserAccess
 from .user import User
 
 __all__ = [
@@ -15,5 +16,6 @@ __all__ = [
     "Rule",
     "Template",
     "TemplateColumn",
+    "TemplateUserAccess",
     "User",
 ]
