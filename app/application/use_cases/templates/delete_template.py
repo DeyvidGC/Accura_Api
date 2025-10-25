@@ -26,16 +26,16 @@ def delete_template(
 
     repository.delete(template_id)
 
+    try:
+        drop_template_table(template.table_name)
+    except RuntimeError as exc:
+        raise ValueError(str(exc)) from exc
+
+    delete_template_excel(template.id, template.name)
+    digital_file_repository = DigitalFileRepository(session)
+    digital_file_repository.delete_by_template_id(template.id)
+
     if template.status == "published":
-        try:
-            drop_template_table(template.table_name)
-        except RuntimeError as exc:
-            raise ValueError(str(exc)) from exc
-
-        delete_template_excel(template.id, template.name)
-        digital_file_repository = DigitalFileRepository(session)
-        digital_file_repository.delete_by_template_id(template.id)
-
         audit_repository = AuditLogRepository(session)
         audit_repository.create(
             AuditLog(

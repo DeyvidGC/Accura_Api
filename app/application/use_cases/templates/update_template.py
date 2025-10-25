@@ -105,9 +105,11 @@ def update_template(
 
     try:
         drop_performed = False
+        cleanup_required = False
         if current.status == "published" and (status_changed or table_changed):
             drop_template_table(current.table_name)
             drop_performed = True
+            cleanup_required = True
             audit_repository.create(
                 AuditLog(
                     id=None,
@@ -121,8 +123,13 @@ def update_template(
                 )
             )
 
-        if current.status == "published" and (status_changed or table_changed):
+        if saved_template.status != "published":
+            cleanup_required = True
+
+        if cleanup_required:
             delete_template_excel(current.id, current.name)
+            if saved_template.name != current.name:
+                delete_template_excel(saved_template.id, saved_template.name)
             digital_file_repository.delete_by_template_id(current.id)
 
         if saved_template.status == "published" and (status_changed or table_changed):
