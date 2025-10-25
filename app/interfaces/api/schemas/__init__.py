@@ -3,6 +3,7 @@ from .assistant import (
     AssistantMessageResponse,
 )
 from .audit_log import AuditLogRead
+from .digital_file import DigitalFileRead
 from .auth import PasswordHashRequest, PasswordHashResponse, Token
 from .rule import RuleCreate, RuleRead, RuleUpdate
 from .template import (
@@ -20,6 +21,7 @@ __all__ = [
     "AssistantMessageRequest",
     "AssistantMessageResponse",
     "AuditLogRead",
+    "DigitalFileRead",
     "PasswordHashRequest",
     "PasswordHashResponse",
     "Token",
