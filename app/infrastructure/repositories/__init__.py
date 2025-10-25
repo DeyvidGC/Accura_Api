@@ -6,6 +6,7 @@ from .role_repository import RoleRepository
 from .rule_repository import RuleRepository
 from .template_column_repository import TemplateColumnRepository
 from .template_repository import TemplateRepository
+from .template_user_access_repository import TemplateUserAccessRepository
 from .user_repository import UserRepository
 
 __all__ = [
@@ -15,5 +16,6 @@ __all__ = [
     "RuleRepository",
     "TemplateColumnRepository",
     "TemplateRepository",
+    "TemplateUserAccessRepository",
     "UserRepository",
 ]

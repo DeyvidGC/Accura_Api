@@ -30,6 +30,12 @@ class TemplateModel(Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+    access_records = relationship(
+        "TemplateUserAccessModel",
+        back_populates="template",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
 
 __all__ = ["TemplateModel"]

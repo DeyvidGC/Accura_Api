@@ -16,21 +16,29 @@ from app.application.use_cases.templates import (
     delete_template as delete_template_uc,
     get_template as get_template_uc,
     get_template_excel as get_template_excel_uc,
+    grant_template_access as grant_template_access_uc,
+    list_template_access as list_template_access_uc,
     list_templates as list_templates_uc,
+    revoke_template_access as revoke_template_access_uc,
     update_template as update_template_uc,
     update_template_status as update_template_status_uc,
 )
-from app.domain.entities import Template, TemplateColumn, User
+from app.domain.entities import Template, TemplateColumn, TemplateUserAccess, User
 from app.infrastructure.database import get_db
-from app.interfaces.api.dependencies import require_admin
+from app.interfaces.api.dependencies import (
+    get_current_active_user,
+    require_admin,
+)
 from app.interfaces.api.schemas import (
     TemplateColumnCreate,
     TemplateColumnRead,
     TemplateColumnUpdate,
     TemplateCreate,
     TemplateRead,
-    TemplateUpdate,
     TemplateStatusUpdate,
+    TemplateUpdate,
+    TemplateUserAccessCreate,
+    TemplateUserAccessRead,
 )
 
 router = APIRouter(prefix="/templates", tags=["templates"])
@@ -46,6 +54,12 @@ def _column_to_read_model(column: TemplateColumn) -> TemplateColumnRead:
     if hasattr(TemplateColumnRead, "model_validate"):
         return TemplateColumnRead.model_validate(column)
     return TemplateColumnRead.from_orm(column)
+
+
+def _access_to_read_model(access: TemplateUserAccess) -> TemplateUserAccessRead:
+    if hasattr(TemplateUserAccessRead, "model_validate"):
+        return TemplateUserAccessRead.model_validate(access)
+    return TemplateUserAccessRead.from_orm(access)
 
 
 @router.post("/", response_model=TemplateRead, status_code=status.HTTP_201_CREATED)
@@ -298,20 +312,113 @@ def delete_template_column(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+@router.post(
+    "/{template_id}/access",
+    response_model=TemplateUserAccessRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def grant_template_access(
+    template_id: int,
+    payload: TemplateUserAccessCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+) -> TemplateUserAccessRead:
+    """Grant a user access to the template."""
+
+    try:
+        access = grant_template_access_uc(
+            db,
+            template_id=template_id,
+            user_id=payload.user_id,
+            start_date=payload.start_date,
+            end_date=payload.end_date,
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        status_code = status.HTTP_400_BAD_REQUEST
+        if detail in {"Plantilla no encontrada", "Usuario no encontrado"}:
+            status_code = status.HTTP_404_NOT_FOUND
+        raise HTTPException(status_code=status_code, detail=detail) from exc
+
+    return _access_to_read_model(access)
+
+
+@router.get(
+    "/{template_id}/access",
+    response_model=list[TemplateUserAccessRead],
+)
+def list_template_access(
+    template_id: int,
+    include_inactive: bool = False,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+) -> list[TemplateUserAccessRead]:
+    """Return access assignments for the template."""
+
+    try:
+        accesses = list_template_access_uc(
+            db,
+            template_id=template_id,
+            include_inactive=include_inactive,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    return [_access_to_read_model(access) for access in accesses]
+
+
+@router.delete(
+    "/{template_id}/access/{access_id}",
+    response_model=TemplateUserAccessRead,
+)
+def revoke_template_access(
+    template_id: int,
+    access_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+) -> TemplateUserAccessRead:
+    """Revoke an existing template access assignment."""
+
+    try:
+        access = revoke_template_access_uc(
+            db,
+            template_id=template_id,
+            access_id=access_id,
+            revoked_by=current_user.id,
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        status_code = status.HTTP_400_BAD_REQUEST
+        if detail in {"Plantilla no encontrada", "Acceso no encontrado"}:
+            status_code = status.HTTP_404_NOT_FOUND
+        raise HTTPException(status_code=status_code, detail=detail) from exc
+
+    return _access_to_read_model(access)
+
+
 @router.get("/{template_id}/excel")
 def download_template_excel(
     template_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    current_user: User = Depends(get_current_active_user),
 ):
     """Return the generated Excel file for a template."""
 
     try:
-        path = get_template_excel_uc(db, template_id=template_id)
+        path = get_template_excel_uc(
+            db,
+            template_id=template_id,
+            requesting_user=current_user,
+        )
     except ValueError as exc:
         detail = str(exc)
         status_code = status.HTTP_404_NOT_FOUND
-        if detail not in {"Plantilla no encontrada", "Archivo de plantilla no encontrado"}:
+        if detail == "El usuario no tiene acceso a la plantilla":
+            status_code = status.HTTP_403_FORBIDDEN
+        elif detail not in {
+            "Plantilla no encontrada",
+            "Archivo de plantilla no encontrado",
+        }:
             status_code = status.HTTP_400_BAD_REQUEST
         raise HTTPException(status_code=status_code, detail=detail) from exc
 

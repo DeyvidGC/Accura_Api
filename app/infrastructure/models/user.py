@@ -27,6 +27,13 @@ class UserModel(Base):
     updated_at = Column(DateTime, nullable=True, onupdate=func.now())
     is_active = Column(Boolean, nullable=False, default=True)
     role = relationship("RoleModel", lazy="joined")
+    template_accesses = relationship(
+        "TemplateUserAccessModel",
+        back_populates="user",
+        foreign_keys="TemplateUserAccessModel.user_id",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
     def touch_last_login(self) -> None:
         """Update the last login timestamp to now."""
