@@ -49,12 +49,9 @@ def login_for_access_token(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    if auth_status is AuthenticationStatus.MUST_CHANGE_PASSWORD:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Debe actualizar su contraseña",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    must_change_password = (
+        auth_status is AuthenticationStatus.MUST_CHANGE_PASSWORD or user.must_change_password
+    )
 
     access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
     access_token = create_access_token(
@@ -66,6 +63,7 @@ def login_for_access_token(
         "access_token": access_token,
         "token_type": "bearer",
         "role": user.role.alias,
+        "must_change_password": must_change_password,
     }
 
 
