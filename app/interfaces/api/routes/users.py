@@ -13,7 +13,10 @@ from app.application.use_cases.users import (
 )
 from app.domain.entities import User
 from app.infrastructure.database import get_db
-from app.infrastructure.email import send_new_user_credentials_email
+from app.infrastructure.email import (
+    send_new_user_credentials_email,
+    send_user_credentials_update_email,
+)
 from app.interfaces.api.dependencies import get_current_active_user, require_admin
 from app.interfaces.api.schemas import UserCreate, UserRead, UserUpdate
 
@@ -84,7 +87,7 @@ def read_user(
     """Return the user identified by ``user_id``."""
 
     try:
-        user = get_user_uc(db, user_id)
+        user = get_user_uc(db, user_id, include_inactive=True)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return _to_read_model(user)
@@ -100,7 +103,7 @@ def update_user(
     """Update an existing user."""
 
     try:
-        target_user = get_user_uc(db, user_id)
+        target_user = get_user_uc(db, user_id, include_inactive=True)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
@@ -140,6 +143,7 @@ def update_user(
     name = update_data.get("name", target_user.name)
     alias = update_data["alias"] if "alias" in update_data else target_user.alias
     email = update_data.get("email", target_user.email)
+    email_changed = "email" in update_data and update_data["email"] != target_user.email
     must_change_password = (
         update_data["must_change_password"]
         if "must_change_password" in update_data
@@ -148,6 +152,7 @@ def update_user(
     is_active = update_data["is_active"] if "is_active" in update_data else target_user.is_active
     role_id = update_data.get("role_id") if "role_id" in update_data else None
     password = update_data.get("password")
+    password_changed = password is not None
 
     if "password" in update_data and "must_change_password" not in update_data:
         must_change_password = False
@@ -170,6 +175,18 @@ def update_user(
         if str(exc) == "Usuario no encontrado":
             status_code = status.HTTP_404_NOT_FOUND
         raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+
+    if email_changed or password_changed:
+        if not send_user_credentials_update_email(
+            user.email,
+            password if password_changed else None,
+            email_changed=email_changed,
+            password_changed=password_changed,
+        ):
+            logger.warning(
+                "No se pudo enviar el correo de actualización de credenciales al usuario %s",
+                user.email,
+            )
     return _to_read_model(user)
 
 
