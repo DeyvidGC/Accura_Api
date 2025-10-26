@@ -24,9 +24,7 @@ class RoleRead(BaseModel):
 
 class UserBase(BaseModel):
     name: str = Field(..., max_length=50)
-    alias: str | None = Field(default=None, max_length=50)
     email: EmailStr
-    must_change_password: bool = False
 
 
 class UserCreate(UserBase):
@@ -35,9 +33,7 @@ class UserCreate(UserBase):
 
 class UserUpdate(BaseModel):
     name: str | None = Field(default=None, max_length=50)
-    alias: str | None = Field(default=None, max_length=50)
     email: EmailStr | None = None
-    must_change_password: bool | None = None
     password: str | None = Field(default=None, min_length=8)
     is_active: bool | None = None
     role_id: int | None = None
@@ -52,7 +48,6 @@ class UserUpdate(BaseModel):
 class UserRead(BaseModel):
     id: int
     name: str
-    alias: str | None
     email: EmailStr
     must_change_password: bool
     last_login: datetime | None
