@@ -16,9 +16,11 @@ from app.infrastructure.database import get_db
 from app.infrastructure.email import (
     send_new_user_credentials_email,
     send_user_credentials_update_email,
+    send_user_password_reset_email,
 )
 from app.interfaces.api.dependencies import get_current_active_user, require_admin
 from app.interfaces.api.schemas import UserCreate, UserRead, UserUpdate
+from app.infrastructure.security import generate_secure_password
 
 router = APIRouter(prefix="/users", tags=["users"])
 logger = logging.getLogger(__name__)
@@ -38,13 +40,14 @@ def register_user(
 ):
     """Create a new user that can authenticate with the API."""
 
+    generated_password = generate_secure_password()
     try:
         user = create_user_uc(
             db,
             name=user_in.name,
             role_id=user_in.role_id,
             email=user_in.email,
-            password=user_in.password,
+            password=generated_password,
             alias=user_in.alias,
             must_change_password=user_in.must_change_password,
             created_by=current_user.id,
@@ -52,7 +55,7 @@ def register_user(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
-    if not send_new_user_credentials_email(user.email, user_in.password):
+    if not send_new_user_credentials_email(user.email, generated_password):
         logger.warning("No se pudo enviar el correo de credenciales al usuario %s", user.email)
 
     return _to_read_model(user)
@@ -151,8 +154,20 @@ def update_user(
     )
     is_active = update_data["is_active"] if "is_active" in update_data else target_user.is_active
     role_id = update_data.get("role_id") if "role_id" in update_data else None
-    password = update_data.get("password")
-    password_changed = password is not None
+    requested_password = update_data.get("password")
+    if requested_password is not None and is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El administrador no puede establecer la contraseña manualmente",
+        )
+
+    generated_password: str | None = None
+    password = requested_password
+
+    if email_changed and is_admin:
+        generated_password = generate_secure_password()
+        password = generated_password
+        must_change_password = True
 
     if "password" in update_data and "must_change_password" not in update_data:
         must_change_password = False
@@ -176,17 +191,52 @@ def update_user(
             status_code = status.HTTP_404_NOT_FOUND
         raise HTTPException(status_code=status_code, detail=str(exc)) from exc
 
-    if email_changed or password_changed:
+    if is_admin and (email_changed or generated_password is not None):
         if not send_user_credentials_update_email(
             user.email,
-            password if password_changed else None,
+            generated_password,
             email_changed=email_changed,
-            password_changed=password_changed,
+            password_changed=generated_password is not None,
         ):
             logger.warning(
                 "No se pudo enviar el correo de actualización de credenciales al usuario %s",
                 user.email,
             )
+    return _to_read_model(user)
+
+
+@router.post("/{user_id}/reset-password", response_model=UserRead)
+def reset_user_password(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """Generate a new temporary password for the selected user."""
+
+    try:
+        get_user_uc(db, user_id, include_inactive=True)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    new_password = generate_secure_password()
+
+    try:
+        user = update_user_uc(
+            db,
+            user_id=user_id,
+            password=new_password,
+            must_change_password=True,
+            updated_by=current_user.id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    if not send_user_password_reset_email(user.email, new_password):
+        logger.warning(
+            "No se pudo enviar el correo de restablecimiento de contraseña al usuario %s",
+            user.email,
+        )
+
     return _to_read_model(user)
 
 

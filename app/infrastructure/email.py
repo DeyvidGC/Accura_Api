@@ -179,3 +179,18 @@ def send_user_credentials_update_email(
     html_content = "".join(messages)
     return send_email(subject, html_content, email)
 
+
+def send_user_password_reset_email(email: str, password: str) -> bool:
+    """Send a password reset email with the generated credentials."""
+
+    subject = "Restablecimiento de contraseña de Accura"
+    html_content = "".join(
+        (
+            "<p>Hola,</p>",
+            "<p>Se generó una nueva contraseña temporal para tu cuenta.</p>",
+            f"<p><strong>Contraseña:</strong> {password}</p>",
+            "<p>Por seguridad, inicia sesión y actualiza tu contraseña lo antes posible.</p>",
+        )
+    )
+    return send_email(subject, html_content, email)
+

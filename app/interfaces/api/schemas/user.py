@@ -30,7 +30,6 @@ class UserBase(BaseModel):
 
 
 class UserCreate(UserBase):
-    password: str = Field(..., min_length=8)
     role_id: int = Field(..., ge=1)
 
 
