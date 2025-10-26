@@ -161,13 +161,18 @@ def send_user_credentials_update_email(
             "<p>Tu correo electrónico de acceso ha sido actualizado correctamente.</p>"
         )
 
-    if password_changed and password is not None:
-        messages.append(
-            (
-                "<p>Se generó una nueva contraseña temporal para tu cuenta.</p>"
-                f"<p><strong>Contraseña:</strong> {password}</p>"
+    if password_changed:
+        if password is not None:
+            messages.append(
+                (
+                    "<p>Se generó una nueva contraseña temporal para tu cuenta.</p>"
+                    f"<p><strong>Contraseña:</strong> {password}</p>"
+                )
             )
-        )
+        else:
+            messages.append(
+                "<p>Tu contraseña fue actualizada correctamente.</p>"
+            )
     else:
         messages.append(
             "<p>Tu contraseña se mantiene sin cambios.</p>"

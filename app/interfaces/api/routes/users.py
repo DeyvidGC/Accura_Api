@@ -21,6 +21,7 @@ from app.infrastructure.email import (
 from app.interfaces.api.dependencies import get_current_active_user, require_admin
 from app.interfaces.api.schemas import UserCreate, UserRead, UserUpdate
 from app.infrastructure.security import generate_secure_password
+from app.interfaces.api.routes_helpers import compute_credentials_notification
 
 router = APIRouter(prefix="/users", tags=["users"])
 logger = logging.getLogger(__name__)
@@ -30,8 +31,6 @@ def _to_read_model(user: User) -> UserRead:
     if hasattr(UserRead, "model_validate"):
         return UserRead.model_validate(user)
     return UserRead.from_orm(user)
-
-
 @router.post("/", response_model=UserRead, status_code=status.HTTP_201_CREATED)
 def register_user(
     user_in: UserCreate,
@@ -114,10 +113,19 @@ def update_user(
         update_data = user_in.dict(exclude_unset=True)
 
     is_admin = current_user.is_admin()
+    acting_on_self = user_id == current_user.id
     if "must_change_password" in update_data:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No se puede modificar esta configuración manualmente",
+        )
+    if is_admin and not acting_on_self and "password" in update_data:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Los administradores deben restablecer la contraseña de otros "
+                "usuarios desde la opción de restablecimiento"
+            ),
         )
     if not is_admin:
         if user_id != current_user.id:
@@ -192,10 +200,19 @@ def update_user(
             status_code = status.HTTP_404_NOT_FOUND
         raise HTTPException(status_code=status_code, detail=str(exc)) from exc
 
-    if is_admin and email_changed:
+    notification_decision = compute_credentials_notification(
+        email_changed=email_changed,
+        password_changed=password_changed,
+        is_admin=is_admin,
+        acting_on_self=acting_on_self,
+    )
+    if notification_decision.should_send:
+        password_for_email = (
+            password_for_notification if notification_decision.include_password else None
+        )
         if not send_user_credentials_update_email(
             user.email,
-            password_for_notification,
+            password_for_email,
             email_changed=email_changed,
             password_changed=password_changed,
         ):
