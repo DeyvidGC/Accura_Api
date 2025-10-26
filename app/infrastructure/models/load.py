@@ -31,7 +31,7 @@ class LoadModel(Base):
         nullable=False,
         index=True,
     )
-    status = Column(String(15), nullable=False, default="processing")
+    status = Column(String(40), nullable=False, default="Procesando")
     file_name = Column(String(100), nullable=False)
     total_rows = Column(Integer, nullable=False, default=0)
     error_rows = Column(Integer, nullable=False, default=0)

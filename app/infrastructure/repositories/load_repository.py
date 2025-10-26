@@ -8,8 +8,17 @@ from typing import Sequence
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.domain.entities import Load
+from app.domain.entities import (
+    LOAD_STATUS_VALIDATED_SUCCESS,
+    LOAD_STATUS_VALIDATED_WITH_ERRORS,
+    Load,
+)
 from app.infrastructure.models import LoadModel
+
+_COMPLETED_STATUSES = (
+    LOAD_STATUS_VALIDATED_SUCCESS,
+    LOAD_STATUS_VALIDATED_WITH_ERRORS,
+)
 
 
 class LoadRepository:
@@ -71,7 +80,7 @@ class LoadRepository:
             .filter(
                 LoadModel.user_id == user_id,
                 LoadModel.template_id == template_id,
-                LoadModel.status == "completed",
+                LoadModel.status.in_(_COMPLETED_STATUSES),
             )
             .scalar()
         )
