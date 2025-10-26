@@ -156,15 +156,17 @@ def update_user(
     role_id = update_data.get("role_id") if "role_id" in update_data else None
     requested_password = update_data.get("password")
 
-    generated_password: str | None = None
     password = requested_password
 
-    if email_changed and is_admin and not requested_password:
-        generated_password = generate_secure_password()
-        password = generated_password
+    if email_changed:
+        if requested_password is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No se puede cambiar la contraseña al actualizar el correo electrónico",
+            )
         must_change_password = True
-
-    if requested_password is not None:
+        password = None
+    elif requested_password is not None:
         must_change_password = False
 
     try:
@@ -185,12 +187,8 @@ def update_user(
             status_code = status.HTTP_404_NOT_FOUND
         raise HTTPException(status_code=status_code, detail=str(exc)) from exc
 
-    password_changed = requested_password is not None or generated_password is not None
-    password_for_notification = (
-        generated_password
-        if generated_password is not None
-        else requested_password
-    )
+    password_changed = requested_password is not None
+    password_for_notification = requested_password
 
     if is_admin and email_changed:
         if not send_user_credentials_update_email(

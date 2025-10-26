@@ -33,23 +33,23 @@ def login_for_access_token(
 ):
     """Authenticate the user by email and return a JWT token."""
 
-    user, status = authenticate_user(db, form_data.username, form_data.password)
+    user, auth_status = authenticate_user(db, form_data.username, form_data.password)
 
-    if status is AuthenticationStatus.INVALID_CREDENTIALS:
+    if auth_status is AuthenticationStatus.INVALID_CREDENTIALS:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Credenciales incorrectas",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    if status is AuthenticationStatus.INACTIVE:
+    if auth_status is AuthenticationStatus.INACTIVE:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Usuario inactivo",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    if status is AuthenticationStatus.MUST_CHANGE_PASSWORD:
+    if auth_status is AuthenticationStatus.MUST_CHANGE_PASSWORD:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Debe actualizar su contraseña",
