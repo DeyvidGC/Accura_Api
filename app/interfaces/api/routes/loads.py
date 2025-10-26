@@ -44,8 +44,8 @@ def _load_to_read_model(load: Load) -> LoadRead:
 )
 def create_template_load(
     template_id: int,
-    file: UploadFile = File(...),
     background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ) -> LoadUploadResponse:
