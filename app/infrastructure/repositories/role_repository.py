@@ -25,6 +25,12 @@ class RoleRepository:
         )
         return self._to_entity(model) if model else None
 
+    def list_aliases(self) -> set[str]:
+        """Return the set of role aliases stored in the database."""
+
+        aliases = self.session.query(RoleModel.alias).all()
+        return {alias.lower() for (alias,) in aliases}
+
     @staticmethod
     def _to_entity(model: RoleModel) -> Role:
         return Role(id=model.id, name=model.name, alias=model.alias)
