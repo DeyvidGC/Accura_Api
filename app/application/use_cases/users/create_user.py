@@ -16,9 +16,7 @@ def create_user(
     role_id: int,
     email: str,
     password: str,
-    alias: str | None = None,
     created_by: int | None = None,
-    must_change_password: bool = False,
 ) -> User:
     """Create a new user ensuring unique email addresses."""
 
@@ -35,11 +33,14 @@ def create_user(
 
     hashed_password = get_password_hash(password)
     now = datetime.utcnow()
+
+    role_alias = role.alias.lower()
+    must_change_password = role_alias in {"client", "cliente"}
+
     user = User(
         id=None,
         role=role,
         name=name,
-        alias=alias,
         email=email,
         password=hashed_password,
         must_change_password=must_change_password,

@@ -69,7 +69,6 @@ class UserRepository:
             id=model.id,
             role=UserRepository._role_to_entity(model.role),
             name=model.name,
-            alias=model.alias,
             email=model.email,
             password=model.password,
             must_change_password=model.must_change_password,
@@ -94,7 +93,6 @@ class UserRepository:
             model.created_at = user.created_at
         model.role_id = user.role.id
         model.name = user.name
-        model.alias = user.alias
         model.email = user.email
         model.password = user.password
         model.must_change_password = user.must_change_password

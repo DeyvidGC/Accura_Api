@@ -14,7 +14,6 @@ class User:
     id: int | None
     role: Role
     name: str
-    alias: str | None
     email: str
     password: str
     must_change_password: bool

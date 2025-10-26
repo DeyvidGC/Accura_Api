@@ -4,10 +4,8 @@ Content-Type: application/json
 
 {
   "name": "Demo User",
-  "alias": "demo",
   "email": "demo@example.com",
-  "role_id": 1,
-  "must_change_password": false
+  "role_id": 1
 }
 
 ###

@@ -48,8 +48,6 @@ def register_user(
             role_id=user_in.role_id,
             email=user_in.email,
             password=generated_password,
-            alias=user_in.alias,
-            must_change_password=user_in.must_change_password,
             created_by=current_user.id,
         )
     except ValueError as exc:
@@ -116,13 +114,18 @@ def update_user(
         update_data = user_in.dict(exclude_unset=True)
 
     is_admin = current_user.is_admin()
+    if "must_change_password" in update_data:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No se puede modificar esta configuración manualmente",
+        )
     if not is_admin:
         if user_id != current_user.id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="No autorizado",
             )
-        if "email" in update_data and update_data["email"] != target_user.email:
+        if "email" in update_data:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="El cliente no puede cambiar su correo electrónico",
@@ -137,21 +140,18 @@ def update_user(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="El cliente no puede cambiar su estado",
             )
-        if "must_change_password" in update_data:
+        if "password" not in update_data or not update_data["password"]:
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="El cliente no puede cambiar esta configuración",
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El cliente debe proporcionar su contraseña para actualizar sus datos",
             )
 
     name = update_data.get("name", target_user.name)
-    alias = update_data["alias"] if "alias" in update_data else target_user.alias
-    email = update_data.get("email", target_user.email)
-    email_changed = "email" in update_data and update_data["email"] != target_user.email
-    must_change_password = (
-        update_data["must_change_password"]
-        if "must_change_password" in update_data
-        else target_user.must_change_password
-    )
+    email = update_data.get("email")
+    email_changed = email is not None and email != target_user.email
+    if email is not None and not email_changed:
+        email = None
+    must_change_password: bool | None = None
     is_active = update_data["is_active"] if "is_active" in update_data else target_user.is_active
     role_id = update_data.get("role_id") if "role_id" in update_data else None
     requested_password = update_data.get("password")
@@ -169,7 +169,7 @@ def update_user(
         password = generated_password
         must_change_password = True
 
-    if "password" in update_data and "must_change_password" not in update_data:
+    if requested_password is not None and not is_admin:
         must_change_password = False
 
     try:
@@ -178,7 +178,6 @@ def update_user(
             user_id=user_id,
             name=name,
             email=email,
-            alias=alias,
             must_change_password=must_change_password,
             is_active=is_active,
             role_id=role_id,

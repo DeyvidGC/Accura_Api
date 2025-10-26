@@ -16,7 +16,6 @@ def update_user(
     user_id: int,
     name: str | None = None,
     email: str | None = None,
-    alias: str | None = None,
     must_change_password: bool | None = None,
     is_active: bool | None = None,
     password: str | None = None,
@@ -50,7 +49,6 @@ def update_user(
         role=new_role,
         name=name if name is not None else current_user.name,
         email=new_email,
-        alias=alias if alias is not None else current_user.alias,
         must_change_password=(
             must_change_password
             if must_change_password is not None
