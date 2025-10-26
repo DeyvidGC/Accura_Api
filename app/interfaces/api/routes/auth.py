@@ -6,7 +6,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
-from app.application.use_cases.users import authenticate_user, record_login
+from app.application.use_cases.users import (
+    AuthenticationStatus,
+    authenticate_user,
+    record_login,
+)
 from app.config import get_settings
 from app.domain.entities import User
 from app.infrastructure.database import get_db
@@ -29,11 +33,26 @@ def login_for_access_token(
 ):
     """Authenticate the user by email and return a JWT token."""
 
-    user = authenticate_user(db, form_data.username, form_data.password)
-    if not user:
+    user, status = authenticate_user(db, form_data.username, form_data.password)
+
+    if status is AuthenticationStatus.INVALID_CREDENTIALS:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Credenciales incorrectas",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if status is AuthenticationStatus.INACTIVE:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Usuario inactivo",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if status is AuthenticationStatus.MUST_CHANGE_PASSWORD:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Debe actualizar su contraseña",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
