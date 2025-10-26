@@ -37,6 +37,12 @@ class StructuredChatService:
 
         base_url = (settings.openai_base_url or "").strip()
         model = (settings.openai_model or "gpt-4.1-mini").strip() or "gpt-4.1-mini"
+        temperature = float(settings.openai_temperature)
+        max_output_tokens = settings.openai_max_output_tokens
+        if isinstance(max_output_tokens, str):  # defensive: settings may coerce str
+            max_output_tokens = int(max_output_tokens)
+        if max_output_tokens is not None and max_output_tokens <= 0:
+            max_output_tokens = None
 
         client_kwargs: dict[str, Any] = {"api_key": api_key}
         if base_url:
@@ -66,6 +72,8 @@ class StructuredChatService:
             # En ese caso asumimos que no soportan response_format.
             self._supports_response_format = False
         self._model = model
+        self._temperature = temperature
+        self._max_output_tokens = max_output_tokens
 
     def generate_structured_response(
         self,
@@ -84,18 +92,22 @@ class StructuredChatService:
         )
 
         instruction = (
-                "Analiza el mensaje del usuario y construye una definición de regla de validación para campos de "
-                "formularios usados en el sector InsurTech (tecnología aplicada a seguros). "
-                "Ten en cuenta que en este sector los formularios suelen incluir datos de pólizas, clientes, "
-                "riesgos, coberturas, siniestros, y entidades aseguradoras. "
-                "Debes responder con un JSON que cumpla EXACTAMENTE con el esquema 'Regla de Campo'. "
-                "Asegúrate de definir todas las propiedades requeridas y de que 'Regla' siga las restricciones "
-                "correspondientes según el tipo de dato. "
-                "Si el mensaje del usuario no especifica algún valor requerido, dedúcelo o propón uno coherente "
-                "con las prácticas y terminología del sector asegurador, manteniendo consistencia con casos de uso reales "
-                "de validación de datos en InsurTech (por ejemplo: verificación de formatos de pólizas, número de documento, "
-                "fechas de vigencia, montos asegurados, o nombres de aseguradoras). "
-                "Nunca uses textos genéricos como 'N/A', 'Por definir' ni dejes campos vacíos. "
+            "Analiza el mensaje del usuario y construye una definición de regla de validación para campos de "
+            "formularios usados en el sector InsurTech (tecnología aplicada a seguros). "
+            "Ten en cuenta que en este sector los formularios suelen incluir datos de pólizas, clientes, "
+            "riesgos, coberturas, siniestros, y entidades aseguradoras. "
+            "Debes responder con un JSON que cumpla EXACTAMENTE con el esquema 'Regla de Campo'. "
+            "Asegúrate de definir todas las propiedades requeridas y de que 'Regla' siga las restricciones "
+            "correspondientes según el tipo de dato. "
+            "Si el mensaje del usuario no especifica algún valor requerido, dedúcelo o propón uno coherente "
+            "con las prácticas y terminología del sector asegurador, manteniendo consistencia con casos de uso reales "
+            "de validación de datos en InsurTech (por ejemplo: verificación de formatos de pólizas, número de documento, "
+            "fechas de vigencia, montos asegurados, o nombres de aseguradoras). "
+            "Nunca uses textos genéricos como 'N/A', 'Por definir' ni dejes campos vacíos. "
+            "En el campo 'Ejemplo' entrega un caso detallado que describa valores de entrada válidos e inválidos y una breve "
+            "explicación de la lógica aplicada por la regla. Ajusta ese ejemplo al tipo de dato seleccionado; por ejemplo, "
+            "para 'Número' incluye límites y cálculos esperados, para 'Fecha' explica cómo se valida la vigencia y para "
+            "'Dependencia' o 'Validación conjunta' muestra cómo interactúan los campos relacionados. "
         )
         if not self._supports_response_format:
             schema_text = json.dumps(json_schema_definition, ensure_ascii=False)
@@ -148,6 +160,10 @@ class StructuredChatService:
                 "model": self._model,
                 "input": messages,
             }
+            if self._temperature is not None:
+                request_kwargs["temperature"] = self._temperature
+            if self._max_output_tokens is not None:
+                request_kwargs["max_output_tokens"] = self._max_output_tokens
             if self._supports_response_format:
                 request_kwargs["response_format"] = response_format
 
