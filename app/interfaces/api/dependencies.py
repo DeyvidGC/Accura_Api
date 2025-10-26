@@ -1,5 +1,7 @@
 """FastAPI dependency utilities."""
 
+from hashlib import sha256
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
@@ -31,7 +33,14 @@ def get_current_user(
         ) from exc
 
     email: str | None = payload.get("sub")
-    if email is None:
+    password_signature_claim = payload.get("pwd_sig")
+    if email is None or password_signature_claim is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Credenciales inválidas",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    if not isinstance(password_signature_claim, str):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Credenciales inválidas",
@@ -43,6 +52,14 @@ def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Usuario no encontrado",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    expected_signature = sha256(user.password.encode()).hexdigest()
+    if password_signature_claim != expected_signature:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Credenciales inválidas",
             headers={"WWW-Authenticate": "Bearer"},
         )
 

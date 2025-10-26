@@ -1,6 +1,7 @@
 """Authentication endpoints."""
 
 from datetime import timedelta
+from hashlib import sha256
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
@@ -54,8 +55,13 @@ def login_for_access_token(
     )
 
     access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
+    password_signature = sha256(user.password.encode()).hexdigest()
     access_token = create_access_token(
-        data={"sub": user.email, "role": user.role.alias},
+        data={
+            "sub": user.email,
+            "role": user.role.alias,
+            "pwd_sig": password_signature,
+        },
         expires_delta=access_token_expires,
     )
     record_login(db, user.id)
