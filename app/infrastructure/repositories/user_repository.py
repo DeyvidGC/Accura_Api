@@ -18,7 +18,6 @@ class UserRepository:
         query = (
             self.session.query(UserModel)
             .options(joinedload(UserModel.role))
-            .filter(UserModel.is_active.is_(True))
             .offset(skip)
             .limit(limit)
         )

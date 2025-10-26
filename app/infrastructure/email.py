@@ -143,3 +143,39 @@ def send_new_user_credentials_email(email: str, password: str) -> bool:
     )
     return send_email(subject, html_content, email)
 
+
+def send_user_credentials_update_email(
+    email: str,
+    password: str | None,
+    *,
+    email_changed: bool,
+    password_changed: bool,
+) -> bool:
+    """Notify a user about changes to their credentials."""
+
+    subject = "Actualización de credenciales de Accura"
+    messages: list[str] = ["<p>Hola,</p>"]
+
+    if email_changed:
+        messages.append(
+            "<p>Tu correo electrónico de acceso ha sido actualizado correctamente.</p>"
+        )
+
+    if password_changed and password is not None:
+        messages.append(
+            (
+                "<p>Se generó una nueva contraseña temporal para tu cuenta.</p>"
+                f"<p><strong>Contraseña:</strong> {password}</p>"
+            )
+        )
+    else:
+        messages.append(
+            "<p>Tu contraseña se mantiene sin cambios.</p>"
+        )
+
+    messages.append(
+        "<p>Si tú no solicitaste esta actualización, por favor comunícate con el administrador.</p>"
+    )
+    html_content = "".join(messages)
+    return send_email(subject, html_content, email)
+
