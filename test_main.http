@@ -6,7 +6,7 @@ Content-Type: application/json
   "name": "Demo User",
   "alias": "demo",
   "email": "demo@example.com",
-  "password": "supersecure",
+  "role_id": 1,
   "must_change_password": false
 }
 
@@ -16,7 +16,7 @@ Content-Type: application/json
 POST http://127.0.0.1:8000/auth/token
 Content-Type: application/x-www-form-urlencoded
 
-username=demo@example.com&password=supersecure
+username=demo@example.com&password={{temporary_password}}
 
 ###
 
