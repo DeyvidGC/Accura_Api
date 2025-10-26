@@ -4,7 +4,7 @@ from .assistant import (
 )
 from .audit_log import AuditLogRead
 from .digital_file import DigitalFileRead
-from .load import LoadRead
+from .load import LoadRead, LoadUploadResponse
 from .auth import PasswordHashRequest, PasswordHashResponse, Token
 from .rule import RuleCreate, RuleRead, RuleUpdate
 from .template import (
@@ -25,6 +25,7 @@ __all__ = [
     "AuditLogRead",
     "DigitalFileRead",
     "LoadRead",
+    "LoadUploadResponse",
     "PasswordHashRequest",
     "PasswordHashResponse",
     "Token",
