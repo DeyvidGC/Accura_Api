@@ -35,7 +35,7 @@ def create_user(
     now = datetime.utcnow()
 
     role_alias = role.alias.lower()
-    must_change_password = role_alias in {"client", "cliente"}
+    must_change_password = role_alias in {"user", "User"}
 
     user = User(
         id=None,
