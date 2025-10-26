@@ -19,7 +19,17 @@ from sqlalchemy import MetaData, Table, insert
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.domain.entities import Load, LoadedFile, Template, TemplateColumn, User
+from app.domain.entities import (
+    LOAD_STATUS_FAILED,
+    LOAD_STATUS_PROCESSING,
+    LOAD_STATUS_VALIDATED_SUCCESS,
+    LOAD_STATUS_VALIDATED_WITH_ERRORS,
+    Load,
+    LoadedFile,
+    Template,
+    TemplateColumn,
+    User,
+)
 from app.infrastructure.database import engine
 from app.infrastructure.repositories import (
     LoadRepository,
@@ -27,6 +37,7 @@ from app.infrastructure.repositories import (
     RuleRepository,
     TemplateRepository,
     TemplateUserAccessRepository,
+    UserRepository,
 )
 from app.infrastructure.template_files import relative_to_project_root
 
@@ -43,7 +54,7 @@ def upload_template_load(
     file_bytes: bytes,
     filename: str,
 ) -> Load:
-    """Execute a new load for ``template_id`` using ``file_bytes``."""
+    """Register a new load for ``template_id`` and mark it as pending processing."""
 
     template = _get_template(session, template_id)
     _ensure_user_has_access(session, template, user)
@@ -61,6 +72,9 @@ def upload_template_load(
     if not columns:
         raise ValueError("La plantilla no tiene columnas activas para importar")
 
+    if not file_bytes:
+        raise ValueError("El archivo proporcionado está vacío")
+
     load_repo = LoadRepository(session)
     now = datetime.utcnow()
     load = load_repo.create(
@@ -68,7 +82,7 @@ def upload_template_load(
             id=None,
             template_id=template.id,
             user_id=user.id,
-            status="processing",
+            status=LOAD_STATUS_PROCESSING,
             file_name=filename,
             total_rows=0,
             error_rows=0,
@@ -78,6 +92,42 @@ def upload_template_load(
             finished_at=None,
         )
     )
+
+    return load
+
+
+def process_template_load(
+    session: Session,
+    *,
+    load_id: int,
+    template_id: int,
+    user_id: int,
+    file_bytes: bytes,
+    filename: str,
+) -> Load:
+    """Execute the validation flow for an existing load."""
+
+    load_repo = LoadRepository(session)
+    load = load_repo.get(load_id)
+    if load is None:
+        raise ValueError("Carga no encontrada")
+
+    template = _get_template(session, template_id)
+    user = UserRepository(session).get(user_id)
+    if user is None:
+        raise ValueError("Usuario no encontrado")
+
+    _ensure_user_has_access(session, template, user)
+
+    suffix = Path(filename).suffix.lower()
+    if suffix not in _SUPPORTED_EXTENSIONS:
+        raise ValueError(
+            "Formato de archivo no soportado. Usa archivos .xlsx, .xls o .csv"
+        )
+
+    columns = _ordered_active_columns(template)
+    if not columns:
+        raise ValueError("La plantilla no tiene columnas activas para importar")
 
     try:
         dataframe = _read_source_file(file_bytes, suffix)
@@ -94,7 +144,11 @@ def upload_template_load(
         total_rows = len(validated_df.index)
         error_rows = total_rows - inserted_rows
 
-        final_status = "completed"
+        final_status = (
+            LOAD_STATUS_VALIDATED_SUCCESS
+            if error_rows == 0
+            else LOAD_STATUS_VALIDATED_WITH_ERRORS
+        )
         finished_at = datetime.utcnow()
         relative_report_path = relative_to_project_root(report_path)
         load = load_repo.update(
@@ -401,13 +455,13 @@ def _mark_load_as_failed(repository: LoadRepository, load: Load, message: str) -
             id=load.id,
             template_id=load.template_id,
             user_id=load.user_id,
-            status="failed",
+            status=LOAD_STATUS_FAILED,
             file_name=load.file_name,
             total_rows=load.total_rows,
             error_rows=load.error_rows,
             report_path=load.report_path,
             created_at=load.created_at,
-            started_at=load.started_at,
+            started_at=load.started_at or finished_at,
             finished_at=finished_at,
         )
     )
@@ -1054,4 +1108,5 @@ __all__ = [
     "get_load_report",
     "list_loads",
     "upload_template_load",
+    "process_template_load",
 ]

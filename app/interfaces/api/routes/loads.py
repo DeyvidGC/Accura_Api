@@ -1,7 +1,10 @@
 """API routes handling template load executions."""
 
+import logging
+
 from fastapi import (
     APIRouter,
+    BackgroundTasks,
     Depends,
     File,
     HTTPException,
@@ -16,14 +19,16 @@ from app.application.use_cases.loads import (
     get_load as get_load_uc,
     get_load_report as get_load_report_uc,
     list_loads as list_loads_uc,
+    process_template_load as process_template_load_uc,
     upload_template_load as upload_template_load_uc,
 )
 from app.domain.entities import Load, User
-from app.infrastructure.database import get_db
+from app.infrastructure.database import SessionLocal, get_db
 from app.interfaces.api.dependencies import get_current_active_user
-from app.interfaces.api.schemas import LoadRead
+from app.interfaces.api.schemas import LoadRead, LoadUploadResponse
 
 router = APIRouter(tags=["loads"])
+logger = logging.getLogger(__name__)
 
 
 def _load_to_read_model(load: Load) -> LoadRead:
@@ -34,16 +39,17 @@ def _load_to_read_model(load: Load) -> LoadRead:
 
 @router.post(
     "/templates/{template_id}/loads",
-    response_model=LoadRead,
+    response_model=LoadUploadResponse,
     status_code=status.HTTP_201_CREATED,
 )
 def create_template_load(
     template_id: int,
     file: UploadFile = File(...),
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
-) -> LoadRead:
-    """Upload data for ``template_id`` and register the resulting load."""
+) -> LoadUploadResponse:
+    """Upload data for ``template_id`` and schedule validation in the background."""
 
     try:
         file_bytes = file.file.read()
@@ -65,7 +71,51 @@ def create_template_load(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
-    return _load_to_read_model(load)
+    if load.id is None:  # pragma: no cover - defensive guard
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="No fue posible registrar la carga",
+        )
+
+    background_tasks.add_task(
+        _process_load_in_background,
+        load_id=load.id,
+        template_id=template_id,
+        user_id=current_user.id,
+        file_bytes=file_bytes,
+        filename=file.filename or "",
+    )
+
+    return LoadUploadResponse(
+        message="Archivo cargado correctamente",
+        load=_load_to_read_model(load),
+    )
+
+
+def _process_load_in_background(
+    *,
+    load_id: int,
+    template_id: int,
+    user_id: int,
+    file_bytes: bytes,
+    filename: str,
+) -> None:
+    """Execute the load processing logic using an isolated database session."""
+
+    session = SessionLocal()
+    try:
+        process_template_load_uc(
+            session,
+            load_id=load_id,
+            template_id=template_id,
+            user_id=user_id,
+            file_bytes=file_bytes,
+            filename=filename,
+        )
+    except Exception as exc:  # pragma: no cover - background processing guard
+        logger.exception("Error al procesar la carga %s: %s", load_id, exc)
+    finally:
+        session.close()
 
 
 @router.get("/loads", response_model=list[LoadRead])

@@ -30,4 +30,9 @@ class LoadRead(BaseModel):
             orm_mode = True
 
 
-__all__ = ["LoadRead"]
+class LoadUploadResponse(BaseModel):
+    message: str
+    load: LoadRead
+
+
+__all__ = ["LoadRead", "LoadUploadResponse"]
