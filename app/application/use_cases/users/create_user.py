@@ -31,11 +31,15 @@ def create_user(
     if role is None:
         raise ValueError("Rol no encontrado")
 
+    role_alias = role.alias.lower()
+    allowed_roles = role_repository.list_aliases()
+    if role_alias not in allowed_roles:
+        raise ValueError("Rol no permitido")
+
     hashed_password = get_password_hash(password)
     now = datetime.utcnow()
 
-    role_alias = role.alias.lower()
-    must_change_password = role_alias in {"user", "User"}
+    must_change_password = role_alias in allowed_roles
 
     user = User(
         id=None,

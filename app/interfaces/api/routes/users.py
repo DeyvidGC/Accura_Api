@@ -155,21 +155,16 @@ def update_user(
     is_active = update_data["is_active"] if "is_active" in update_data else target_user.is_active
     role_id = update_data.get("role_id") if "role_id" in update_data else None
     requested_password = update_data.get("password")
-    if requested_password is not None and is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El administrador no puede establecer la contraseña manualmente",
-        )
 
     generated_password: str | None = None
     password = requested_password
 
-    if email_changed and is_admin:
+    if email_changed and is_admin and not requested_password:
         generated_password = generate_secure_password()
         password = generated_password
         must_change_password = True
 
-    if requested_password is not None and not is_admin:
+    if requested_password is not None:
         must_change_password = False
 
     try:
@@ -190,12 +185,19 @@ def update_user(
             status_code = status.HTTP_404_NOT_FOUND
         raise HTTPException(status_code=status_code, detail=str(exc)) from exc
 
-    if is_admin and (email_changed or generated_password is not None):
+    password_changed = requested_password is not None or generated_password is not None
+    password_for_notification = (
+        generated_password
+        if generated_password is not None
+        else requested_password
+    )
+
+    if is_admin and (email_changed or password_changed):
         if not send_user_credentials_update_email(
             user.email,
-            generated_password,
+            password_for_notification,
             email_changed=email_changed,
-            password_changed=generated_password is not None,
+            password_changed=password_changed,
         ):
             logger.warning(
                 "No se pudo enviar el correo de actualización de credenciales al usuario %s",

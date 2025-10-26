@@ -37,12 +37,19 @@ def update_user(
             raise ValueError("El correo electrónico ya está registrado")
         new_email = email
 
+    allowed_roles = role_repository.list_aliases()
+
     new_role = current_user.role
     if role_id is not None and role_id != current_user.role.id:
         role = role_repository.get(role_id)
         if role is None:
             raise ValueError("Rol no encontrado")
+        if role.alias.lower() not in allowed_roles:
+            raise ValueError("Rol no permitido")
         new_role = role
+
+    if current_user.role.alias.lower() not in allowed_roles:
+        raise ValueError("Rol no permitido")
 
     updated_user = replace(
         current_user,
