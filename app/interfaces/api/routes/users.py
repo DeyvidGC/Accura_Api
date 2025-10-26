@@ -192,7 +192,7 @@ def update_user(
         else requested_password
     )
 
-    if is_admin and (email_changed or password_changed):
+    if is_admin and email_changed:
         if not send_user_credentials_update_email(
             user.email,
             password_for_notification,
