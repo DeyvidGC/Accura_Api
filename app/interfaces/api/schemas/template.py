@@ -24,6 +24,12 @@ class TemplateColumnCreate(TemplateColumnBase):
     """Payload required to create a template column."""
 
 
+class TemplateColumnBulkCreate(BaseModel):
+    """Payload wrapper to create many columns at once."""
+
+    columns: list[TemplateColumnCreate]
+
+
 class TemplateColumnUpdate(BaseModel):
     name: str | None = Field(default=None, max_length=50)
     data_type: str | None = Field(default=None, max_length=50)

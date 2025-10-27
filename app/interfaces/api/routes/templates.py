@@ -1,11 +1,13 @@
 """Routes for managing templates and their columns."""
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Response, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.application.use_cases.template_columns import (
+    NewTemplateColumnData,
     create_template_column as create_template_column_uc,
+    create_template_columns as create_template_columns_uc,
     delete_template_column as delete_template_column_uc,
     get_template_column as get_template_column_uc,
     list_template_columns as list_template_columns_uc,
@@ -30,6 +32,7 @@ from app.interfaces.api.dependencies import (
     require_admin,
 )
 from app.interfaces.api.schemas import (
+    TemplateColumnBulkCreate,
     TemplateColumnCreate,
     TemplateColumnRead,
     TemplateColumnUpdate,
@@ -191,27 +194,52 @@ def delete_template(
 
 @router.post(
     "/{template_id}/columns",
-    response_model=TemplateColumnRead,
+    response_model=TemplateColumnRead | list[TemplateColumnRead],
     status_code=status.HTTP_201_CREATED,
 )
 def register_template_column(
     template_id: int,
-    column_in: TemplateColumnCreate,
+    column_in: TemplateColumnCreate
+    | list[TemplateColumnCreate]
+    | TemplateColumnBulkCreate = Body(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
-) -> TemplateColumnRead:
-    """Create a new column for the template."""
+) -> TemplateColumnRead | list[TemplateColumnRead]:
+    """Create one or multiple columns for the template."""
 
     try:
-        column = create_template_column_uc(
-            db,
-            template_id=template_id,
-            name=column_in.name,
-            data_type=column_in.data_type,
-            description=column_in.description,
-            rule_id=column_in.rule_id,
-            created_by=current_user.id,
-        )
+        if isinstance(column_in, TemplateColumnCreate):
+            column = create_template_column_uc(
+                db,
+                template_id=template_id,
+                name=column_in.name,
+                data_type=column_in.data_type,
+                description=column_in.description,
+                rule_id=column_in.rule_id,
+                created_by=current_user.id,
+            )
+            result = _column_to_read_model(column)
+        else:
+            if isinstance(column_in, TemplateColumnBulkCreate):
+                incoming_columns = column_in.columns
+            else:
+                incoming_columns = column_in
+            payload = [
+                NewTemplateColumnData(
+                    name=col.name,
+                    data_type=col.data_type,
+                    description=col.description,
+                    rule_id=col.rule_id,
+                )
+                for col in incoming_columns
+            ]
+            columns = create_template_columns_uc(
+                db,
+                template_id=template_id,
+                columns=payload,
+                created_by=current_user.id,
+            )
+            result = [_column_to_read_model(column) for column in columns]
     except ValueError as exc:
         detail = str(exc)
         status_code = status.HTTP_400_BAD_REQUEST
@@ -219,7 +247,7 @@ def register_template_column(
             status_code = status.HTTP_404_NOT_FOUND
         raise HTTPException(status_code=status_code, detail=detail) from exc
 
-    return _column_to_read_model(column)
+    return result
 
 
 @router.get("/{template_id}/columns", response_model=list[TemplateColumnRead])

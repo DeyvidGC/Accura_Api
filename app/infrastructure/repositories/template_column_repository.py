@@ -36,6 +36,23 @@ class TemplateColumnRepository:
             self.session.refresh(model, attribute_names=["rule"])
         return self._to_entity(model)
 
+    def create_many(self, columns: Sequence[TemplateColumn]) -> list[TemplateColumn]:
+        models: list[TemplateColumnModel] = []
+        for column in columns:
+            model = TemplateColumnModel()
+            self._apply_entity_to_model(model, column, include_creation_fields=True)
+            self.session.add(model)
+            models.append(model)
+
+        self.session.commit()
+
+        for model, column in zip(models, columns, strict=False):
+            self.session.refresh(model)
+            if model.rule is None and column.rule_id is not None:
+                self.session.refresh(model, attribute_names=["rule"])
+
+        return [self._to_entity(model) for model in models]
+
     def update(self, column: TemplateColumn) -> TemplateColumn:
         model = self._get_model(id=column.id)
         if not model:
