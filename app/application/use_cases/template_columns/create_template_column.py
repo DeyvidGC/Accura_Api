@@ -1,5 +1,7 @@
 """Use case for creating template columns."""
 
+from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import datetime
 
 from sqlalchemy.orm import Session
@@ -14,6 +16,64 @@ from app.infrastructure.repositories import (
     TemplateColumnRepository,
     TemplateRepository,
 )
+
+
+@dataclass(frozen=True)
+class NewTemplateColumnData:
+    """Data required to create a template column."""
+
+    name: str
+    data_type: str
+    description: str | None = None
+    rule_id: int | None = None
+
+
+def _ensure_template_is_editable(template_repository: TemplateRepository, template_id: int):
+    template = template_repository.get(template_id)
+    if template is None:
+        raise ValueError("Plantilla no encontrada")
+
+    if template.status == "published":
+        raise ValueError("No se pueden modificar las columnas de una plantilla publicada")
+
+    return template
+
+
+def _build_column(
+    *,
+    template_id: int,
+    payload: NewTemplateColumnData,
+    created_by: int | None,
+    forbidden_names: set[str],
+) -> TemplateColumn:
+    try:
+        safe_name = ensure_identifier(payload.name, kind="column")
+    except IdentifierError as exc:
+        raise ValueError(str(exc)) from exc
+
+    try:
+        normalized_type = ensure_data_type(payload.data_type)
+    except ValueError as exc:
+        raise ValueError(str(exc)) from exc
+
+    normalized_name = safe_name.lower()
+    if normalized_name in forbidden_names:
+        raise ValueError("Ya existe una columna con ese nombre en la plantilla")
+
+    now = datetime.utcnow()
+    return TemplateColumn(
+        id=None,
+        template_id=template_id,
+        rule_id=payload.rule_id,
+        name=safe_name,
+        description=payload.description,
+        data_type=normalized_type,
+        created_by=created_by,
+        created_at=now,
+        updated_by=None,
+        updated_at=None,
+        is_active=True,
+    )
 
 
 def create_template_column(
@@ -35,42 +95,56 @@ def create_template_column(
     column_repository = TemplateColumnRepository(session)
     template_repository = TemplateRepository(session)
 
-    template = template_repository.get(template_id)
-    if template is None:
-        raise ValueError("Plantilla no encontrada")
-
-    if template.status == "published":
-        raise ValueError("No se pueden modificar las columnas de una plantilla publicada")
-
-    try:
-        safe_name = ensure_identifier(name, kind="column")
-    except IdentifierError as exc:
-        raise ValueError(str(exc)) from exc
-
-    try:
-        normalized_type = ensure_data_type(data_type)
-    except ValueError as exc:
-        raise ValueError(str(exc)) from exc
+    _ensure_template_is_editable(template_repository, template_id)
 
     existing_columns = column_repository.list_by_template(template_id)
-    if any(col.name.lower() == safe_name.lower() for col in existing_columns):
-        raise ValueError("Ya existe una columna con ese nombre en la plantilla")
-
-    now = datetime.utcnow()
-    column = TemplateColumn(
-        id=None,
+    forbidden_names = {column.name.lower() for column in existing_columns}
+    column = _build_column(
         template_id=template_id,
-        rule_id=rule_id,
-        name=safe_name,
-        description=description,
-        data_type=normalized_type,
+        payload=NewTemplateColumnData(
+            name=name,
+            data_type=data_type,
+            description=description,
+            rule_id=rule_id,
+        ),
         created_by=created_by,
-        created_at=now,
-        updated_by=None,
-        updated_at=None,
-        is_active=True,
+        forbidden_names=forbidden_names,
     )
 
     saved_column = column_repository.create(column)
 
     return saved_column
+
+
+def create_template_columns(
+    session: Session,
+    *,
+    template_id: int,
+    columns: Sequence[NewTemplateColumnData],
+    created_by: int | None = None,
+) -> list[TemplateColumn]:
+    """Create multiple columns for a template in a single operation."""
+
+    if not columns:
+        return []
+
+    column_repository = TemplateColumnRepository(session)
+    template_repository = TemplateRepository(session)
+
+    _ensure_template_is_editable(template_repository, template_id)
+
+    existing_columns = column_repository.list_by_template(template_id)
+    forbidden_names = {column.name.lower() for column in existing_columns}
+
+    new_columns: list[TemplateColumn] = []
+    for payload in columns:
+        column = _build_column(
+            template_id=template_id,
+            payload=payload,
+            created_by=created_by,
+            forbidden_names=forbidden_names,
+        )
+        forbidden_names.add(column.name.lower())
+        new_columns.append(column)
+
+    return column_repository.create_many(new_columns)
