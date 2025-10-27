@@ -22,6 +22,7 @@ class TipoDatoEnum(str, Enum):
     NUMERO = "Número"
     DOCUMENTO = "Documento"
     LISTA = "Lista"
+    LISTA_COMPLEJA = "Lista compleja"
     TELEFONO = "Telefono"
     CORREO = "Correo"
     FECHA = "Fecha"
@@ -103,6 +104,38 @@ class AssistantMessageResponse(BaseModel):
         elif tipo == TipoDatoEnum.LISTA:
             if not isinstance(regla, dict):  # pragma: no cover - defensive
                 raise ValueError("La regla de tipo 'Lista' debe ser un objeto JSON.")
+
+        elif tipo == TipoDatoEnum.LISTA_COMPLEJA:
+            ensure_keys({"Lista compleja"})
+            combinaciones = regla.get("Lista compleja")
+            if not isinstance(combinaciones, list) or not combinaciones:
+                raise ValueError(
+                    "'Lista compleja' debe ser una lista con al menos una combinación permitida."
+                )
+            for combinacion in combinaciones:
+                if not isinstance(combinacion, dict) or not combinacion:
+                    raise ValueError(
+                        "Cada combinación en 'Lista compleja' debe ser un objeto con al menos una clave."
+                    )
+                for campo, valor in combinacion.items():
+                    if not isinstance(campo, str) or not campo.strip():
+                        raise ValueError(
+                            "Las claves de cada combinación deben ser cadenas no vacías."
+                        )
+                    if isinstance(valor, str):
+                        if not valor.strip():
+                            raise ValueError(
+                                "Los valores de cada combinación deben ser cadenas o números no vacíos."
+                            )
+                        continue
+                    if not isinstance(valor, (int, float)):
+                        raise ValueError(
+                            "Los valores de cada combinación deben ser cadenas o números no vacíos."
+                        )
+                    if isinstance(valor, float) and valor != valor:
+                        raise ValueError(
+                            "Los valores de cada combinación no pueden ser NaN."
+                        )
 
         elif tipo == TipoDatoEnum.TELEFONO:
             ensure_keys({"Longitud minima", "Código de país"})
