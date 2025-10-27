@@ -8,6 +8,7 @@ from .load import LoadRead, LoadUploadResponse
 from .auth import PasswordHashRequest, PasswordHashResponse, Token
 from .rule import RuleCreate, RuleRead, RuleUpdate
 from .template import (
+    TemplateColumnBulkCreate,
     TemplateColumnCreate,
     TemplateColumnRead,
     TemplateColumnUpdate,
@@ -32,6 +33,7 @@ __all__ = [
     "RuleCreate",
     "RuleRead",
     "RuleUpdate",
+    "TemplateColumnBulkCreate",
     "TemplateColumnCreate",
     "TemplateColumnRead",
     "TemplateColumnUpdate",
