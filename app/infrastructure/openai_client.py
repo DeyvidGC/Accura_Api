@@ -214,6 +214,7 @@ class StructuredChatService:
             "Número",
             "Documento",
             "Lista",
+            "Lista compleja",
             "Telefono",
             "Correo",
             "Fecha",

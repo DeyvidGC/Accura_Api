@@ -697,6 +697,71 @@ def _validate_list_rule(
     return text_value, []
 
 
+def _validate_full_list_rule(
+    *,
+    value: Any,
+    column_name: str,
+    rule_config: Mapping[str, Any],
+    message: str | None,
+    row_context: Mapping[str, Any] | None,
+    **_: Any,
+) -> tuple[str, list[str]]:
+    text_value = str(value)
+    combinations = _extract_composite_combinations(rule_config)
+    if not combinations:
+        return text_value, []
+
+    row_snapshot: Mapping[str, Any] = row_context or {}
+    related_fields: set[str] = {column_name}
+    for combination in combinations:
+        related_fields.update(combination.keys())
+
+    def _stringify(raw: Any) -> str | None:
+        normalized = _normalize_cell_value(raw)
+        if normalized is None:
+            return None
+        return str(normalized)
+
+    current_values: dict[str, str | None] = {}
+    for field in sorted(related_fields):
+        raw_value = value if field == column_name else row_snapshot.get(field)
+        text_related = _stringify(raw_value)
+        current_values[field] = text_related
+    missing_for_viable: set[str] = set()
+    for combination in combinations:
+        missing_fields = [field for field in combination if current_values.get(field) is None]
+        if missing_fields:
+            if all(
+                current_values.get(field) == expected
+                for field, expected in combination.items()
+                if field not in missing_fields
+            ):
+                missing_for_viable.update(missing_fields)
+            continue
+        if all(current_values.get(field) == expected for field, expected in combination.items()):
+            return text_value, []
+
+    if missing_for_viable:
+        missing = ", ".join(sorted(missing_for_viable))
+        return text_value, [
+            _compose_error(
+                message,
+                f"{column_name}: completa los campos relacionados ({missing})",
+            )
+        ]
+
+    summary = "; ".join(
+        " / ".join(f"{field}={expected}" for field, expected in combination.items())
+        for combination in combinations
+    )
+    return text_value, [
+        _compose_error(
+            message,
+            f"{column_name}: combinación no permitida ({summary})",
+        )
+    ]
+
+
 def _validate_phone_rule(
     *,
     value: Any,
@@ -951,6 +1016,43 @@ def _extract_allowed_values(rule_config: Mapping[str, Any]) -> list[Any]:
     return []
 
 
+def _extract_composite_combinations(rule_config: Mapping[str, Any]) -> list[dict[str, str]]:
+    candidate_keys = [
+        "Lista compleja",
+        "Lista",
+        "Listas",
+        "Combinaciones",
+    ]
+    for key in candidate_keys:
+        raw_values = rule_config.get(key)
+        if not isinstance(raw_values, list):
+            continue
+        combinations: list[dict[str, str]] = []
+        for entry in raw_values:
+            if not isinstance(entry, Mapping):
+                continue
+            normalized_entry: dict[str, str] = {}
+            for campo, valor in entry.items():
+                if not isinstance(campo, str):
+                    continue
+                field_name = campo.strip()
+                if not field_name:
+                    continue
+                normalized_value = _normalize_cell_value(valor)
+                if normalized_value is None:
+                    continue
+                if isinstance(normalized_value, (Mapping, Sequence)) and not isinstance(
+                    normalized_value, (str, bytes)
+                ):
+                    continue
+                normalized_entry[field_name] = str(normalized_value)
+            if normalized_entry:
+                combinations.append(normalized_entry)
+        if combinations:
+            return combinations
+    return []
+
+
 def _coerce_timestamp(value: Any) -> Any:
     if isinstance(value, pd.Timestamp):
         if value.tzinfo is not None:
@@ -1073,6 +1175,7 @@ _TYPE_PARSERS: dict[str, _TypeParser] = {
     "numero": _parse_float,
     "documento": _parse_string,
     "lista": _parse_string,
+    "lista compleja": _parse_string,
     "telefono": _parse_string,
     "correo": _parse_string,
     "fecha": _parse_date,
@@ -1088,6 +1191,7 @@ _RULE_VALIDATORS: dict[str, RuleValidator] = {
     "documento": _validate_document_rule,
     "numero": _validate_number_rule,
     "lista": _validate_list_rule,
+    "lista compleja": _validate_full_list_rule,
     "telefono": _validate_phone_rule,
     "correo": _validate_email_rule,
     "fecha": _validate_date_rule,
