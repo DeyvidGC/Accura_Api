@@ -104,10 +104,8 @@ class StructuredChatService:
             "de validación de datos en InsurTech (por ejemplo: verificación de formatos de pólizas, número de documento, "
             "fechas de vigencia, montos asegurados, o nombres de aseguradoras). "
             "Nunca uses textos genéricos como 'N/A', 'Por definir' ni dejes campos vacíos. "
-            "En el campo 'Ejemplo' entrega un caso detallado que describa valores de entrada válidos e inválidos y una breve "
-            "explicación de la lógica aplicada por la regla. Ajusta ese ejemplo al tipo de dato seleccionado; por ejemplo, "
-            "para 'Número' incluye límites y cálculos esperados, para 'Fecha' explica cómo se valida la vigencia y para "
-            "'Dependencia' o 'Validación conjunta' muestra cómo interactúan los campos relacionados. "
+            "En el campo 'Ejemplo' entrega un caso detallado que describa valores de entrada valido e invalido que sea los mas reales posibles."
+            "Solo brindar un ejemplo de valido y otro de invalido"
         )
         if not self._supports_response_format:
             schema_text = json.dumps(json_schema_definition, ensure_ascii=False)
