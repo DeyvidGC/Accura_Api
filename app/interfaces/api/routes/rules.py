@@ -1,4 +1,4 @@
-"""Routes for managing validation rules."""
+"""Rutas para administrar reglas de validación."""
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
@@ -30,7 +30,7 @@ def register_rule(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ) -> RuleRead:
-    """Create a new validation rule."""
+    """Crea una nueva regla de validación."""
 
     try:
         rule = create_rule_uc(
@@ -51,7 +51,7 @@ def list_rules(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ) -> list[RuleRead]:
-    """Return a paginated list of validation rules."""
+    """Devuelve una lista paginada de reglas de validación."""
 
     rules = list_rules_uc(db, skip=skip, limit=limit)
     return [_to_read_model(rule) for rule in rules]
@@ -63,7 +63,7 @@ def read_rule(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ) -> RuleRead:
-    """Return the rule identified by ``rule_id``."""
+    """Obtiene la regla identificada por ``rule_id``."""
 
     try:
         rule = get_rule_uc(db, rule_id)
@@ -79,7 +79,7 @@ def update_rule(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ) -> RuleRead:
-    """Update an existing validation rule."""
+    """Actualiza una regla de validación existente."""
 
     if hasattr(rule_in, "model_dump"):
         update_data = rule_in.model_dump(exclude_unset=True)
@@ -111,7 +111,7 @@ def delete_rule(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ) -> Response:
-    """Delete a validation rule."""
+    """Elimina una regla de validación."""
 
     try:
         delete_rule_uc(db, rule_id)

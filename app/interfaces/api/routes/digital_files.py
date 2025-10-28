@@ -1,4 +1,4 @@
-"""Routes exposing stored digital file metadata."""
+"""Rutas para consultar archivos digitales generados por las plantillas."""
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
@@ -30,7 +30,7 @@ def list_digital_files(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ) -> list[DigitalFileRead]:
-    """Return stored digital files optionally filtered by template."""
+    """Devuelve los archivos digitales almacenados, opcionalmente filtrados por plantilla."""
 
     digital_files = list_digital_files_uc(
         db, template_id=template_id, skip=skip, limit=limit
@@ -44,7 +44,7 @@ def read_digital_file(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ) -> DigitalFileRead:
-    """Return a digital file identified by ``digital_file_id``."""
+    """Obtiene el archivo digital identificado por ``digital_file_id``."""
 
     try:
         digital_file = get_digital_file_uc(db, digital_file_id)
@@ -59,7 +59,7 @@ def read_digital_file_by_template(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ) -> DigitalFileRead:
-    """Return the digital file associated with ``template_id``."""
+    """Obtiene el archivo digital asociado a la plantilla indicada."""
 
     try:
         digital_file = get_digital_file_by_template_uc(db, template_id)

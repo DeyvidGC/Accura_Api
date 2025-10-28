@@ -1,4 +1,4 @@
-"""Routes for managing templates and their columns."""
+"""Rutas para administrar plantillas, sus columnas y accesos."""
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Response, status
 from fastapi.responses import FileResponse
@@ -71,7 +71,7 @@ def register_template(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ) -> TemplateRead:
-    """Create a new template definition."""
+    """Crea una nueva definición de plantilla."""
 
     try:
         template = create_template_uc(
@@ -95,7 +95,7 @@ def list_templates(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ) -> list[TemplateRead]:
-    """Return a paginated list of templates."""
+    """Devuelve una lista paginada de plantillas registradas."""
 
     templates = list_templates_uc(db, skip=skip, limit=limit)
     return [_template_to_read_model(template) for template in templates]
@@ -107,7 +107,7 @@ def read_template(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ) -> TemplateRead:
-    """Return the template identified by ``template_id``."""
+    """Obtiene la plantilla identificada por ``template_id``."""
 
     try:
         template = get_template_uc(db, template_id)
@@ -123,7 +123,7 @@ def update_template(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ) -> TemplateRead:
-    """Update an existing template."""
+    """Actualiza una plantilla existente."""
 
     if hasattr(template_in, "model_dump"):
         update_data = template_in.model_dump(exclude_unset=True)
@@ -158,7 +158,7 @@ def update_template_status(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ) -> TemplateRead:
-    """Update only the status of an existing template."""
+    """Actualiza únicamente el estado de una plantilla."""
 
     try:
         template = update_template_status_uc(
@@ -183,7 +183,7 @@ def delete_template(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ) -> Response:
-    """Delete a template and its dynamic table."""
+    """Elimina una plantilla junto con su tabla dinámica."""
 
     try:
         delete_template_uc(db, template_id, deleted_by=current_user.id)
@@ -205,7 +205,7 @@ def register_template_column(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ) -> TemplateColumnRead | list[TemplateColumnRead]:
-    """Create one or multiple columns for the template."""
+    """Crea una o varias columnas asociadas a la plantilla."""
 
     try:
         if isinstance(column_in, TemplateColumnCreate):
@@ -256,7 +256,7 @@ def list_template_columns(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ) -> list[TemplateColumnRead]:
-    """Return all columns for a template."""
+    """Lista todas las columnas configuradas para la plantilla."""
 
     try:
         columns = list_template_columns_uc(db, template_id=template_id)
@@ -274,7 +274,7 @@ def read_template_column(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ) -> TemplateColumnRead:
-    """Return a single template column."""
+    """Obtiene la información de una columna específica."""
 
     try:
         column = get_template_column_uc(db, template_id=template_id, column_id=column_id)
@@ -293,7 +293,7 @@ def update_template_column(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ) -> TemplateColumnRead:
-    """Update a template column definition."""
+    """Actualiza la definición de una columna de plantilla."""
 
     if hasattr(column_in, "model_dump"):
         update_data = column_in.model_dump(exclude_unset=True)
@@ -331,7 +331,7 @@ def delete_template_column(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ) -> Response:
-    """Delete a template column."""
+    """Elimina una columna de la plantilla."""
 
     try:
         delete_template_column_uc(db, template_id=template_id, column_id=column_id)
@@ -351,7 +351,7 @@ def grant_template_access(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ) -> TemplateUserAccessRead:
-    """Grant a user access to the template."""
+    """Concede acceso a la plantilla para el usuario indicado."""
 
     try:
         access = grant_template_access_uc(
@@ -381,7 +381,7 @@ def list_template_access(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ) -> list[TemplateUserAccessRead]:
-    """Return access assignments for the template."""
+    """Lista los accesos configurados para la plantilla."""
 
     try:
         accesses = list_template_access_uc(
@@ -405,7 +405,7 @@ def revoke_template_access(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ) -> TemplateUserAccessRead:
-    """Revoke an existing template access assignment."""
+    """Revoca un acceso previamente concedido a la plantilla."""
 
     try:
         access = revoke_template_access_uc(
@@ -430,7 +430,7 @@ def download_template_excel(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Return the generated Excel file for a template."""
+    """Descarga el archivo de Excel generado para la plantilla."""
 
     try:
         path = get_template_excel_uc(

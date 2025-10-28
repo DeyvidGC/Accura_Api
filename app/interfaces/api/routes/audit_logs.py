@@ -1,4 +1,4 @@
-"""Routes for inspecting and managing audit log entries."""
+"""Rutas para consultar y administrar entradas del registro de auditoría."""
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
@@ -28,7 +28,7 @@ def list_audit_logs(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ) -> list[AuditLogRead]:
-    """Return audit log entries optionally filtered by template name."""
+    """Devuelve entradas del registro de auditoría, filtradas opcionalmente por plantilla."""
 
     entries = list_audit_logs_uc(db, template_name=template_name)
     return [_audit_log_to_read_model(entry) for entry in entries]
@@ -40,7 +40,7 @@ def read_audit_log(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ) -> AuditLogRead:
-    """Return the audit log entry identified by ``entry_id``."""
+    """Obtiene la entrada de auditoría identificada por ``entry_id``."""
 
     try:
         entry = get_audit_log_uc(db, entry_id)
@@ -55,7 +55,7 @@ def delete_audit_log(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ) -> Response:
-    """Delete the audit log entry identified by ``entry_id``."""
+    """Elimina la entrada de auditoría indicada."""
 
     try:
         delete_audit_log_uc(db, entry_id)

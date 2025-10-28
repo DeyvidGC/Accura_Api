@@ -1,4 +1,4 @@
-"""API routes handling template load executions."""
+"""Rutas de la API relacionadas con cargas de datos para plantillas."""
 
 import logging
 
@@ -49,7 +49,7 @@ def create_template_load(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ) -> LoadUploadResponse:
-    """Upload data for ``template_id`` and schedule validation in the background."""
+    """Sube información para la plantilla indicada y agenda su validación en segundo plano."""
 
     try:
         file_bytes = file.file.read()
@@ -100,7 +100,7 @@ def _process_load_in_background(
     file_bytes: bytes,
     filename: str,
 ) -> None:
-    """Execute the load processing logic using an isolated database session."""
+    """Procesa la carga utilizando una sesión de base de datos independiente."""
 
     session = SessionLocal()
     try:
@@ -126,7 +126,7 @@ def list_loads(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ) -> list[LoadRead]:
-    """Return loads visible to ``current_user``."""
+    """Devuelve las cargas visibles para el usuario autenticado."""
 
     loads = list_loads_uc(
         db,
@@ -144,7 +144,7 @@ def read_load(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ) -> LoadRead:
-    """Return the load identified by ``load_id`` if accessible."""
+    """Obtiene la carga identificada por ``load_id`` si el usuario tiene acceso."""
 
     try:
         load = get_load_uc(db, load_id=load_id, current_user=current_user)
@@ -161,7 +161,7 @@ def download_load_report(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ) -> FileResponse:
-    """Return the generated Excel report for ``load_id``."""
+    """Descarga el reporte en Excel generado para la carga solicitada."""
 
     try:
         load, path = get_load_report_uc(db, load_id=load_id, current_user=current_user)
