@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import json
 import math
 import re
@@ -11,10 +12,8 @@ from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Callable
-
-import pandas as pd
-from pandas import DataFrame
+from functools import lru_cache
+from typing import TYPE_CHECKING, Any, Callable
 from sqlalchemy import MetaData, Table, insert
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -48,6 +47,19 @@ from app.infrastructure.template_files import relative_to_project_root
 _REPORT_DIRECTORY = Path(__file__).resolve().parents[2] / "Files" / "Reports"
 
 _SUPPORTED_EXTENSIONS = {".xlsx", ".xls", ".csv"}
+
+
+@lru_cache(maxsize=1)
+def _get_pandas_module() -> Any:
+    """Load :mod:`pandas` lazily to avoid import-time circular errors."""
+
+    return importlib.import_module("pandas")
+
+
+if TYPE_CHECKING:
+    from pandas import DataFrame  # pragma: no cover
+else:  # pragma: no cover
+    DataFrame = Any
 
 
 def upload_template_load(
@@ -275,6 +287,7 @@ def _ordered_active_columns(template: Template) -> list[TemplateColumn]:
 
 
 def _read_source_file(file_bytes: bytes, suffix: str) -> DataFrame:
+    pd = _get_pandas_module()
     buffer = BytesIO(file_bytes)
     if suffix == ".csv":
         return pd.read_csv(buffer, dtype=object)
@@ -282,6 +295,7 @@ def _read_source_file(file_bytes: bytes, suffix: str) -> DataFrame:
 
 
 def _normalize_dataframe(dataframe: DataFrame) -> DataFrame:
+    pd = _get_pandas_module()
     df = dataframe.copy()
     df.columns = [str(column).strip() for column in df.columns]
     df.replace({"": pd.NA}, inplace=True)
@@ -320,6 +334,7 @@ def _validate_dataframe(
     columns: Sequence[TemplateColumn],
     rules: dict[int, dict[str, Any] | list[Any]],
 ) -> tuple[DataFrame, list[bool]]:
+    pd = _get_pandas_module()
     df = dataframe.copy()
     observations: list[list[str]] = [[] for _ in range(len(df.index))]
     row_is_valid = [True] * len(df.index)
@@ -386,6 +401,7 @@ def _normalize_cell_value(value: Any) -> Any:
 def _persist_valid_rows(
     dataframe: DataFrame, row_is_valid: Sequence[bool], table_name: str
 ) -> int:
+    pd = _get_pandas_module()
     if not len(dataframe.index):
         return 0
 
@@ -848,6 +864,7 @@ def _validate_date_rule(
     message: str | None,
     **_: Any,
 ) -> tuple[date, list[str]]:
+    pd = _get_pandas_module()
     if isinstance(value, datetime):
         return value.date(), []
 
@@ -1063,6 +1080,7 @@ def _extract_composite_combinations(rule_config: Mapping[str, Any]) -> list[dict
 
 
 def _coerce_timestamp(value: Any) -> Any:
+    pd = _get_pandas_module()
     if isinstance(value, pd.Timestamp):
         if value.tzinfo is not None:
             value = value.tz_convert(None)
@@ -1134,6 +1152,7 @@ def _parse_boolean(value: Any) -> tuple[Any, str | None]:
 
 
 def _parse_date(value: Any) -> tuple[Any, str | None]:
+    pd = _get_pandas_module()
     if value is None:
         return None, None
     if isinstance(value, datetime):
@@ -1146,6 +1165,7 @@ def _parse_date(value: Any) -> tuple[Any, str | None]:
 
 
 def _parse_datetime(value: Any) -> tuple[Any, str | None]:
+    pd = _get_pandas_module()
     if value is None:
         return None, None
     if isinstance(value, datetime):
