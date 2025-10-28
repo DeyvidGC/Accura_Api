@@ -14,20 +14,20 @@ class TemplateUserAccessModel(Base):
     id = Column(Integer, primary_key=True, index=True)
     template_id = Column(
         Integer,
-        ForeignKey("templates.id", ondelete="CASCADE"),
+        ForeignKey("template.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
     user_id = Column(
         Integer,
-        ForeignKey("users.id", ondelete="CASCADE"),
+        ForeignKey("user.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
     start_date = Column(DateTime, nullable=False, default=func.now())
     end_date = Column(DateTime, nullable=True)
     revoked_at = Column(DateTime, nullable=True)
-    revoked_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    revoked_by = Column(Integer, ForeignKey("user.id"), nullable=True)
     created_at = Column(DateTime, nullable=False, server_default=func.now())
     updated_at = Column(DateTime, nullable=True, onupdate=func.now())
 

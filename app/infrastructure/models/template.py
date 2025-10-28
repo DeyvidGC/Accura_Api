@@ -9,10 +9,10 @@ from app.infrastructure.database import Base
 class TemplateModel(Base):
     """Database representation of a template definition."""
 
-    __tablename__ = "templates"
+    __tablename__ = "template"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("user.id"), nullable=False, index=True)
     name = Column(String(50), nullable=False)
     status = Column(String(20), nullable=False, default="unpublished")
     description = Column(String(255), nullable=True)

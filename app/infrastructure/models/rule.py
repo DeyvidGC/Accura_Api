@@ -12,7 +12,7 @@ _rule_json_type = JSONB().with_variant(JSON(), "sqlite")
 class RuleModel(Base):
     """Database representation of validation rules."""
 
-    __tablename__ = "rules"
+    __tablename__ = "rule"
 
     id = Column(Integer, primary_key=True, index=True)
     rule = Column(_rule_json_type, nullable=False)

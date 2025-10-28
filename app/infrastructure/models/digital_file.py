@@ -8,10 +8,10 @@ from app.infrastructure.database import Base
 class DigitalFileModel(Base):
     """Database representation of a generated template file."""
 
-    __tablename__ = "digital_files"
+    __tablename__ = "digital_file"
 
     id = Column(Integer, primary_key=True, index=True)
-    template_id = Column(Integer, ForeignKey("templates.id", ondelete="CASCADE"), nullable=False)
+    template_id = Column(Integer, ForeignKey("template.id", ondelete="CASCADE"), nullable=False)
     name = Column(String(255), nullable=False)
     description = Column(String(255), nullable=True)
     path = Column(String(255), nullable=False)

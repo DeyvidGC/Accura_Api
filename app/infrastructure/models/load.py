@@ -16,18 +16,18 @@ from app.infrastructure.database import Base
 class LoadModel(Base):
     """Database representation of a data import performed against a template."""
 
-    __tablename__ = "loads"
+    __tablename__ = "load"
 
     id = Column(Integer, primary_key=True, index=True)
     template_id = Column(
         Integer,
-        ForeignKey("templates.id", ondelete="CASCADE"),
+        ForeignKey("template.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
     user_id = Column(
         Integer,
-        ForeignKey("users.id", ondelete="CASCADE"),
+        ForeignKey("user.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )

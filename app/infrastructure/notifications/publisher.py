@@ -19,24 +19,20 @@ class NotificationPublisher:
         self._manager = manager
 
     def dispatch(self, notification: Notification) -> None:
-        """Schedule ``notification`` to be delivered to its recipient."""
+        """Schedule ``notification`` to be delivered to its user."""
 
         message = {"type": "notification", "data": self._serialize(notification)}
         try:
-            from_thread.start_soon(
-                self._manager.send_to_user, notification.recipient_id, message
-            )
+            from_thread.start_soon(self._manager.send_to_user, notification.user_id, message)
         except RuntimeError:
             loop = asyncio.get_running_loop()
-            loop.create_task(
-                self._manager.send_to_user(notification.recipient_id, message)
-            )
+            loop.create_task(self._manager.send_to_user(notification.user_id, message))
 
     @staticmethod
     def _serialize(notification: Notification) -> dict[str, Any]:
         return {
             "id": notification.id,
-            "recipient_id": notification.recipient_id,
+            "user_id": notification.user_id,
             "event_type": notification.event_type,
             "title": notification.title,
             "message": notification.message,

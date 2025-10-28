@@ -12,7 +12,7 @@ class Notification:
     """Information message delivered to a specific user."""
 
     id: int | None
-    recipient_id: int
+    user_id: int
     event_type: str
     title: str
     message: str

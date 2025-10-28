@@ -9,16 +9,16 @@ from app.infrastructure.database import Base
 class TemplateColumnModel(Base):
     """Database representation of a template column definition."""
 
-    __tablename__ = "template_columns"
+    __tablename__ = "template_column"
 
     id = Column(Integer, primary_key=True, index=True)
     template_id = Column(
         Integer,
-        ForeignKey("templates.id", ondelete="CASCADE"),
+        ForeignKey("template.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
-    rule_id = Column(Integer, ForeignKey("rules.id"), nullable=True, index=True)
+    rule_id = Column(Integer, ForeignKey("rule.id"), nullable=True, index=True)
     name = Column(String(50), nullable=False)
     description = Column(String(255), nullable=True)
     data_type = Column(String(50), nullable=False)
