@@ -10,6 +10,7 @@ from .template import TemplateModel
 from .template_column import TemplateColumnModel
 from .template_user_access import TemplateUserAccessModel
 from .user import UserModel
+from .notification import NotificationModel
 
 __all__ = [
     "AuditLogModel",
@@ -22,4 +23,5 @@ __all__ = [
     "TemplateColumnModel",
     "TemplateUserAccessModel",
     "UserModel",
+    "NotificationModel",
 ]

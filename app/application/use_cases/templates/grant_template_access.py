@@ -4,6 +4,7 @@ from datetime import date, datetime, time
 
 from sqlalchemy.orm import Session
 
+from app.application.use_cases.notifications import notify_template_access_granted
 from app.domain.entities import TemplateUserAccess
 from app.infrastructure.repositories import (
     TemplateRepository,
@@ -57,7 +58,11 @@ def grant_template_access(
         updated_at=None,
     )
 
-    return access_repository.create(access)
+    saved_access = access_repository.create(access)
+    notify_template_access_granted(
+        session, access=saved_access, template=template, user=user
+    )
+    return saved_access
 
 
 def _normalize_date(value: date | datetime | None) -> datetime | None:

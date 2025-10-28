@@ -8,6 +8,7 @@ from .loads import router as loads_router
 from .rules import router as rules_router
 from .templates import router as templates_router
 from .users import router as users_router
+from .notifications import router as notifications_router
 
 
 def register_routes(app: FastAPI) -> None:
@@ -21,3 +22,4 @@ def register_routes(app: FastAPI) -> None:
     app.include_router(rules_router)
     app.include_router(users_router)
     app.include_router(templates_router)
+    app.include_router(notifications_router)
