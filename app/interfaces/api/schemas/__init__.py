@@ -6,6 +6,7 @@ from .audit_log import AuditLogRead
 from .digital_file import DigitalFileRead
 from .load import LoadRead, LoadUploadResponse
 from .auth import PasswordHashRequest, PasswordHashResponse, Token
+from .notification import NotificationRead
 from .rule import RuleCreate, RuleRead, RuleUpdate
 from .template import (
     TemplateColumnBulkCreate,
@@ -27,6 +28,7 @@ __all__ = [
     "DigitalFileRead",
     "LoadRead",
     "LoadUploadResponse",
+    "NotificationRead",
     "PasswordHashRequest",
     "PasswordHashResponse",
     "Token",

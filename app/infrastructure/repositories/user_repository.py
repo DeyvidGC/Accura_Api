@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from sqlalchemy.orm import Session, joinedload
 
 from app.domain.entities import Role, User
-from app.infrastructure.models import UserModel
+from app.infrastructure.models import RoleModel, UserModel
 
 
 class UserRepository:
@@ -62,6 +62,14 @@ class UserRepository:
 
         self.session.delete(model)
         self.session.commit()
+
+    def list_ids_by_role_alias(self, alias: str) -> list[int]:
+        query = (
+            self.session.query(UserModel.id)
+            .join(RoleModel, UserModel.role_id == RoleModel.id)
+            .filter(RoleModel.alias.ilike(alias))
+        )
+        return [user_id for (user_id,) in query.all()]
 
     @staticmethod
     def _to_entity(model: UserModel) -> User:

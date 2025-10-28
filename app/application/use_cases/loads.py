@@ -19,6 +19,10 @@ from sqlalchemy import MetaData, Table, insert
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.application.use_cases.notifications import (
+    notify_load_validated_success,
+    notify_template_processing,
+)
 from app.domain.entities import (
     LOAD_STATUS_FAILED,
     LOAD_STATUS_PROCESSING,
@@ -93,6 +97,9 @@ def upload_template_load(
         )
     )
 
+    notify_template_processing(
+        session, load=load, template=template, user=user
+    )
     return load
 
 
@@ -176,6 +183,8 @@ def process_template_load(
             report_path=report_path,
             relative_report_path=relative_report_path,
         )
+        if final_status == LOAD_STATUS_VALIDATED_SUCCESS:
+            notify_load_validated_success(session, load=load, template=template)
     except Exception as exc:  # pragma: no cover - defensive path
         _mark_load_as_failed(load_repo, load, str(exc))
         if isinstance(exc, (ValueError, PermissionError)):

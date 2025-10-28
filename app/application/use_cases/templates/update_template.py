@@ -6,6 +6,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from app.domain.entities import AuditLog, DigitalFile, Template
+from app.application.use_cases.notifications import notify_template_published
 from app.infrastructure.dynamic_tables import (
     IdentifierError,
     create_template_table,
@@ -184,5 +185,8 @@ def update_template(
             )
     except RuntimeError as exc:
         raise ValueError(str(exc)) from exc
+
+    if status_changed and saved_template.status == "published":
+        notify_template_published(session, template=saved_template)
 
     return saved_template

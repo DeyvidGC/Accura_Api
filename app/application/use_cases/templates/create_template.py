@@ -5,6 +5,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from app.domain.entities import Template
+from app.application.use_cases.notifications import notify_template_created
 from app.infrastructure.dynamic_tables import IdentifierError, ensure_identifier
 from app.infrastructure.repositories import TemplateRepository
 
@@ -48,4 +49,6 @@ def create_template(
         is_active=True,
     )
 
-    return repository.create(template)
+    saved_template = repository.create(template)
+    notify_template_created(session, template=saved_template)
+    return saved_template
