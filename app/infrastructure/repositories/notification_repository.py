@@ -18,10 +18,10 @@ class NotificationRepository:
     def __init__(self, session: Session) -> None:
         self.session = session
 
-    def list_for_user(self, recipient_id: int, *, limit: int | None = 50) -> Sequence[Notification]:
+    def list_for_user(self, user_id: int, *, limit: int | None = 50) -> Sequence[Notification]:
         query = (
             self.session.query(NotificationModel)
-            .filter(NotificationModel.recipient_id == recipient_id)
+            .filter(NotificationModel.user_id == user_id)
             .order_by(NotificationModel.created_at.desc())
         )
         if limit is not None:
@@ -29,11 +29,11 @@ class NotificationRepository:
         return [self._to_entity(model) for model in query.all()]
 
     def list_unread_for_user(
-        self, recipient_id: int, *, limit: int | None = 50
+        self, user_id: int, *, limit: int | None = 50
     ) -> Sequence[Notification]:
         query = (
             self.session.query(NotificationModel)
-            .filter(NotificationModel.recipient_id == recipient_id)
+            .filter(NotificationModel.user_id == user_id)
             .filter(NotificationModel.read_at.is_(None))
             .order_by(NotificationModel.created_at.desc())
         )
@@ -55,7 +55,7 @@ class NotificationRepository:
             return
         self.session.query(NotificationModel).filter(
             NotificationModel.id.in_(ids),
-            NotificationModel.recipient_id == user_id,
+            NotificationModel.user_id == user_id,
         ).update({NotificationModel.read_at: datetime.utcnow()}, synchronize_session=False)
         self.session.commit()
 
@@ -68,7 +68,7 @@ class NotificationRepository:
     ) -> None:
         if include_creation_fields:
             model.created_at = notification.created_at or datetime.utcnow()
-        model.recipient_id = notification.recipient_id
+        model.user_id = notification.user_id
         model.event_type = notification.event_type
         model.title = notification.title
         model.message = notification.message
@@ -79,7 +79,7 @@ class NotificationRepository:
     def _to_entity(model: NotificationModel) -> Notification:
         return Notification(
             id=model.id,
-            recipient_id=model.recipient_id,
+            user_id=model.user_id,
             event_type=model.event_type,
             title=model.title,
             message=model.message,

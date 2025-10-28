@@ -8,7 +8,7 @@ from app.infrastructure.database import Base
 class RoleModel(Base):
     """Database representation of the system roles."""
 
-    __tablename__ = "roles"
+    __tablename__ = "role"
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(50), nullable=False, unique=True)

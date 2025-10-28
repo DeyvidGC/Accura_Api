@@ -20,7 +20,7 @@ router = APIRouter(prefix="/notifications", tags=["notifications"])
 def _notification_to_schema(notification: Notification) -> NotificationRead:
     return NotificationRead(
         id=notification.id or 0,
-        recipient_id=notification.recipient_id,
+        user_id=notification.user_id,
         event_type=notification.event_type,
         title=notification.title,
         message=notification.message,

@@ -12,7 +12,7 @@ _audit_json_type = JSONB().with_variant(JSON(), "sqlite")
 class AuditLogModel(Base):
     """Database representation of audit events."""
 
-    __tablename__ = "audit_table"
+    __tablename__ = "audit_log"
 
     id = Column(Integer, primary_key=True, index=True)
     template_name = Column(String(63), nullable=False)

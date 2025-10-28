@@ -9,12 +9,12 @@ from app.infrastructure.database import Base
 class LoadedFileModel(Base):
     """Database representation of a generated report associated with a load."""
 
-    __tablename__ = "loaded_files"
+    __tablename__ = "loaded_file"
 
     id = Column(Integer, primary_key=True, index=True)
     load_id = Column(
         Integer,
-        ForeignKey("loads.id", ondelete="CASCADE"),
+        ForeignKey("load.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
@@ -24,7 +24,7 @@ class LoadedFileModel(Base):
     num_load = Column(Integer, nullable=False)
     created_user_id = Column(
         Integer,
-        ForeignKey("users.id", ondelete="CASCADE"),
+        ForeignKey("user.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )

@@ -23,7 +23,7 @@ _ADMIN_ROLE_ALIAS = "admin"
 def _persist_notification(
     session: Session,
     *,
-    recipient_id: int,
+    user_id: int,
     event_type: str,
     title: str,
     message: str,
@@ -31,7 +31,7 @@ def _persist_notification(
 ) -> Notification:
     notification = Notification(
         id=None,
-        recipient_id=recipient_id,
+        user_id=user_id,
         event_type=event_type,
         title=title,
         message=message,
@@ -45,19 +45,19 @@ def _persist_notification(
     return saved
 
 
-def _admin_recipient_ids(session: Session) -> list[int]:
+def _admin_user_ids(session: Session) -> list[int]:
     return UserRepository(session).list_ids_by_role_alias(_ADMIN_ROLE_ALIAS)
 
 
 def notify_template_created(session: Session, *, template: Template) -> None:
     """Notify administrators that a new template has been created."""
 
-    recipients = _admin_recipient_ids(session)
+    user_ids = _admin_user_ids(session)
     message = f"Se creó la plantilla '{template.name}'."
-    for recipient_id in recipients:
+    for user_id in user_ids:
         _persist_notification(
             session,
-            recipient_id=recipient_id,
+            user_id=user_id,
             event_type="template.created",
             title="Nueva plantilla",
             message=message,
@@ -68,14 +68,14 @@ def notify_template_created(session: Session, *, template: Template) -> None:
 def notify_template_published(session: Session, *, template: Template) -> None:
     """Notify administrators that a template has been published."""
 
-    recipients = _admin_recipient_ids(session)
-    if not recipients:
+    user_ids = _admin_user_ids(session)
+    if not user_ids:
         return
     message = f"La plantilla '{template.name}' fue publicada."
-    for recipient_id in recipients:
+    for user_id in user_ids:
         _persist_notification(
             session,
-            recipient_id=recipient_id,
+            user_id=user_id,
             event_type="template.published",
             title="Plantilla publicada",
             message=message,
@@ -98,7 +98,7 @@ def notify_template_processing(
     )
     _persist_notification(
         session,
-        recipient_id=user.id,
+        user_id=user.id,
         event_type="load.processing",
         title="Procesamiento iniciado",
         message=message,
@@ -128,7 +128,7 @@ def notify_template_access_granted(
     }
     _persist_notification(
         session,
-        recipient_id=user.id,
+        user_id=user.id,
         event_type="template.access.granted",
         title="Acceso a plantilla",
         message=message,
@@ -144,8 +144,8 @@ def notify_load_validated_success(
 ) -> None:
     """Inform administrators that a load finished with a successful validation."""
 
-    recipients = _admin_recipient_ids(session)
-    if not recipients:
+    user_ids = _admin_user_ids(session)
+    if not user_ids:
         return
     message = (
         f"La carga '{load.file_name}' de la plantilla '{template.name}' "
@@ -156,10 +156,10 @@ def notify_load_validated_success(
         "load_id": load.id,
         "status": LOAD_STATUS_VALIDATED_SUCCESS,
     }
-    for recipient_id in recipients:
+    for user_id in user_ids:
         _persist_notification(
             session,
-            recipient_id=recipient_id,
+            user_id=user_id,
             event_type="load.validated.success",
             title="Validación exitosa",
             message=message,

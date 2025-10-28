@@ -12,7 +12,7 @@ class NotificationRead(BaseModel):
     """Representation of a notification delivered to the client."""
 
     id: int
-    recipient_id: int
+    user_id: int
     event_type: str
     title: str
     message: str
