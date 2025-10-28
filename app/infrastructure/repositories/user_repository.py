@@ -1,5 +1,7 @@
 """Persistence layer for user data."""
 
+from __future__ import annotations
+
 from collections.abc import Sequence
 
 from sqlalchemy.orm import Session, joinedload
