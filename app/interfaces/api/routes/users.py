@@ -1,4 +1,4 @@
-"""Routes for managing users."""
+"""Rutas para administrar usuarios y sus credenciales."""
 
 import logging
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -37,7 +37,7 @@ def register_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
-    """Create a new user that can authenticate with the API."""
+    """Crea un nuevo usuario con credenciales de acceso a la API."""
 
     generated_password = generate_secure_password()
     try:
@@ -60,7 +60,7 @@ def register_user(
 
 @router.get("/me", response_model=UserRead)
 def read_current_user(current_user: User = Depends(get_current_active_user)):
-    """Return the authenticated user."""
+    """Devuelve la información del usuario autenticado."""
 
     return _to_read_model(current_user)
 
@@ -72,7 +72,7 @@ def list_users(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
-    """Return a paginated list of users."""
+    """Devuelve una lista paginada de usuarios registrados."""
 
     users = list_users_uc(db, skip=skip, limit=limit)
     return [_to_read_model(user) for user in users]
@@ -84,7 +84,7 @@ def read_user(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
-    """Return the user identified by ``user_id``."""
+    """Obtiene al usuario identificado por ``user_id``."""
 
     try:
         user = get_user_uc(db, user_id, include_inactive=True)
@@ -100,7 +100,7 @@ def update_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Update an existing user."""
+    """Actualiza los datos de un usuario existente."""
 
     try:
         target_user = get_user_uc(db, user_id, include_inactive=True)
@@ -229,7 +229,7 @@ def reset_user_password(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
-    """Generate a new temporary password for the selected user."""
+    """Genera una nueva contraseña temporal para el usuario seleccionado."""
 
     try:
         get_user_uc(db, user_id, include_inactive=True)
@@ -264,7 +264,7 @@ def delete_user(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ):
-    """Delete the specified user."""
+    """Elimina al usuario indicado."""
 
     try:
         delete_user_uc(db, user_id)

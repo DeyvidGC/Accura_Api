@@ -1,4 +1,4 @@
-"""Routes for interacting with the OpenAI powered assistant."""
+"""Rutas para interactuar con el asistente basado en OpenAI."""
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -29,7 +29,7 @@ def analyze_message(
     _: User = Depends(require_admin),
     assistant: StructuredChatService = Depends(get_structured_chat_service),
 ) -> AssistantMessageResponse:
-    """Generate a structured reply describing how to respond to the user message."""
+    """Genera una respuesta estructurada que indica cómo atender el mensaje del usuario."""
 
     try:
         recent_rules = list_recent_rules_uc(db, limit=5)

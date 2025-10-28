@@ -1,4 +1,4 @@
-"""Authentication endpoints."""
+"""Endpoints relacionados con autenticación y gestión de contraseñas."""
 
 from datetime import timedelta
 from hashlib import sha256
@@ -27,12 +27,13 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 settings = get_settings()
 
 
+# Nota: se conserva la firma esperada por OAuth2PasswordRequestForm.
 @router.post("/token", response_model=Token)
 def login_for_access_token(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
 ):
-    """Authenticate the user by email and return a JWT token."""
+    """Autentica al usuario por correo electrónico y devuelve un token JWT."""
 
     user, auth_status = authenticate_user(db, form_data.username, form_data.password)
 
@@ -78,7 +79,7 @@ def generate_password_hash(
     payload: PasswordHashRequest,
     _: User = Depends(require_admin),
 ) -> PasswordHashResponse:
-    """Return a hashed version of the provided password for administrator use."""
+    """Devuelve el hash de la contraseña indicada para uso administrativo."""
 
     hashed_password = get_password_hash(payload.password)
     return PasswordHashResponse(hashed_password=hashed_password)

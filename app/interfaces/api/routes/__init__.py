@@ -11,7 +11,7 @@ from .users import router as users_router
 
 
 def register_routes(app: FastAPI) -> None:
-    """Register all API routes with the FastAPI application."""
+    """Registra todos los routers de la API en la aplicación FastAPI."""
 
     app.include_router(assistant_router)
     app.include_router(auth_router)
