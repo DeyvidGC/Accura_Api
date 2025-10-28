@@ -8,6 +8,12 @@ from .load import LoadRead, LoadUploadResponse
 from .auth import PasswordHashRequest, PasswordHashResponse, Token
 from .notification import NotificationRead
 from .rule import RuleCreate, RuleRead, RuleUpdate
+from .kpi import (
+    KPIReportRead,
+    MonthlyComparisonRead,
+    TemplatePublicationSummaryRead,
+    ValidationEffectivenessRead,
+)
 from .template import (
     TemplateColumnBulkCreate,
     TemplateColumnCreate,
@@ -35,6 +41,10 @@ __all__ = [
     "RuleCreate",
     "RuleRead",
     "RuleUpdate",
+    "KPIReportRead",
+    "MonthlyComparisonRead",
+    "TemplatePublicationSummaryRead",
+    "ValidationEffectivenessRead",
     "TemplateColumnBulkCreate",
     "TemplateColumnCreate",
     "TemplateColumnRead",
