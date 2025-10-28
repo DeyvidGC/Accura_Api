@@ -51,7 +51,7 @@ def decode_access_token(token: str) -> dict:
 def generate_secure_password() -> str:
     """Generate a random password between 8 and 12 characters."""
 
-    alphabet = string.ascii_letters + string.digits
+    alphabet = string.ascii_letters + string.digits + string.punctuation
     length = secrets.choice(range(8, 13))
 
     while True:
@@ -60,5 +60,8 @@ def generate_secure_password() -> str:
             any(char.islower() for char in password)
             and any(char.isupper() for char in password)
             and any(char.isdigit() for char in password)
+            and any(char in string.punctuation for char in password)
         ):
             return password
+
+

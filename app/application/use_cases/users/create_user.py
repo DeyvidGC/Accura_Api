@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.domain.entities import User
 from app.infrastructure.repositories import RoleRepository, UserRepository
 from app.infrastructure.security import get_password_hash
+from .validators import ensure_valid_gmail
 
 
 def create_user(
@@ -23,7 +24,9 @@ def create_user(
     repository = UserRepository(session)
     role_repository = RoleRepository(session)
 
-    if repository.get_by_email(email):
+    normalized_email = ensure_valid_gmail(email)
+
+    if repository.get_by_email(normalized_email):
         msg = "El correo electrónico ya está registrado"
         raise ValueError(msg)
 
@@ -45,7 +48,7 @@ def create_user(
         id=None,
         role=role,
         name=name,
-        email=email,
+        email=normalized_email,
         password=hashed_password,
         must_change_password=must_change_password,
         last_login=None,

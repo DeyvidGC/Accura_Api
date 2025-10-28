@@ -84,7 +84,7 @@ Esta guía explica, paso a paso, cómo interactuar con cada servicio expuesto po
 
 ## Documento B. Gestión de usuarios
 
-Los usuarios poseen un **nombre** (máximo 50 caracteres), un **correo electrónico** único y un **rol** asociado (`role_id` ≥ 1).
+Los usuarios poseen un **nombre** (máximo 50 caracteres), un **correo electrónico** de Gmail único y un **rol** asociado (`role_id` ≥ 1).
 
 ### B.1 Crear un usuario
 - **Método y URL:** `POST /users/`
@@ -94,7 +94,7 @@ Los usuarios poseen un **nombre** (máximo 50 caracteres), un **correo electrón
 ```json
 {
   "name": "Ana López",
-  "email": "ana.lopez@empresa.com",
+  "email": "ana.lopez@gmail.com",
   "role_id": 2
 }
 ```
@@ -102,14 +102,14 @@ Los usuarios poseen un **nombre** (máximo 50 caracteres), un **correo electrón
   | Campo | Tipo | Obligatorio | Validaciones |
   | --- | --- | --- | --- |
   | `name` | Cadena | Sí | Máximo 50 caracteres |
-  | `email` | Email | Sí | Debe ser único en el sistema |
+  | `email` | Email | Sí | Debe ser una cuenta de Gmail válida y única |
   | `role_id` | Entero | Sí | Valor mínimo 1 |
 - **Respuesta 201 (éxito):**
 ```json
 {
   "id": 12,
   "name": "Ana López",
-  "email": "ana.lopez@empresa.com",
+  "email": "ana.lopez@gmail.com",
   "role_id": 2,
   "is_active": true,
   "temporary_password": "XZ29kd$!"
@@ -135,7 +135,7 @@ Los usuarios poseen un **nombre** (máximo 50 caracteres), un **correo electrón
 {
   "id": 8,
   "name": "Ana López",
-  "email": "ana.lopez@empresa.com",
+  "email": "ana.lopez@gmail.com",
   "role_id": 2,
   "is_active": true,
   "must_change_password": false
@@ -163,14 +163,14 @@ Los usuarios poseen un **nombre** (máximo 50 caracteres), un **correo electrón
     {
       "id": 8,
       "name": "Ana López",
-      "email": "ana.lopez@empresa.com",
+      "email": "ana.lopez@gmail.com",
       "role_id": 2,
       "is_active": true
     },
     {
       "id": 9,
       "name": "Carlos Pérez",
-      "email": "carlos.perez@empresa.com",
+      "email": "carlos.perez@gmail.com",
       "role_id": 3,
       "is_active": false
     }
@@ -194,7 +194,7 @@ Los usuarios poseen un **nombre** (máximo 50 caracteres), un **correo electrón
 {
   "id": 9,
   "name": "Carlos Pérez",
-  "email": "carlos.perez@empresa.com",
+  "email": "carlos.perez@gmail.com",
   "role_id": 3,
   "is_active": false
 }
@@ -217,7 +217,7 @@ Los usuarios poseen un **nombre** (máximo 50 caracteres), un **correo electrón
 ```json
 {
   "name": "Ana Renovada",
-  "email": "ana.lopez@empresa.com",
+  "email": "ana.lopez@gmail.com",
   "password": "ClaveSegura123",
   "is_active": true,
   "role_id": 2
@@ -271,7 +271,7 @@ Los usuarios poseen un **nombre** (máximo 50 caracteres), un **correo electrón
 {
   "id": 8,
   "name": "Ana Renovada",
-  "email": "ana.lopez@empresa.com",
+  "email": "ana.lopez@gmail.com",
   "role_id": 2,
   "is_active": true
 }
@@ -989,7 +989,7 @@ Las plantillas definen la estructura de los datos que se cargarán y las reglas 
       "id": 31,
       "template_name": "Ventas Retail 2024",
       "action": "create",
-      "performed_by": "admin@empresa.com",
+      "performed_by": "admin@gmail.com",
       "performed_at": "2024-05-28T12:30:00Z"
     }
   ],
@@ -1015,7 +1015,7 @@ Las plantillas definen la estructura de los datos que se cargarán y las reglas 
     "name": "Ventas Retail 2024",
     "table_name": "ventas_retail_2024"
   },
-  "performed_by": "admin@empresa.com",
+  "performed_by": "admin@gmail.com",
   "performed_at": "2024-05-28T12:30:00Z"
 }
 ```

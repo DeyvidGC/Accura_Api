@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.domain.entities import User
 from app.infrastructure.repositories import RoleRepository, UserRepository
 from app.infrastructure.security import get_password_hash
+from .validators import ensure_valid_gmail
 
 
 def update_user(
@@ -32,10 +33,11 @@ def update_user(
 
     new_email = current_user.email
     if email is not None and email != current_user.email:
-        existing_with_email = repository.get_by_email(email)
+        normalized_email = ensure_valid_gmail(email)
+        existing_with_email = repository.get_by_email(normalized_email)
         if existing_with_email and existing_with_email.id != user_id:
             raise ValueError("El correo electrónico ya está registrado")
-        new_email = email
+        new_email = normalized_email
 
     allowed_roles = role_repository.list_aliases()
 
