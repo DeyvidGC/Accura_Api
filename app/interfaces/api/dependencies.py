@@ -55,7 +55,9 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    expected_signature = sha256(user.password.encode()).hexdigest()
+    expected_signature = sha256(
+        f"{user.password}:{int(user.is_active)}".encode()
+    ).hexdigest()
     if password_signature_claim != expected_signature:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

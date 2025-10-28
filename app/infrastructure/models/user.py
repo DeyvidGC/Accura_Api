@@ -7,7 +7,6 @@ from sqlalchemy.orm import relationship
 
 from app.infrastructure.database import Base
 
-
 class UserModel(Base):
     """Database representation of the system user."""
 
