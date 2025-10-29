@@ -196,6 +196,7 @@ class StructuredChatService:
             "Nombre de la regla",
             "Tipo de dato",
             "Campo obligatorio",
+            "Header",
             "Mensaje de error",
             "Descripción",
             "Ejemplo",
@@ -230,6 +231,16 @@ class StructuredChatService:
         for field in ("Mensaje de error", "Descripción"):
             if not isinstance(payload[field], str) or not payload[field].strip():
                 raise OpenAIServiceError(f"'{field}' debe ser una cadena no vacía.")
+
+        header = payload.get("Header")
+        if not isinstance(header, list) or not header:
+            raise OpenAIServiceError("'Header' debe ser una lista con al menos un elemento.")
+        for index, entry in enumerate(header, start=1):
+            if not isinstance(entry, str) or not entry.strip():
+                raise OpenAIServiceError(
+                    "Cada elemento de 'Header' debe ser una cadena no vacía. "
+                    f"Elemento inválido en la posición {index}."
+                )
 
         if not isinstance(payload.get("Regla"), dict):
             raise OpenAIServiceError("'Regla' debe ser un objeto JSON.")
