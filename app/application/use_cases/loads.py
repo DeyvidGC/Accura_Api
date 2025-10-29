@@ -909,16 +909,47 @@ def _validate_dependency_rule(
         value, column_name, base_parser, message
     )
 
-    dependent_name = rule_config.get("Nombre dependiente")
     specific_rules = rule_config.get("reglas especifica")
-
-    if not isinstance(dependent_name, str) or not dependent_name.strip():
-        return fallback_value, fallback_errors
 
     if not isinstance(specific_rules, list) or not specific_rules:
         return fallback_value, fallback_errors
 
-    normalized_dependent_name = _normalize_type_label(dependent_name)
+    dependent_name: str | None = None
+    normalized_dependent_name: str | None = None
+
+    for entry in specific_rules:
+        if not isinstance(entry, Mapping) or len(entry) < 2:
+            continue
+
+        dependent_candidates = [
+            key
+            for key, candidate in entry.items()
+            if isinstance(key, str)
+            and key.strip()
+            and not isinstance(candidate, Mapping)
+        ]
+
+        if not dependent_candidates:
+            continue
+
+        if len(dependent_candidates) > 1:
+            dependent_name = None
+            normalized_dependent_name = None
+            break
+
+        candidate_name = dependent_candidates[0]
+        normalized_candidate = _normalize_type_label(candidate_name)
+
+        if dependent_name is None:
+            dependent_name = candidate_name
+            normalized_dependent_name = normalized_candidate
+        elif normalized_dependent_name != normalized_candidate:
+            dependent_name = None
+            normalized_dependent_name = None
+            break
+
+    if not dependent_name or not normalized_dependent_name:
+        return fallback_value, fallback_errors
 
     found_dependent = False
     dependent_current: Any = None
