@@ -338,6 +338,8 @@ def _validate_dataframe(
     df = dataframe.copy()
     observations: list[list[str]] = [[] for _ in range(len(df.index))]
     row_is_valid = [True] * len(df.index)
+    duplicate_rules: list[dict[str, Any]] = []
+    seen_duplicate_configs: set[tuple[tuple[str, ...], str | None, str | None, bool]] = set()
 
     for column in columns:
         normalized_type = _normalize_type_label(column.data_type)
@@ -349,6 +351,21 @@ def _validate_dataframe(
 
         series = df[column.name] if column.name in df.columns else pd.Series(dtype=object)
         rule_definition = rules.get(column.rule_id or -1)
+
+        if rule_definition is not None:
+            duplicate_configs = _gather_duplicate_rule_configs(
+                rule_definition, column.name
+            )
+            for config in duplicate_configs:
+                key = (
+                    tuple(config["fields"]),
+                    config.get("name"),
+                    config.get("message"),
+                    config.get("ignore_empty", False),
+                )
+                if key not in seen_duplicate_configs:
+                    seen_duplicate_configs.add(key)
+                    duplicate_rules.append(config)
 
         for idx, raw_value in enumerate(series.tolist()):
             normalized_value = _normalize_cell_value(raw_value)
@@ -382,6 +399,9 @@ def _validate_dataframe(
                 row_is_valid[idx] = False
             else:
                 df.at[idx, column.name] = converted_value
+
+    if duplicate_rules:
+        _apply_duplicate_rules(df, duplicate_rules, observations, row_is_valid)
 
     df["Observaciones"] = [
         "; ".join(messages) if messages else "" for messages in observations
@@ -551,6 +571,84 @@ def _validate_value_with_rule(
     return parsed_value, validator_errors
 
 
+def _gather_duplicate_rule_configs(
+    rule_definition: Any, column_name: str
+) -> list[dict[str, Any]]:
+    if isinstance(rule_definition, list):
+        configs: list[dict[str, Any]] = []
+        for definition in rule_definition:
+            configs.extend(_gather_duplicate_rule_configs(definition, column_name))
+        return configs
+
+    if not isinstance(rule_definition, Mapping):
+        return []
+
+    rule_type = _normalize_type_label(rule_definition.get("Tipo de dato", ""))
+    if rule_type != "duplicados":
+        return []
+
+    message = rule_definition.get("Mensaje de error")
+    normalized_message = None
+    if isinstance(message, str):
+        stripped_message = message.strip()
+        if stripped_message:
+            normalized_message = stripped_message
+
+    rule_name = rule_definition.get("Nombre de la regla")
+    normalized_name = None
+    if isinstance(rule_name, str):
+        stripped_name = rule_name.strip()
+        if stripped_name:
+            normalized_name = stripped_name
+
+    raw_config = rule_definition.get("Regla")
+    config: Mapping[str, Any] = raw_config if isinstance(raw_config, Mapping) else {}
+
+    candidate_keys = ["Campos", "Columnas", "Fields", "fields"]
+    fields: list[str] = []
+    for key in candidate_keys:
+        raw_fields = config.get(key)
+        if isinstance(raw_fields, Sequence) and not isinstance(raw_fields, (str, bytes)):
+            for field in raw_fields:
+                if isinstance(field, str):
+                    normalized = field.strip()
+                    if normalized:
+                        fields.append(normalized)
+            if fields:
+                break
+
+    if not fields and column_name:
+        fields = [column_name]
+
+    unique_fields: list[str] = []
+    seen_fields: set[str] = set()
+    for field in fields:
+        if field not in seen_fields:
+            seen_fields.add(field)
+            unique_fields.append(field)
+
+    if not unique_fields:
+        return []
+
+    ignore_empty = bool(
+        config.get("Ignorar vacios")
+        or config.get("Ignorar vacíos")
+        or config.get("Ignorar vacias")
+        or config.get("Ignorar vacías")
+        or config.get("Ignore empty")
+        or config.get("Ignore empties")
+    )
+
+    return [
+        {
+            "fields": unique_fields,
+            "message": normalized_message,
+            "name": normalized_name,
+            "ignore_empty": ignore_empty,
+        }
+    ]
+
+
 def _apply_base_parser(
     value: Any,
     column_name: str,
@@ -569,6 +667,66 @@ def _compose_error(message: str | None, fallback: str) -> str:
     if message:
         return f"{message} ({fallback})"
     return fallback
+
+
+def _apply_duplicate_rules(
+    dataframe: DataFrame,
+    duplicate_rules: Sequence[Mapping[str, Any]],
+    observations: list[list[str]],
+    row_is_valid: list[bool],
+) -> None:
+    if not duplicate_rules or not len(dataframe.index):
+        return
+
+    for rule in duplicate_rules:
+        raw_fields = rule.get("fields")
+        if not isinstance(raw_fields, Sequence):
+            continue
+        fields = [field for field in raw_fields if isinstance(field, str) and field]
+        if not fields:
+            continue
+
+        missing_fields = [field for field in fields if field not in dataframe.columns]
+        if missing_fields:
+            detail = (
+                f"{rule.get('name') or 'Regla de duplicados'}: "
+                f"campos no encontrados ({', '.join(missing_fields)})"
+            )
+            for idx in range(len(observations)):
+                observations[idx].append(detail)
+                row_is_valid[idx] = False
+            continue
+
+        subset = dataframe[fields]
+        duplicated_mask = subset.duplicated(keep=False)
+        if not duplicated_mask.any():
+            continue
+
+        ignore_empty = bool(rule.get("ignore_empty"))
+        if ignore_empty:
+            non_empty_mask = subset.notna().any(axis=1)
+            duplicated_mask = duplicated_mask & non_empty_mask
+
+        if not duplicated_mask.any():
+            continue
+
+        message = rule.get("message") if isinstance(rule.get("message"), str) else None
+        for idx in subset.index[duplicated_mask]:
+            values = "; ".join(
+                f"{field}={_format_duplicate_value(dataframe.at[idx, field])}"
+                for field in fields
+            )
+            fallback = (
+                f"Registros duplicados en campos {', '.join(fields)} ({values})"
+            )
+            observations[idx].append(_compose_error(message, fallback))
+            row_is_valid[idx] = False
+
+
+def _format_duplicate_value(value: Any) -> str:
+    if value is None:
+        return "vacío"
+    return str(value)
 
 
 def _normalize_type_label(label: str) -> str:
