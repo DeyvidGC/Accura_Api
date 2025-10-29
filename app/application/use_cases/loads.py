@@ -19,6 +19,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.application.use_cases.notifications import (
+    notify_load_status_changed,
     notify_load_validated_success,
     notify_template_processing,
 )
@@ -44,7 +45,7 @@ from app.infrastructure.repositories import (
 )
 from app.infrastructure.template_files import relative_to_project_root
 
-_REPORT_DIRECTORY = Path(__file__).resolve().parents[2] / "Files" / "Reports"
+_REPORT_DIRECTORY = Path(__file__).resolve().parents[3] / "Files" / "Reports"
 
 _SUPPORTED_EXTENSIONS = {".xlsx", ".xls", ".csv"}
 
@@ -195,8 +196,10 @@ def process_template_load(
             report_path=report_path,
             relative_report_path=relative_report_path,
         )
-        if final_status == LOAD_STATUS_VALIDATED_SUCCESS:
-            notify_load_validated_success(session, load=load, template=template)
+        notify_load_status_changed(
+            session, load=load, template=template, user=user
+        )
+        notify_load_validated_success(session, load=load, template=template)
     except Exception as exc:  # pragma: no cover - defensive path
         _mark_load_as_failed(load_repo, load, str(exc))
         if isinstance(exc, (ValueError, PermissionError)):
@@ -298,10 +301,11 @@ def _normalize_dataframe(dataframe: DataFrame) -> DataFrame:
     pd = _get_pandas_module()
     df = dataframe.copy()
     df.columns = [str(column).strip() for column in df.columns]
-    df.replace({"": pd.NA}, inplace=True)
-    df.replace(to_replace=r"^\s+$", value=pd.NA, regex=True, inplace=True)
+    df = df.replace({"": pd.NA})
+    df = df.replace(to_replace=r"^\s+$", value=pd.NA, regex=True)
     df.dropna(how="all", inplace=True)
     df = df.reset_index(drop=True)
+    df = df.astype("object")
     return df
 
 
@@ -335,7 +339,7 @@ def _validate_dataframe(
     rules: dict[int, dict[str, Any] | list[Any]],
 ) -> tuple[DataFrame, list[bool]]:
     pd = _get_pandas_module()
-    df = dataframe.copy()
+    df = dataframe.copy().astype("object")
     observations: list[list[str]] = [[] for _ in range(len(df.index))]
     row_is_valid = [True] * len(df.index)
     duplicate_rules: list[dict[str, Any]] = []
@@ -349,7 +353,9 @@ def _validate_dataframe(
                 f"Tipo de dato desconocido para la columna '{column.name}'"
             )
 
-        series = df[column.name] if column.name in df.columns else pd.Series(dtype=object)
+        if column.name not in df.columns:
+            df[column.name] = pd.Series([None] * len(df.index), dtype=object)
+        series = df[column.name]
         rule_definition = rules.get(column.rule_id or -1)
 
         if rule_definition is not None:

@@ -6,8 +6,10 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from app.domain.entities import (
+    LOAD_STATUS_FAILED,
     LOAD_STATUS_PROCESSING,
     LOAD_STATUS_VALIDATED_SUCCESS,
+    LOAD_STATUS_VALIDATED_WITH_ERRORS,
     Load,
     Notification,
     Template,
@@ -142,29 +144,93 @@ def notify_load_validated_success(
     load: Load,
     template: Template,
 ) -> None:
-    """Inform administrators that a load finished with a successful validation."""
+    """Inform administrators that a load finished validation and report its status."""
 
     user_ids = _admin_user_ids(session)
     if not user_ids:
         return
+
+    status = load.status
+    if status == LOAD_STATUS_VALIDATED_SUCCESS:
+        event_type = "load.validated.success"
+        title = "Validación exitosa"
+        message_detail = "finalizó con validación exitosa"
+    elif status == LOAD_STATUS_VALIDATED_WITH_ERRORS:
+        event_type = "load.validated.errors"
+        title = "Validación con observaciones"
+        message_detail = "finalizó con observaciones de validación"
+    else:
+        return
+
     message = (
         f"La carga '{load.file_name}' de la plantilla '{template.name}' "
-        "finalizó con validación exitosa."
+        f"{message_detail}."
     )
     payload = {
         "template_id": template.id,
         "load_id": load.id,
-        "status": LOAD_STATUS_VALIDATED_SUCCESS,
+        "status": status,
     }
     for user_id in user_ids:
         _persist_notification(
             session,
             user_id=user_id,
-            event_type="load.validated.success",
-            title="Validación exitosa",
+            event_type=event_type,
+            title=title,
             message=message,
             payload=payload,
         )
+
+
+def notify_load_status_changed(
+    session: Session,
+    *,
+    load: Load,
+    template: Template,
+    user: User,
+) -> None:
+    """Notify the load owner about a status change once processing completes."""
+
+    status = load.status
+    if status == LOAD_STATUS_VALIDATED_SUCCESS:
+        event_type = "load.completed.success"
+        title = "Carga validada"
+        message = (
+            f"Tu carga '{load.file_name}' para la plantilla '{template.name}' "
+            "finalizó exitosamente."
+        )
+    elif status == LOAD_STATUS_VALIDATED_WITH_ERRORS:
+        event_type = "load.completed.errors"
+        title = "Carga con observaciones"
+        message = (
+            f"Tu carga '{load.file_name}' para la plantilla '{template.name}' "
+            "finalizó con observaciones."
+        )
+    elif status == LOAD_STATUS_FAILED:
+        event_type = "load.completed.failed"
+        title = "Carga fallida"
+        message = (
+            f"Tu carga '{load.file_name}' para la plantilla '{template.name}' "
+            "no pudo completarse."
+        )
+    else:
+        return
+
+    payload = {
+        "template_id": template.id,
+        "load_id": load.id,
+        "status": status,
+        "total_rows": load.total_rows,
+        "error_rows": load.error_rows,
+    }
+    _persist_notification(
+        session,
+        user_id=user.id,
+        event_type=event_type,
+        title=title,
+        message=message,
+        payload=payload,
+    )
 
 
 __all__ = [
@@ -172,5 +238,6 @@ __all__ = [
     "notify_template_published",
     "notify_template_processing",
     "notify_template_access_granted",
+    "notify_load_status_changed",
     "notify_load_validated_success",
 ]
