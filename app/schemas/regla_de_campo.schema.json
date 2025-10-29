@@ -288,9 +288,11 @@
                     "Fecha": {
                       "type": "object",
                       "additionalProperties": false,
-                      "required": ["Formato"],
+                      "required": ["Formato", "Fecha mínima", "Fecha máxima"],
                       "properties": {
-                        "Formato": { "type": "string" }
+                        "Formato": { "type": "string", "enum": ["yyyy-MM-dd", "dd/MM/yyyy", "MM-dd-yyyy"] },
+                        "Fecha mínima": { "type": "string", "minLength": 1 },
+                        "Fecha máxima": { "type": "string", "minLength": 1 }
                       }
                     }
                   },
