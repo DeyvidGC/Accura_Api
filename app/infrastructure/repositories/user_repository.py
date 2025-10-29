@@ -25,6 +25,14 @@ class UserRepository:
         )
         return [self._to_entity(model) for model in query.all()]
 
+    def list_by_creator(self, creator_id: int) -> Sequence[User]:
+        query = (
+            self.session.query(UserModel)
+            .options(joinedload(UserModel.role))
+            .filter(UserModel.created_by == creator_id)
+        )
+        return [self._to_entity(model) for model in query.all()]
+
     def get(self, user_id: int) -> User | None:
         model = self._get_model(id=user_id)
         return self._to_entity(model) if model else None

@@ -21,11 +21,11 @@ def _report_to_read_model(report: KPIReport) -> KPIReportRead:
 @router.get("/", response_model=KPIReportRead)
 def read_kpis(
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    current_admin: User = Depends(require_admin),
 ) -> KPIReportRead:
     """Devuelve los indicadores clave de desempeño para el mes en curso."""
 
-    report = get_kpis(db)
+    report = get_kpis(db, admin_user_id=current_admin.id)
     return _report_to_read_model(report)
 
 

@@ -9,6 +9,7 @@ from app.application.use_cases.users import (
     delete_user as delete_user_uc,
     get_user as get_user_uc,
     list_users as list_users_uc,
+    list_users_by_creator as list_users_by_creator_uc,
     update_user as update_user_uc,
 )
 from app.domain.entities import User
@@ -75,6 +76,17 @@ def list_users(
     """Devuelve una lista paginada de usuarios registrados."""
 
     users = list_users_uc(db, skip=skip, limit=limit)
+    return [_to_read_model(user) for user in users]
+
+
+@router.get("/created-by/me", response_model=list[UserRead])
+def list_users_created_by_admin(
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(require_admin),
+):
+    """Devuelve todos los usuarios creados por el administrador autenticado."""
+
+    users = list_users_by_creator_uc(db, creator_id=current_admin.id)
     return [_to_read_model(user) for user in users]
 
 
