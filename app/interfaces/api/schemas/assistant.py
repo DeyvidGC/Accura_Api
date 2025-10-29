@@ -39,7 +39,7 @@ DEPENDENCY_TYPE_HEADERS: dict[str, tuple[str, ...]] = {
     "lista compleja": ("Lista compleja",),
     "telefono": ("Longitud minima", "Código de país"),
     "correo": ("Formato", "Longitud máxima"),
-    "fecha": ("Formato",),
+    "fecha": ("Formato", "Fecha mínima", "Fecha máxima"),
 }
 
 
@@ -111,6 +111,11 @@ class AssistantMessageResponse(BaseModel):
             if not isinstance(value, (int, float)):
                 raise ValueError("Los límites deben ser numéricos o nulos.")
 
+        def ensure_non_empty_str(name: str) -> None:
+            value = regla.get(name)
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(f"'{name}' debe ser una cadena no vacía.")
+
         if tipo == TipoDatoEnum.TEXTO:
             ensure_keys({"Longitud minima", "Longitud maxima"})
             ensure_int("Longitud minima", minimum=0)
@@ -177,7 +182,10 @@ class AssistantMessageResponse(BaseModel):
             ensure_int("Longitud máxima", minimum=1)
 
         elif tipo == TipoDatoEnum.FECHA:
-            ensure_keys({"Formato"})
+            ensure_keys({"Formato", "Fecha mínima", "Fecha máxima"})
+            ensure_non_empty_str("Formato")
+            ensure_non_empty_str("Fecha mínima")
+            ensure_non_empty_str("Fecha máxima")
             formato = regla.get("Formato")
             formatos_validos = {"yyyy-MM-dd", "dd/MM/yyyy", "MM-dd-yyyy"}
             if formato not in formatos_validos:
@@ -354,7 +362,9 @@ class AssistantMessageResponse(BaseModel):
                                 contenido, "Longitud máxima", minimum=1, type_label=clave
                             )
                         elif normalized_clave == "fecha":
-                            ensure_config_exact_keys(contenido, {"Formato"}, clave)
+                            ensure_config_exact_keys(
+                                contenido, {"Formato", "Fecha mínima", "Fecha máxima"}, clave
+                            )
                             formato = contenido.get("Formato")
                             formatos_validos = {"yyyy-MM-dd", "dd/MM/yyyy", "MM-dd-yyyy"}
                             if formato not in formatos_validos:
@@ -362,6 +372,12 @@ class AssistantMessageResponse(BaseModel):
                                     "El formato de fecha debe ser uno de: "
                                     + ", ".join(sorted(formatos_validos))
                                 )
+                            for etiqueta in ("Fecha mínima", "Fecha máxima"):
+                                valor = contenido.get(etiqueta)
+                                if not isinstance(valor, str) or not valor.strip():
+                                    raise ValueError(
+                                        f"'{etiqueta}' en la configuración de '{clave}' debe ser una cadena no vacía."
+                                    )
 
                         expected_headers.update(DEPENDENCY_TYPE_HEADERS[normalized_clave])
                         continue
