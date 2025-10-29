@@ -248,19 +248,19 @@ Los usuarios poseen un **nombre** (máximo 50 caracteres), un **correo electrón
       "name": "Cambio sin contraseña"
     }
   },
+  "Header": [
+    "password",
+    "Texto"
+  ],
   "Regla": {
-    "Dependencia": [
+    "Nombre dependiente": "password",
+    "reglas especifica": [
       {
-        "Nombre dependiente": "password",
-        "valor": true,
-        "reglas especifica": [
-          {
-            "Texto": {
-              "Longitud minima": 8,
-              "Longitud maxima": 128
-            }
-          }
-        ]
+        "password": true,
+        "Texto": {
+          "Longitud minima": 8,
+          "Longitud maxima": 128
+        }
       }
     ]
   }
@@ -1048,6 +1048,9 @@ Las reglas permiten definir validaciones avanzadas para las columnas de las plan
       "válido": "USD",
       "inválido": "GBP"
     },
+    "Header": [
+      "Lista"
+    ],
     "Regla": {
       "Lista": [
         "MXN",
@@ -1078,6 +1081,9 @@ Las reglas permiten definir validaciones avanzadas para las columnas de las plan
       "válido": "USD",
       "inválido": "GBP"
     },
+    "Header": [
+      "Lista"
+    ],
     "Regla": {
       "Lista": [
         "MXN",
@@ -1135,6 +1141,9 @@ Las reglas permiten definir validaciones avanzadas para las columnas de las plan
       "válido": "MXN",
       "inválido": "GBP"
     },
+    "Header": [
+      "Lista"
+    ],
     "Regla": {
       "Lista": [
         "MXN",
@@ -1168,6 +1177,9 @@ Las reglas permiten definir validaciones avanzadas para las columnas de las plan
       "válido": "EUR",
       "inválido": "GBP"
     },
+    "Header": [
+      "Lista"
+    ],
     "Regla": {
       "Lista": [
         "MXN",
@@ -1207,6 +1219,59 @@ Las reglas permiten definir validaciones avanzadas para las columnas de las plan
     {"detail": "Regla no encontrada."}
     ```
 
+### G.6 Regla de dependencia por tipo de documento
+- **Descripción:** ejemplo de una validación dependiente donde el formato del número de documento varía según el tipo seleccionado.
+- **Estructura:**
+```json
+{
+  "Nombre de la regla": "Número de documento según tipo de documento",
+  "Tipo de dato": "Dependencia",
+  "Campo obligatorio": true,
+  "Mensaje de error": "El número de documento no cumple con la longitud requerida para el tipo seleccionado.",
+  "Descripción": "Valida que el número de documento tenga la longitud correcta de acuerdo con el tipo de documento (DNI, Pasaporte, RUC).",
+  "Ejemplo": {
+    "Válido": {
+      "Tipo de documento": "DNI",
+      "Número de documento": "12345678"
+    },
+    "Inválido": {
+      "Tipo de documento": "RUC",
+      "Número de documento": "12345678"
+    }
+  },
+  "Header": [
+    "Tipo de documento",
+    "Documento"
+  ],
+  "Regla": {
+    "Nombre dependiente": "Tipo de documento",
+    "reglas especifica": [
+      {
+        "Tipo de documento": "DNI",
+        "Documento": {
+          "Longitud minima": 8,
+          "Longitud maxima": 8
+        }
+      },
+      {
+        "Tipo de documento": "RUC",
+        "Documento": {
+          "Longitud minima": 9,
+          "Longitud maxima": 12
+        }
+      },
+      {
+        "Tipo de documento": "Pasaporte",
+        "Documento": {
+          "Longitud minima": 11,
+          "Longitud maxima": 11
+        }
+      }
+    ]
+  }
+}
+```
+
 ---
 
 ## Documento H. Asistente inteligente
@@ -1237,6 +1302,9 @@ Las reglas permiten definir validaciones avanzadas para las columnas de las plan
     "válido": "MXN",
     "inválido": "GBP"
   },
+  "Header": [
+    "Lista"
+  ],
   "Regla": {
     "Lista": [
       "MXN",

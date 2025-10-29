@@ -905,64 +905,131 @@ def _validate_dependency_rule(
     base_parser: Callable[[Any], tuple[Any, str | None]] | None,
     **_: Any,
 ) -> tuple[Any, list[str]]:
+    fallback_value, fallback_errors = _apply_base_parser(
+        value, column_name, base_parser, message
+    )
+
     dependent_name = rule_config.get("Nombre dependiente")
-    trigger_value = rule_config.get("valor")
     specific_rules = rule_config.get("reglas especifica")
 
-    if not isinstance(dependent_name, str) or not dependent_name:
-        parsed_value, base_errors = _apply_base_parser(
-            value, column_name, base_parser, message
-        )
-        return parsed_value, base_errors
-
-    dependent_current = _normalize_cell_value(row_context.get(dependent_name))
-    if trigger_value is not None and str(dependent_current) != str(trigger_value):
-        parsed_value, base_errors = _apply_base_parser(
-            value, column_name, base_parser, message
-        )
-        return parsed_value, base_errors
+    if not isinstance(dependent_name, str) or not dependent_name.strip():
+        return fallback_value, fallback_errors
 
     if not isinstance(specific_rules, list) or not specific_rules:
-        parsed_value, base_errors = _apply_base_parser(
-            value, column_name, base_parser, message
-        )
-        return parsed_value, base_errors
+        return fallback_value, fallback_errors
 
-    current_value = value
+    normalized_dependent_name = _normalize_type_label(dependent_name)
+
+    found_dependent = False
+    dependent_current: Any = None
+    for key, candidate in row_context.items():
+        if isinstance(key, str) and _normalize_type_label(key) == normalized_dependent_name:
+            dependent_current = candidate
+            found_dependent = True
+            break
+
+    if not found_dependent:
+        return fallback_value, fallback_errors
+
+    matched = False
     accumulated_errors: list[str] = []
+    resulting_value = value
+
     for entry in specific_rules:
-        if not isinstance(entry, dict) or len(entry) != 1:
+        if not isinstance(entry, Mapping) or len(entry) < 2:
             accumulated_errors.append(
                 _compose_error(message, f"{column_name}: configuración dependiente inválida")
             )
             continue
-        key, config = next(iter(entry.items()))
-        normalized_key = _normalize_type_label(key)
-        handler = _DEPENDENCY_RULE_HANDLERS.get(normalized_key)
-        if handler is None:
+
+        trigger_value: Any | None = None
+        validators: list[tuple[str, Callable[[Any, str, Mapping[str, Any], str | None], tuple[Any, list[str]]], Mapping[str, Any]]] = []
+
+        for raw_key, config in entry.items():
+            if not isinstance(raw_key, str) or not raw_key.strip():
+                accumulated_errors.append(
+                    _compose_error(message, f"{column_name}: clave de dependencia inválida")
+                )
+                validators = []
+                trigger_value = None
+                break
+
+            normalized_key = _normalize_type_label(raw_key)
+
+            if normalized_key == normalized_dependent_name:
+                trigger_value = config
+                if isinstance(config, Mapping):
+                    accumulated_errors.append(
+                        _compose_error(
+                            message,
+                            f"{column_name}: el valor del campo dependiente '{raw_key}' no puede ser un objeto",
+                        )
+                    )
+                    validators = []
+                    trigger_value = None
+                    break
+                continue
+
+            handler = _DEPENDENCY_RULE_HANDLERS.get(normalized_key)
+            if handler is None:
+                accumulated_errors.append(
+                    _compose_error(
+                        message,
+                        f"{column_name}: tipo dependiente '{raw_key}' no soportado",
+                    )
+                )
+                continue
+
+            if not isinstance(config, Mapping):
+                accumulated_errors.append(
+                    _compose_error(
+                        message,
+                        f"{column_name}: la configuración asociada a '{raw_key}' debe ser un objeto",
+                    )
+                )
+                continue
+
+            validators.append((raw_key, handler, config))
+
+        if trigger_value is None:
             accumulated_errors.append(
                 _compose_error(
                     message,
-                    f"{column_name}: tipo dependiente '{key}' no soportado",
+                    f"{column_name}: falta indicar el valor para '{dependent_name}' en la configuración dependiente",
                 )
             )
             continue
-        current_value, dependency_errors = handler(
-            current_value,
-            column_name,
-            config if isinstance(config, Mapping) else {},
-            message,
-        )
-        if dependency_errors:
-            accumulated_errors.extend(dependency_errors)
+
+        if not _dependency_values_equal(dependent_current, trigger_value):
+            continue
+
+        matched = True
+        candidate_value = value
+        candidate_errors: list[str] = []
+
+        for raw_key, handler, config in validators:
+            candidate_value, dependency_errors = handler(
+                candidate_value,
+                column_name,
+                config,
+                message,
+            )
+            if dependency_errors:
+                candidate_errors.extend(dependency_errors)
+
+        if candidate_errors:
+            accumulated_errors.extend(candidate_errors)
+            continue
+
+        resulting_value = candidate_value
 
     if accumulated_errors:
         return value, accumulated_errors
 
-    parsed_value, base_errors = _apply_base_parser(
-        current_value, column_name, base_parser, message
-    )
-    return parsed_value, base_errors
+    if matched:
+        return resulting_value, []
+
+    return fallback_value, fallback_errors
 
 
 def _validate_joint_rule(
@@ -1023,6 +1090,94 @@ def _dependency_number_validator(
         column_name=column_name,
         rule_config=rule_config,
         message=message,
+    )
+
+
+def _dependency_document_validator(
+    value: Any, column_name: str, rule_config: Mapping[str, Any], message: str | None
+) -> tuple[str, list[str]]:
+    return _validate_document_rule(
+        value=value,
+        column_name=column_name,
+        rule_config=rule_config,
+        message=message,
+    )
+
+
+def _dependency_list_validator(
+    value: Any, column_name: str, rule_config: Mapping[str, Any], message: str | None
+) -> tuple[str, list[str]]:
+    return _validate_list_rule(
+        value=value,
+        column_name=column_name,
+        rule_config=rule_config,
+        message=message,
+    )
+
+
+def _dependency_full_list_validator(
+    value: Any, column_name: str, rule_config: Mapping[str, Any], message: str | None
+) -> tuple[str, list[str]]:
+    return _validate_full_list_rule(
+        value=value,
+        column_name=column_name,
+        rule_config=rule_config,
+        message=message,
+    )
+
+
+def _dependency_phone_validator(
+    value: Any, column_name: str, rule_config: Mapping[str, Any], message: str | None
+) -> tuple[str, list[str]]:
+    return _validate_phone_rule(
+        value=value,
+        column_name=column_name,
+        rule_config=rule_config,
+        message=message,
+    )
+
+
+def _dependency_email_validator(
+    value: Any, column_name: str, rule_config: Mapping[str, Any], message: str | None
+) -> tuple[str, list[str]]:
+    return _validate_email_rule(
+        value=value,
+        column_name=column_name,
+        rule_config=rule_config,
+        message=message,
+    )
+
+
+def _dependency_date_validator(
+    value: Any, column_name: str, rule_config: Mapping[str, Any], message: str | None
+) -> tuple[date, list[str]]:
+    return _validate_date_rule(
+        value=value,
+        column_name=column_name,
+        rule_config=rule_config,
+        message=message,
+    )
+
+
+def _dependency_values_equal(actual: Any, expected: Any) -> bool:
+    normalized_actual = _normalize_cell_value(actual)
+    normalized_expected = _normalize_cell_value(expected)
+
+    if isinstance(normalized_actual, bool) or isinstance(normalized_expected, bool):
+        return bool(normalized_actual) is bool(normalized_expected)
+
+    numeric_types = (int, float, Decimal)
+    if isinstance(normalized_actual, numeric_types) and isinstance(normalized_expected, numeric_types):
+        try:
+            return Decimal(str(normalized_actual)) == Decimal(str(normalized_expected))
+        except (InvalidOperation, ValueError):
+            return False
+
+    if normalized_actual is None or normalized_expected is None:
+        return normalized_actual is None and normalized_expected is None
+
+    return _normalize_type_label(str(normalized_actual)) == _normalize_type_label(
+        str(normalized_expected)
     )
 
 
@@ -1233,6 +1388,12 @@ _DEPENDENCY_RULE_HANDLERS: dict[
 ] = {
     "texto": _dependency_text_validator,
     "numero": _dependency_number_validator,
+    "documento": _dependency_document_validator,
+    "lista": _dependency_list_validator,
+    "lista compleja": _dependency_full_list_validator,
+    "telefono": _dependency_phone_validator,
+    "correo": _dependency_email_validator,
+    "fecha": _dependency_date_validator,
 }
 
 
