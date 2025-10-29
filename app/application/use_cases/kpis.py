@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import func
+from sqlalchemy import and_, func
 from sqlalchemy.orm import Session
 
 from app.domain.entities import (
@@ -69,7 +69,12 @@ def _previous_month_start(current_start: datetime) -> datetime:
     return current_start.replace(month=current_start.month - 1)
 
 
-def get_kpis(session: Session, *, reference: datetime | None = None) -> KPIReport:
+def get_kpis(
+    session: Session,
+    *,
+    reference: datetime | None = None,
+    admin_user_id: int | None = None,
+) -> KPIReport:
     """Compute KPI metrics required by the administrative dashboard."""
 
     now = reference or datetime.utcnow()
@@ -77,27 +82,25 @@ def get_kpis(session: Session, *, reference: datetime | None = None) -> KPIRepor
     previous_start = _previous_month_start(current_start)
     previous_end = current_start
 
-    active_users_current = (
-        session.query(func.count(UserModel.id))
-        .filter(
+    def _active_users_count(start: datetime, end: datetime) -> int:
+        filters = [
             UserModel.is_active.is_(True),
             UserModel.last_login.isnot(None),
-            UserModel.last_login >= current_start,
-            UserModel.last_login < next_month_start,
-        )
-        .scalar()
-    ) or 0
+            UserModel.last_login >= start,
+            UserModel.last_login < end,
+        ]
+        if admin_user_id is not None:
+            filters.append(UserModel.created_by == admin_user_id)
+            filters.append(UserModel.id != admin_user_id)
 
-    active_users_previous = (
-        session.query(func.count(UserModel.id))
-        .filter(
-            UserModel.is_active.is_(True),
-            UserModel.last_login.isnot(None),
-            UserModel.last_login >= previous_start,
-            UserModel.last_login < previous_end,
-        )
-        .scalar()
-    ) or 0
+        return (
+            session.query(func.count(UserModel.id))
+            .filter(and_(*filters))
+            .scalar()
+        ) or 0
+
+    active_users_current = _active_users_count(current_start, next_month_start)
+    active_users_previous = _active_users_count(previous_start, previous_end)
 
     published_templates = (
         session.query(func.count(TemplateModel.id))
