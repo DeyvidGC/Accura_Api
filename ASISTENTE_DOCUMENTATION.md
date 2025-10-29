@@ -214,17 +214,16 @@ Los tipos de reglas más utilizados se agrupan en las siguientes categorías. In
     "Válidos": ["2020-06-15", "2023-12-01"],
     "Inválidos": ["2019-12-31", "2025-01-01"]
   },
-  "Header": {
-    "Columna": "FechaEmision",
-    "Formato": "YYYY-MM-DD",
-    "ZonaHoraria": "America/Mexico_City"
-  },
+  "Header": [
+    "Fecha de emisión",
+    "Formato",
+    "Fecha mínima",
+    "Fecha máxima"
+  ],
   "Regla": {
-    "Tipo": "fecha",
-    "FechaMinima": "2020-01-01",
-    "FechaMaxima": "today",
-    "IncluirMaxima": false,
-    "ValidarZonaHoraria": true
+    "Formato": "yyyy-MM-dd",
+    "Fecha mínima": "2020-01-01",
+    "Fecha máxima": "today"
   }
 }
 ```
