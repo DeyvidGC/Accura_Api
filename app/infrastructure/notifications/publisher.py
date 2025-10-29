@@ -23,10 +23,20 @@ class NotificationPublisher:
 
         message = {"type": "notification", "data": self._serialize(notification)}
         try:
-            from_thread.start_soon(self._manager.send_to_user, notification.user_id, message)
-        except RuntimeError:
             loop = asyncio.get_running_loop()
-            loop.create_task(self._manager.send_to_user(notification.user_id, message))
+        except RuntimeError:
+            if hasattr(from_thread, "start_soon"):
+                from_thread.start_soon(
+                    self._manager.send_to_user, notification.user_id, message
+                )
+            else:
+                from_thread.run(
+                    self._manager.send_to_user, notification.user_id, message
+                )
+        else:
+            loop.create_task(
+                self._manager.send_to_user(notification.user_id, message)
+            )
 
     @staticmethod
     def _serialize(notification: Notification) -> dict[str, Any]:
