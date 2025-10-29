@@ -260,7 +260,7 @@ def get_load_report(
     if not current_user.is_admin() and loaded_file.created_user_id != current_user.id:
         raise PermissionError("No autorizado")
 
-    project_root = Path(__file__).resolve().parents[2]
+    project_root = Path(__file__).resolve().parents[3]
     path = project_root / loaded_file.path
     if not path.exists():
         raise FileNotFoundError("Reporte no encontrado en el sistema de archivos")
@@ -303,6 +303,7 @@ def _normalize_dataframe(dataframe: DataFrame) -> DataFrame:
     df.columns = [str(column).strip() for column in df.columns]
     df = df.replace({"": pd.NA})
     df = df.replace(to_replace=r"^\s+$", value=pd.NA, regex=True)
+    df = df.infer_objects(copy=False)
     df.dropna(how="all", inplace=True)
     df = df.reset_index(drop=True)
     df = df.astype("object")
@@ -1073,7 +1074,7 @@ def _validate_dependency_rule(
         value, column_name, base_parser, message
     )
 
-    specific_rules = rule_config.get("reglas especifica")
+    specific_rules = _extract_specific_dependency_rules(rule_config)
 
     if not isinstance(specific_rules, list) or not specific_rules:
         return fallback_value, fallback_errors
@@ -1167,6 +1168,11 @@ def _validate_dependency_rule(
 
             handler = _DEPENDENCY_RULE_HANDLERS.get(normalized_key)
             if handler is None:
+                if (
+                    normalized_key in _DEPENDENCY_METADATA_KEYS
+                    or not isinstance(config, Mapping)
+                ):
+                    continue
                 accumulated_errors.append(
                     _compose_error(
                         message,
@@ -1392,6 +1398,20 @@ def _extract_allowed_values(rule_config: Mapping[str, Any]) -> list[Any]:
     return []
 
 
+def _extract_specific_dependency_rules(
+    rule_config: Mapping[str, Any]
+) -> list[Mapping[str, Any]] | None:
+    for key, value in rule_config.items():
+        if isinstance(key, str) and _normalize_type_label(key) == "reglas especifica":
+            if isinstance(value, list):
+                return value
+            return None
+    fallback = rule_config.get("reglas especifica")
+    if isinstance(fallback, list):
+        return fallback
+    return None
+
+
 def _extract_composite_combinations(rule_config: Mapping[str, Any]) -> list[dict[str, str]]:
     candidate_keys = [
         "Lista compleja",
@@ -1576,6 +1596,19 @@ _RULE_VALIDATORS: dict[str, RuleValidator] = {
     "fecha": _validate_date_rule,
     "dependencia": _validate_dependency_rule,
     "validacion conjunta": _validate_joint_rule,
+}
+
+_DEPENDENCY_METADATA_KEYS: set[str] = {
+    "ejemplo",
+    "ejemplos",
+    "example",
+    "examples",
+    "descripcion",
+    "descripcion general",
+    "descripcion corta",
+    "notas",
+    "nota",
+    "notes",
 }
 
 _DEPENDENCY_RULE_HANDLERS: dict[

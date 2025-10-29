@@ -30,6 +30,7 @@ class UserRepository:
             self.session.query(UserModel)
             .options(joinedload(UserModel.role))
             .filter(UserModel.created_by == creator_id)
+            .order_by(UserModel.created_at.desc())
         )
         return [self._to_entity(model) for model in query.all()]
 
