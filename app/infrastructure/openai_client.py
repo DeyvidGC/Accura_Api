@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import inspect
 import json
+import logging
 from collections.abc import Sequence
 from typing import Any
 
@@ -14,6 +15,38 @@ except Exception:  # pragma: no cover - keep runtime dependency optional
     Responses = None  # type: ignore[misc, assignment]
 from app.config import get_settings
 from app.schemas import load_regla_de_campo_schema
+
+
+logger = logging.getLogger(__name__)
+
+
+def _strip_code_fences(text: str) -> str:
+    """Return JSON text without Markdown code fences."""
+
+    s = text.strip()
+    if not s.startswith("```"):
+        return text
+
+    # remove the opening fences and keep only the JSON payload between the
+    # first "{" and the matching closing "}".
+    cleaned = s.strip("`")
+    start = cleaned.find("{")
+    end = cleaned.rfind("}")
+    if start == -1 or end == -1:
+        return text
+    return cleaned[start : end + 1]
+
+
+def _remove_trailing_commas(text: str) -> str:
+    """Remove trailing commas that break strict JSON decoding."""
+
+    # This is a very small sanitiser aimed at fixing answers such as
+    # "{ \"foo\": 1, }" or "[1, 2, ]" that occasionally appear in LLM
+    # outputs.  The regex is conservative and only removes a comma when the
+    # next non-whitespace character closes the object/array.
+    import re
+
+    return re.sub(r",(\s*[}\]])", r"\1", text)
 
 class OpenAIConfigurationError(RuntimeError):
     """Error lanzado cuando faltan datos básicos de configuración."""
@@ -177,19 +210,26 @@ class StructuredChatService:
             except (AttributeError, IndexError, TypeError) as exc:
                 raise OpenAIServiceError("La respuesta de OpenAI no contiene texto utilizable.") from exc
 
-        # Ya que usamos response_format estricto, debería ser JSON “limpio”
+        logger.debug("Respuesta sin procesar del modelo: %s", text)
+
+        # Ya que usamos response_format estricto, debería ser JSON “limpio”. En la
+        # práctica podemos recibir ligeras variaciones (code fences, comas sobrantes).
+        json_text = text
         try:
-            payload = json.loads(text)
-        except json.JSONDecodeError as exc:
-            # Fallback defensivo por si el proveedor devuelve code fences (raro con strict)
-            s = text.strip()
-            if s.startswith("```"):
-                # quita fences tipo ```json ... ```
-                s = s.strip("`")
-                s = s[s.find("{"): s.rfind("}") + 1]
-                payload = json.loads(s)
-            else:
-                raise OpenAIServiceError("La respuesta de OpenAI no es un JSON válido.") from exc
+            payload = json.loads(json_text)
+        except json.JSONDecodeError:
+            json_text = _strip_code_fences(json_text)
+            try:
+                payload = json.loads(json_text)
+            except json.JSONDecodeError:
+                json_text = _remove_trailing_commas(json_text)
+                try:
+                    payload = json.loads(json_text)
+                except json.JSONDecodeError as exc:
+                    logger.error("No se pudo decodificar la respuesta de OpenAI: %s", json_text)
+                    raise OpenAIServiceError("La respuesta de OpenAI no es un JSON válido.") from exc
+
+        logger.debug("Respuesta del modelo convertida a JSON: %s", payload)
 
         # Validaciones extra (por si cambias el schema arriba en el futuro)
         required_fields = [
