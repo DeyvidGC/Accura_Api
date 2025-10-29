@@ -1,5 +1,7 @@
 """Rutas para interactuar con el asistente basado en OpenAI."""
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -18,6 +20,8 @@ from app.interfaces.api.schemas import (
     AssistantMessageRequest,
     AssistantMessageResponse,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/assistant", tags=["assistant"])
 
@@ -44,6 +48,7 @@ def analyze_message(
             payload.message,
             recent_rules=serialized_rules or None,
         )
+        logger.debug("Respuesta sin validar del asistente: %s", raw_response)
     except OpenAIServiceError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
