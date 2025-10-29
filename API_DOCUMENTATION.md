@@ -250,10 +250,10 @@ Los usuarios poseen un **nombre** (máximo 50 caracteres), un **correo electrón
   },
   "Header": [
     "password",
-    "Texto"
+    "Longitud minima",
+    "Longitud maxima"
   ],
   "Regla": {
-    "Nombre dependiente": "password",
     "reglas especifica": [
       {
         "password": true,
@@ -1221,14 +1221,15 @@ Las reglas permiten definir validaciones avanzadas para las columnas de las plan
 
 ### G.6 Regla de dependencia por tipo de documento
 - **Descripción:** ejemplo de una validación dependiente donde el formato del número de documento varía según el tipo seleccionado.
+- **Nota:** El arreglo `Header` de las reglas de dependencia debe incluir el campo dependiente y los encabezados propios de cada tipo configurado (por ejemplo, `Longitud minima` y `Longitud maxima` para reglas de documentos).
 - **Estructura:**
 ```json
 {
   "Nombre de la regla": "Número de documento según tipo de documento",
   "Tipo de dato": "Dependencia",
   "Campo obligatorio": true,
-  "Mensaje de error": "El número de documento no cumple con la longitud requerida para el tipo seleccionado.",
-  "Descripción": "Valida que el número de documento tenga la longitud correcta de acuerdo con el tipo de documento (DNI, Pasaporte, RUC).",
+  "Mensaje de error": "El número de documento no cumple con la longitud requerida para el tipo de documento seleccionado.",
+  "Descripción": "Valida que el número de documento tenga la longitud correcta dependiendo del tipo de documento seleccionado en la lista (DNI, Pasaporte, RUC, etc.) para documentos peruanos.",
   "Ejemplo": {
     "Válido": {
       "Tipo de documento": "DNI",
@@ -1240,28 +1241,28 @@ Las reglas permiten definir validaciones avanzadas para las columnas de las plan
     }
   },
   "Header": [
-    "Tipo de documento",
-    "Documento"
+    "Tipo Documento",
+    "Longitud minima",
+    "Longitud maxima"
   ],
   "Regla": {
-    "Nombre dependiente": "Tipo de documento",
     "reglas especifica": [
       {
-        "Tipo de documento": "DNI",
+        "Tipo Documento": "DNI",
         "Documento": {
           "Longitud minima": 8,
           "Longitud maxima": 8
         }
       },
       {
-        "Tipo de documento": "RUC",
+        "Tipo Documento": "RUC",
         "Documento": {
           "Longitud minima": 9,
           "Longitud maxima": 12
         }
       },
       {
-        "Tipo de documento": "Pasaporte",
+        "Tipo Documento": "PASAPORTE",
         "Documento": {
           "Longitud minima": 11,
           "Longitud maxima": 11
