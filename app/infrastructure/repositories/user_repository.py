@@ -78,12 +78,15 @@ class UserRepository:
             return
 
         now = datetime.utcnow()
+        # Preserve the existing password reset requirement flag when deleting the user.
+        original_must_change_password = model.must_change_password
         model.deleted = True
         model.deleted_by = deleted_by
         model.deleted_at = now
         model.is_active = False
         model.updated_by = deleted_by
         model.updated_at = now
+        model.must_change_password = original_must_change_password
         self.session.add(model)
         self.session.commit()
 
