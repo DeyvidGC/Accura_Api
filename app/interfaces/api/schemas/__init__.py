@@ -5,7 +5,13 @@ from .assistant import (
 from .audit_log import AuditLogRead
 from .digital_file import DigitalFileRead
 from .load import LoadRead, LoadUploadResponse
-from .auth import PasswordHashRequest, PasswordHashResponse, Token
+from .auth import (
+    ForgotPasswordRequest,
+    ForgotPasswordResponse,
+    PasswordHashRequest,
+    PasswordHashResponse,
+    Token,
+)
 from .notification import NotificationRead
 from .rule import RuleCreate, RuleRead, RuleUpdate
 from .kpi import (
@@ -35,6 +41,8 @@ __all__ = [
     "LoadRead",
     "LoadUploadResponse",
     "NotificationRead",
+    "ForgotPasswordRequest",
+    "ForgotPasswordResponse",
     "PasswordHashRequest",
     "PasswordHashResponse",
     "Token",

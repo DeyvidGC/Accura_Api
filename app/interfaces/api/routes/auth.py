@@ -1,5 +1,6 @@
 """Endpoints relacionados con autenticación y gestión de contraseñas."""
 
+import logging
 from datetime import timedelta
 from hashlib import sha256
 
@@ -11,13 +12,17 @@ from app.application.use_cases.users import (
     AuthenticationStatus,
     authenticate_user,
     record_login,
+    reset_password_by_email,
 )
 from app.config import get_settings
 from app.domain.entities import User
 from app.infrastructure.database import get_db
+from app.infrastructure.email import send_user_password_reset_email
 from app.infrastructure.security import create_access_token, get_password_hash
 from app.interfaces.api.dependencies import require_admin
 from app.interfaces.api.schemas import (
+    ForgotPasswordRequest,
+    ForgotPasswordResponse,
     PasswordHashRequest,
     PasswordHashResponse,
     Token,
@@ -25,6 +30,11 @@ from app.interfaces.api.schemas import (
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 settings = get_settings()
+logger = logging.getLogger(__name__)
+
+_PASSWORD_RESET_MESSAGE = (
+    "Si el correo está registrado, recibirás un mensaje con una contraseña temporal."
+)
 
 
 # Nota: se conserva la firma esperada por OAuth2PasswordRequestForm.
@@ -85,3 +95,39 @@ def generate_password_hash(
 
     hashed_password = get_password_hash(payload.password)
     return PasswordHashResponse(hashed_password=hashed_password)
+
+
+@router.post(
+    "/forgot-password",
+    response_model=ForgotPasswordResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def forgot_password(
+    payload: ForgotPasswordRequest,
+    db: Session = Depends(get_db),
+) -> ForgotPasswordResponse:
+    """Genera una contraseña temporal y la envía al correo del usuario."""
+
+    try:
+        user, temporary_password = reset_password_by_email(
+            db,
+            email=payload.email,
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        if detail == "El correo electrónico debe ser una cuenta de Gmail válida":
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail) from exc
+        logger.info(
+            "Solicitud de restablecimiento ignorada para %s: %s",
+            payload.email,
+            detail,
+        )
+        return ForgotPasswordResponse(message=_PASSWORD_RESET_MESSAGE)
+
+    if not send_user_password_reset_email(user.email, temporary_password):
+        logger.warning(
+            "No se pudo enviar el correo de restablecimiento de contraseña al usuario %s",
+            user.email,
+        )
+
+    return ForgotPasswordResponse(message=_PASSWORD_RESET_MESSAGE)

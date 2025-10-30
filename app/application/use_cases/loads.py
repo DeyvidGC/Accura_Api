@@ -1406,9 +1406,26 @@ def _extract_specific_dependency_rules(
             if isinstance(value, list):
                 return value
             return None
+
     fallback = rule_config.get("reglas especifica")
     if isinstance(fallback, list):
         return fallback
+
+    # Algunas reglas generadas desde herramientas externas anidan la definición
+    # específica dentro de otro bloque "Regla". Permitimos esa estructura para
+    # mantener compatibilidad con reglas existentes.
+    nested_candidates = [
+        nested
+        for key, nested in rule_config.items()
+        if isinstance(key, str)
+        and _normalize_type_label(key) == "regla"
+        and isinstance(nested, Mapping)
+    ]
+    for nested in nested_candidates:
+        extracted = _extract_specific_dependency_rules(nested)
+        if extracted:
+            return extracted
+
     return None
 
 
