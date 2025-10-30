@@ -274,12 +274,12 @@ def reset_user_password(
 def delete_user(
     user_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    current_user: User = Depends(require_admin),
 ):
     """Elimina al usuario indicado."""
 
     try:
-        delete_user_uc(db, user_id)
+        delete_user_uc(db, user_id, deleted_by=current_user.id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -54,6 +54,9 @@ class UserRead(BaseModel):
     created_at: datetime | None
     updated_at: datetime | None
     is_active: bool
+    deleted: bool
+    deleted_by: int | None
+    deleted_at: datetime | None
     role: RoleRead
 
     if ConfigDict is not None:  # pragma: no branch - runtime configuration
