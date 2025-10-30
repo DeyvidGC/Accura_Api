@@ -299,6 +299,7 @@ def _read_source_file(file_bytes: bytes, suffix: str) -> DataFrame:
 
 def _normalize_dataframe(dataframe: DataFrame) -> DataFrame:
     pd = _get_pandas_module()
+    pd.set_option('future.no_silent_downcasting', True)
     df = dataframe.copy()
     df.columns = [str(column).strip() for column in df.columns]
     df = df.replace({"": pd.NA})
