@@ -1350,6 +1350,65 @@ Las reglas permiten definir validaciones avanzadas para las columnas de las plan
 
 ---
 
+## Documento I. Actividad reciente
+
+### I.1 Consultar actividad reciente
+- **Método y URL:** `GET /activity/recent`
+- **Roles permitidos:** solo administradores.
+- **Parámetros de consulta opcionales:** `limit` (entero, mínimo 1, máximo 100, por defecto 20) para indicar cuántos eventos recuperar.
+- **Respuesta 200 (éxito):**
+```json
+[
+  {
+    "event_id": "load-42",
+    "event_type": "load.uploaded",
+    "summary": "María García cargó 'ventas_mayo.xlsx' en la plantilla 'Ventas Mensuales'.",
+    "created_at": "2024-05-28T12:30:00Z",
+    "metadata": {
+      "load_id": 42,
+      "template_id": 3,
+      "template_name": "Ventas Mensuales",
+      "user_id": 8,
+      "user_name": "María García",
+      "file_name": "ventas_mayo.xlsx"
+    }
+  },
+  {
+    "event_id": "access-15",
+    "event_type": "template.access.granted",
+    "summary": "Juan Pérez recibió acceso a la plantilla 'Inventario'.",
+    "created_at": "2024-05-20T09:00:00Z",
+    "metadata": {
+      "access_id": 15,
+      "template_id": 5,
+      "template_name": "Inventario",
+      "user_id": 11,
+      "user_name": "Juan Pérez"
+    }
+  },
+  {
+    "event_id": "user-27",
+    "event_type": "user.created",
+    "summary": "Se creó el usuario 'Laura Méndez' con el rol 'Analista'.",
+    "created_at": "2024-05-18T14:45:00Z",
+    "metadata": {
+      "user_id": 27,
+      "name": "Laura Méndez",
+      "email": "laura.mendez@example.com",
+      "role_name": "Analista",
+      "role_alias": "analyst"
+    }
+  }
+]
+```
+- **Errores frecuentes:**
+  - `403 Forbidden`
+    ```json
+    {"detail": "No autorizado"}
+    ```
+
+---
+
 ## Consejos finales
 
 - Incluye siempre el encabezado `Authorization: Bearer <token>` en los endpoints que lo requieren.

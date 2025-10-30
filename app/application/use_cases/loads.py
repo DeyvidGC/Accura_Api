@@ -318,9 +318,28 @@ def _normalize_dataframe(dataframe: DataFrame) -> DataFrame:
 def _validate_headers(dataframe: DataFrame, columns: Sequence[TemplateColumn]) -> None:
     expected = [column.name for column in columns]
     observed = list(dataframe.columns)
+    if len(observed) != len(expected):
+        raise ValueError(
+            "El archivo no contiene la misma cantidad de columnas que la plantilla"
+        )
+
+    missing = [column for column in expected if column not in observed]
+    extra = [column for column in observed if column not in expected]
+    if missing or extra:
+        details: list[str] = []
+        if missing:
+            details.append(
+                "faltan columnas: " + ", ".join(f"'{name}'" for name in missing)
+            )
+        if extra:
+            details.append(
+                "hay columnas no esperadas: " + ", ".join(f"'{name}'" for name in extra)
+            )
+        raise ValueError("; ".join(details))
+
     if expected != observed:
         raise ValueError(
-            "Los encabezados del archivo no coinciden con la plantilla configurada"
+            "El orden de las columnas no coincide con la plantilla configurada"
         )
 
 

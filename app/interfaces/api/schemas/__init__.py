@@ -14,6 +14,7 @@ from .auth import (
     TokenValidationResponse,
 )
 from .notification import NotificationRead
+from .activity import RecentActivityRead
 from .rule import RuleCreate, RuleRead, RuleUpdate
 from .kpi import (
     KPIReportRead,
@@ -42,6 +43,7 @@ __all__ = [
     "LoadRead",
     "LoadUploadResponse",
     "NotificationRead",
+    "RecentActivityRead",
     "ForgotPasswordRequest",
     "ForgotPasswordResponse",
     "PasswordHashRequest",
