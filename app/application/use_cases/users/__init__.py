@@ -7,6 +7,7 @@ from .get_user import get_user
 from .list_users import list_users
 from .list_users_by_creator import list_users_by_creator
 from .record_login import record_login
+from .reset_password_by_email import reset_password_by_email
 from .update_user import update_user
 
 __all__ = [
@@ -18,5 +19,6 @@ __all__ = [
     "list_users",
     "list_users_by_creator",
     "record_login",
+    "reset_password_by_email",
     "update_user",
 ]

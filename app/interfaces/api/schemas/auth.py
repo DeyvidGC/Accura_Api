@@ -1,6 +1,6 @@
 """Authentication related schemas."""
 
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr, Field
 
 
 class Token(BaseModel):
@@ -16,3 +16,11 @@ class PasswordHashRequest(BaseModel):
 
 class PasswordHashResponse(BaseModel):
     hashed_password: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr = Field(..., description="Correo electrónico registrado del usuario")
+
+
+class ForgotPasswordResponse(BaseModel):
+    message: str

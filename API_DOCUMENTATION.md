@@ -80,6 +80,29 @@ Esta guía explica, paso a paso, cómo interactuar con cada servicio expuesto po
     {"detail": "No tienes permisos para generar hashes."}
     ```
 
+### A.3 Solicitar restablecimiento de contraseña
+- **Método y URL:** `POST /auth/forgot-password`
+- **Roles permitidos:** público.
+- **Encabezados obligatorios:** `Content-Type: application/json`
+- **Datos posibles:**
+```json
+{
+  "email": "usuario@gmail.com"
+}
+```
+- **Descripción:** envía una contraseña temporal al correo si está registrado. La respuesta es intencionalmente genérica para proteger la confidencialidad de los usuarios.
+- **Respuesta 202 (éxito):**
+```json
+{
+  "message": "Si el correo está registrado, recibirás un mensaje con una contraseña temporal."
+}
+```
+- **Errores frecuentes:**
+  - `400 Bad Request`
+    ```json
+    {"detail": "El correo electrónico debe ser una cuenta de Gmail válida"}
+    ```
+
 ---
 
 ## Documento B. Gestión de usuarios
