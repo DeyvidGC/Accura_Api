@@ -2,14 +2,14 @@
 
 from hashlib import sha256
 
-from fastapi import Depends, HTTPException, Request, Response, status
+from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
 from app.domain.entities import User
 from app.infrastructure.database import get_db
 from app.infrastructure.repositories import UserRepository
-from app.infrastructure.security import decode_access_token, refresh_access_token
+from app.infrastructure.security import decode_access_token
 from app.infrastructure.openai_client import (
     OpenAIConfigurationError,
     StructuredChatService,
@@ -18,8 +18,10 @@ from app.infrastructure.openai_client import (
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
 
 
-def resolve_current_user(token: str, db: Session) -> User:
-    """Resolve the authenticated user for the provided token."""
+def get_current_user(
+    token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
+) -> User:
+    """Return the authenticated user from the provided token."""
 
     try:
         payload = decode_access_token(token)
@@ -62,31 +64,6 @@ def resolve_current_user(token: str, db: Session) -> User:
             detail="Credenciales inválidas",
             headers={"WWW-Authenticate": "Bearer"},
         )
-
-    return user
-
-
-def get_current_user(
-    request: Request,
-    response: Response,
-    token: str = Depends(oauth2_scheme),
-    db: Session = Depends(get_db),
-) -> User:
-    """Return the authenticated user from the provided token."""
-
-    user = resolve_current_user(token, db)
-
-    try:
-        refreshed_token = refresh_access_token(token)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Credenciales inválidas",
-            headers={"WWW-Authenticate": "Bearer"},
-        ) from exc
-
-    response.headers["X-Refreshed-Token"] = refreshed_token
-    request.state.refreshed_token = refreshed_token
 
     return user
 

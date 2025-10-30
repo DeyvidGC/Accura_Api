@@ -4,7 +4,7 @@ import logging
 from datetime import timedelta
 from hashlib import sha256
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
@@ -18,16 +18,8 @@ from app.config import get_settings
 from app.domain.entities import User
 from app.infrastructure.database import get_db
 from app.infrastructure.email import send_user_password_reset_email
-from app.infrastructure.security import (
-    create_access_token,
-    get_password_hash,
-    refresh_access_token,
-)
-from app.interfaces.api.dependencies import (
-    oauth2_scheme,
-    require_admin,
-    get_current_user,
-)
+from app.infrastructure.security import create_access_token, get_password_hash
+from app.interfaces.api.dependencies import require_admin
 from app.interfaces.api.schemas import (
     ForgotPasswordRequest,
     ForgotPasswordResponse,
@@ -91,34 +83,6 @@ def login_for_access_token(
         "token_type": "bearer",
         "role": user.role.alias,
         "must_change_password": must_change_password,
-    }
-
-
-@router.get("/token/validate", response_model=Token)
-def validate_access_token(
-    current_user: User = Depends(get_current_user),
-    token: str = Depends(oauth2_scheme),
-    request: Request,
-):
-    """Verifica que el token sea válido y renueva su tiempo de expiración."""
-
-    refreshed_token = getattr(request.state, "refreshed_token", None)
-
-    if not refreshed_token:
-        try:
-            refreshed_token = refresh_access_token(token)
-        except ValueError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Credenciales inválidas",
-                headers={"WWW-Authenticate": "Bearer"},
-            ) from exc
-
-    return {
-        "access_token": refreshed_token,
-        "token_type": "bearer",
-        "role": current_user.role.alias,
-        "must_change_password": current_user.must_change_password,
     }
 
 
