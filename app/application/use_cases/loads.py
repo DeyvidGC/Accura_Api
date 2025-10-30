@@ -302,8 +302,15 @@ def _normalize_dataframe(dataframe: DataFrame) -> DataFrame:
     pd.set_option('future.no_silent_downcasting', True)
     df = dataframe.copy()
     df.columns = [str(column).strip() for column in df.columns]
-    df = df.replace({"": pd.NA})
-    df = df.replace(to_replace=r"^\s+$", value=pd.NA, regex=True)
+
+    def _replace_blank_strings(value: Any) -> Any:
+        if isinstance(value, str) and not value.strip():
+            return pd.NA
+        return value
+
+    if len(df.columns):
+        df = df.applymap(_replace_blank_strings)
+
     df = df.infer_objects(copy=False)
     df.dropna(how="all", inplace=True)
     df = df.reset_index(drop=True)
@@ -346,6 +353,15 @@ def _validate_dataframe(
     row_is_valid = [True] * len(df.index)
     duplicate_rules: list[dict[str, Any]] = []
     seen_duplicate_configs: set[tuple[tuple[str, ...], str | None, str | None, bool]] = set()
+
+    normalized_column_lookup: dict[str, str] = {}
+    column_token_lookup: dict[str, tuple[str, ...]] = {}
+
+    for column in columns:
+        normalized_name = _normalize_type_label(column.name)
+        if normalized_name and normalized_name not in normalized_column_lookup:
+            normalized_column_lookup[normalized_name] = column.name
+        column_token_lookup[column.name] = _tokenize_label(column.name)
 
     for column in columns:
         normalized_type = _normalize_type_label(column.data_type)
@@ -391,6 +407,8 @@ def _validate_dataframe(
                     rule_definition,
                     row_snapshot,
                     parser,
+                    normalized_column_lookup,
+                    column_token_lookup,
                 )
                 column_errors.extend(rule_errors)
                 if not rule_errors:
@@ -526,6 +544,8 @@ def _validate_value_with_rule(
     rule_definition: dict[str, Any] | list[Any],
     row_context: Mapping[str, Any],
     base_parser: Callable[[Any], tuple[Any, str | None]] | None,
+    column_lookup: Mapping[str, str],
+    column_tokens: Mapping[str, tuple[str, ...]],
 ) -> tuple[Any, list[str]]:
     if isinstance(rule_definition, list):
         current_value = value
@@ -537,6 +557,8 @@ def _validate_value_with_rule(
                 definition,
                 row_context,
                 base_parser,
+                column_lookup,
+                column_tokens,
             )
             if definition_errors:
                 all_errors.extend(definition_errors)
@@ -575,6 +597,8 @@ def _validate_value_with_rule(
         message=normalized_message,
         row_context=row_context,
         base_parser=base_parser,
+        column_lookup=column_lookup,
+        column_tokens=column_tokens,
     )
     return parsed_value, validator_errors
 
@@ -737,10 +761,63 @@ def _format_duplicate_value(value: Any) -> str:
     return str(value)
 
 
+_NORMALIZATION_STOPWORDS: set[str] = {
+    "de",
+    "del",
+    "la",
+    "el",
+    "los",
+    "las",
+    "un",
+    "una",
+    "uno",
+    "y",
+    "the",
+    "a",
+}
+
+
 def _normalize_type_label(label: str) -> str:
     normalized = unicodedata.normalize("NFKD", str(label))
     ascii_label = "".join(char for char in normalized if not unicodedata.combining(char))
-    return ascii_label.lower().strip()
+    separated = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", ascii_label)
+    separated = re.sub(r"(?<=[A-Z])(?=[A-Z][a-z])", " ", separated)
+    collapsed = re.sub(r"[\s\-_/]+", " ", separated)
+    return collapsed.lower().strip()
+
+
+def _tokenize_label(label: str) -> tuple[str, ...]:
+    normalized = _normalize_type_label(label)
+    if not normalized:
+        return ()
+    tokens = [
+        token
+        for token in normalized.split()
+        if token and token not in _NORMALIZATION_STOPWORDS
+    ]
+    return tuple(tokens)
+
+
+def _labels_match(raw_header: str, expected_normalized: str, expected_label: str | None) -> bool:
+    normalized_header = _normalize_type_label(raw_header)
+    if normalized_header == expected_normalized:
+        return True
+    if expected_label is None:
+        return False
+    return _tokenize_label(raw_header) == _tokenize_label(expected_label)
+
+
+def _labels_equivalent(
+    normalized_candidate: str,
+    raw_candidate: str,
+    expected_normalized: str,
+    expected_label: str | None,
+) -> bool:
+    if normalized_candidate == expected_normalized:
+        return True
+    if expected_label is None:
+        return False
+    return _tokenize_label(raw_candidate) == _tokenize_label(expected_label)
 
 
 def _validate_text_rule(
@@ -1069,6 +1146,8 @@ def _validate_dependency_rule(
     message: str | None,
     row_context: Mapping[str, Any],
     base_parser: Callable[[Any], tuple[Any, str | None]] | None,
+    column_lookup: Mapping[str, str] | None = None,
+    column_tokens: Mapping[str, tuple[str, ...]] | None = None,
     **_: Any,
 ) -> tuple[Any, list[str]]:
     fallback_value, fallback_errors = _apply_base_parser(
@@ -1119,11 +1198,58 @@ def _validate_dependency_rule(
 
     found_dependent = False
     dependent_current: Any = None
+    resolved_header: str | None = None
     for key, candidate in row_context.items():
-        if isinstance(key, str) and _normalize_type_label(key) == normalized_dependent_name:
+        if isinstance(key, str) and _labels_match(
+            key,
+            normalized_dependent_name,
+            dependent_name,
+        ):
             dependent_current = candidate
             found_dependent = True
+            resolved_header = key
             break
+
+    if not found_dependent and column_lookup:
+        mapped = column_lookup.get(normalized_dependent_name)
+        if mapped and mapped in row_context:
+            dependent_current = row_context.get(mapped)
+            found_dependent = True
+            resolved_header = mapped
+
+    if not found_dependent and column_tokens:
+        target_tokens = _tokenize_label(dependent_name)
+        token_matches = [
+            header
+            for header, tokens in column_tokens.items()
+            if header in row_context
+            and tokens
+            and tokens == target_tokens
+        ]
+        if not token_matches and target_tokens:
+            target_set = set(target_tokens)
+            token_matches = [
+                header
+                for header, tokens in column_tokens.items()
+                if header in row_context
+                and tokens
+                and (
+                    target_set.issubset(set(tokens))
+                    or set(tokens).issubset(target_set)
+                )
+            ]
+        if len(token_matches) == 1:
+            resolved_header = token_matches[0]
+            dependent_current = row_context.get(resolved_header)
+            found_dependent = True
+
+    if resolved_header and not _labels_match(
+        resolved_header,
+        normalized_dependent_name,
+        dependent_name,
+    ):
+        dependent_name = resolved_header
+        normalized_dependent_name = _normalize_type_label(resolved_header)
 
     if not found_dependent:
         return fallback_value, fallback_errors
@@ -1153,7 +1279,12 @@ def _validate_dependency_rule(
 
             normalized_key = _normalize_type_label(raw_key)
 
-            if normalized_key == normalized_dependent_name:
+            if _labels_equivalent(
+                normalized_key,
+                raw_key,
+                normalized_dependent_name,
+                dependent_name,
+            ):
                 trigger_value = config
                 if isinstance(config, Mapping):
                     accumulated_errors.append(
