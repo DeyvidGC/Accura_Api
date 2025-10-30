@@ -302,15 +302,12 @@ def _normalize_dataframe(dataframe: DataFrame) -> DataFrame:
     pd.set_option('future.no_silent_downcasting', True)
     df = dataframe.copy()
     df.columns = [str(column).strip() for column in df.columns]
-
     def _replace_blank_strings(value: Any) -> Any:
         if isinstance(value, str) and not value.strip():
             return pd.NA
         return value
-
     if len(df.columns):
-        df = df.applymap(_replace_blank_strings)
-
+        df = df.apply(lambda col: col.map(_replace_blank_strings) if col.dtype == "object" else col)
     df = df.infer_objects(copy=False)
     df.dropna(how="all", inplace=True)
     df = df.reset_index(drop=True)
