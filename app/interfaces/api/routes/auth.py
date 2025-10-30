@@ -19,13 +19,14 @@ from app.domain.entities import User
 from app.infrastructure.database import get_db
 from app.infrastructure.email import send_user_password_reset_email
 from app.infrastructure.security import create_access_token, get_password_hash
-from app.interfaces.api.dependencies import require_admin
+from app.interfaces.api.dependencies import get_current_user, oauth2_scheme, require_admin
 from app.interfaces.api.schemas import (
     ForgotPasswordRequest,
     ForgotPasswordResponse,
     PasswordHashRequest,
     PasswordHashResponse,
     Token,
+    TokenValidationResponse,
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -131,3 +132,18 @@ def forgot_password(
         )
 
     return ForgotPasswordResponse(message=_PASSWORD_RESET_MESSAGE)
+
+
+@router.get("/validate-token", response_model=TokenValidationResponse)
+def validate_token(
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+) -> TokenValidationResponse:
+    """Valida el token proporcionado y devuelve un indicador booleano."""
+
+    try:
+        get_current_user(token=token, db=db)
+    except HTTPException:
+        return TokenValidationResponse(is_valid=False)
+
+    return TokenValidationResponse(is_valid=True)
