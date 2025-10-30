@@ -10,6 +10,12 @@ class Token(BaseModel):
     must_change_password: bool
 
 
+class TokenValidationResponse(BaseModel):
+    is_valid: bool = Field(
+        ..., description="Indica si el token proporcionado es válido y pertenece a un usuario"
+    )
+
+
 class PasswordHashRequest(BaseModel):
     password: str
 

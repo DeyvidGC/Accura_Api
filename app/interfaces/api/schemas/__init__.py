@@ -11,6 +11,7 @@ from .auth import (
     PasswordHashRequest,
     PasswordHashResponse,
     Token,
+    TokenValidationResponse,
 )
 from .notification import NotificationRead
 from .rule import RuleCreate, RuleRead, RuleUpdate
@@ -46,6 +47,7 @@ __all__ = [
     "PasswordHashRequest",
     "PasswordHashResponse",
     "Token",
+    "TokenValidationResponse",
     "RuleCreate",
     "RuleRead",
     "RuleUpdate",
