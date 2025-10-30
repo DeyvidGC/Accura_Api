@@ -11,7 +11,10 @@ from app.domain.entities import Notification, User
 from app.infrastructure.database import SessionLocal, get_db
 from app.infrastructure.notifications import notification_manager, serialize_notification
 from app.infrastructure.repositories import NotificationRepository
-from app.interfaces.api.dependencies import get_current_active_user, get_current_user
+from app.interfaces.api.dependencies import (
+    get_current_active_user,
+    resolve_current_user,
+)
 from app.interfaces.api.schemas import NotificationRead
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
@@ -56,7 +59,7 @@ async def notifications_websocket(websocket: WebSocket) -> None:
 
     session = SessionLocal()
     try:
-        user = get_current_user(token=token, db=session)
+        user = resolve_current_user(token=token, db=session)
         if not user.is_active:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Usuario inactivo")
         pending_notifications = NotificationRepository(session).list_unread_for_user(
