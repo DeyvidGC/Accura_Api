@@ -7,6 +7,11 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+try:  # pragma: no cover - compatibility with pydantic v1/v2
+    from pydantic import ConfigDict
+except ImportError:  # pragma: no cover - fallback for pydantic v1
+    ConfigDict = None  # type: ignore[misc]
+
 
 class RecentActivityRead(BaseModel):
     event_id: str = Field(..., description="Identificador único de la actividad")
@@ -18,8 +23,11 @@ class RecentActivityRead(BaseModel):
         description="Información adicional relacionada al evento",
     )
 
-    class Config:
-        orm_mode = True
+    if ConfigDict is not None:  # pragma: no branch - runtime configuration
+        model_config = ConfigDict(from_attributes=True)
+    else:  # pragma: no cover - compatibility path for pydantic v1
+        class Config:
+            orm_mode = True
 
 
 __all__ = ["RecentActivityRead"]
