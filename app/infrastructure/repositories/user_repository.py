@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import datetime
 
 from sqlalchemy.orm import Session, joinedload
 
@@ -20,6 +21,7 @@ class UserRepository:
         query = (
             self.session.query(UserModel)
             .options(joinedload(UserModel.role))
+            .filter(UserModel.deleted.is_(False))
             .offset(skip)
             .limit(limit)
         )
@@ -29,6 +31,7 @@ class UserRepository:
         query = (
             self.session.query(UserModel)
             .options(joinedload(UserModel.role))
+            .filter(UserModel.deleted.is_(False))
             .filter(UserModel.created_by == creator_id)
             .order_by(UserModel.created_at.desc())
         )
@@ -65,19 +68,30 @@ class UserRepository:
             self.session.refresh(model, attribute_names=["role"])
         return self._to_entity(model)
 
-    def delete(self, user_id: int) -> None:
+    def delete(self, user_id: int, *, deleted_by: int | None = None) -> None:
         model = self._get_model(id=user_id)
         if not model:
             msg = f"User with id {user_id} not found"
             raise ValueError(msg)
 
-        self.session.delete(model)
+        if model.deleted:
+            return
+
+        now = datetime.utcnow()
+        model.deleted = True
+        model.deleted_by = deleted_by
+        model.deleted_at = now
+        model.is_active = False
+        model.updated_by = deleted_by
+        model.updated_at = now
+        self.session.add(model)
         self.session.commit()
 
     def list_ids_by_role_alias(self, alias: str) -> list[int]:
         query = (
             self.session.query(UserModel.id)
             .join(RoleModel, UserModel.role_id == RoleModel.id)
+            .filter(UserModel.deleted.is_(False))
             .filter(RoleModel.alias.ilike(alias))
         )
         return [user_id for (user_id,) in query.all()]
@@ -97,10 +111,15 @@ class UserRepository:
             updated_by=model.updated_by,
             updated_at=model.updated_at,
             is_active=model.is_active,
+            deleted=model.deleted,
+            deleted_by=model.deleted_by,
+            deleted_at=model.deleted_at,
         )
 
-    def _get_model(self, **filters) -> UserModel | None:
+    def _get_model(self, include_deleted: bool = False, **filters) -> UserModel | None:
         query = self.session.query(UserModel).options(joinedload(UserModel.role))
+        if not include_deleted:
+            query = query.filter(UserModel.deleted.is_(False))
         return query.filter_by(**filters).first()
 
     @staticmethod
@@ -120,6 +139,9 @@ class UserRepository:
             model.updated_by = user.updated_by
             model.updated_at = user.updated_at
         model.is_active = user.is_active
+        model.deleted = user.deleted
+        model.deleted_by = user.deleted_by
+        model.deleted_at = user.deleted_at
 
     @staticmethod
     def _role_to_entity(model_role) -> Role:

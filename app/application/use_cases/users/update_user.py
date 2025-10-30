@@ -66,6 +66,9 @@ def update_user(
         is_active=is_active if is_active is not None else current_user.is_active,
         updated_by=updated_by if updated_by is not None else current_user.updated_by,
         updated_at=datetime.utcnow(),
+        deleted=current_user.deleted,
+        deleted_by=current_user.deleted_by,
+        deleted_at=current_user.deleted_at,
     )
 
     if password:
