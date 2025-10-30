@@ -48,25 +48,6 @@ def decode_access_token(token: str) -> dict:
         raise ValueError("Could not validate credentials") from exc
 
 
-def refresh_access_token(
-    token: str, expires_delta: timedelta | None = None
-) -> str:
-    """Return a new token with a refreshed expiration time.
-
-    This function is intended to support sliding session expirations. It decodes the
-    provided token to ensure it is valid and then issues a new token with the same
-    payload (excluding registered claims such as ``exp``) while assigning a fresh
-    expiration window using the configured settings or the optional ``expires_delta``.
-    """
-
-    payload = decode_access_token(token)
-    reserved_claims = {"exp", "iat", "nbf"}
-    refreshed_payload = {
-        key: value for key, value in payload.items() if key not in reserved_claims
-    }
-    return create_access_token(refreshed_payload, expires_delta=expires_delta)
-
-
 def generate_secure_password() -> str:
     """Generate a random password between 8 and 12 characters."""
 
