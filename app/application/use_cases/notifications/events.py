@@ -85,6 +85,52 @@ def notify_template_published(session: Session, *, template: Template) -> None:
         )
 
 
+def _persist_or_update_load_notification(
+    session: Session,
+    *,
+    user: User,
+    load: Load,
+    template: Template,
+    event_type: str,
+    title: str,
+    message: str,
+    status: str,
+) -> Notification:
+    payload = {
+        "template_id": template.id,
+        "load_id": load.id,
+        "status": status,
+        "template_name": template.name,
+        "file_name": load.file_name,
+    }
+    repository = NotificationRepository(session)
+    existing = repository.get_latest_by_user_and_load(user_id=user.id, load_id=load.id)
+    now = datetime.utcnow()
+    if existing is not None:
+        updated = Notification(
+            id=existing.id,
+            user_id=user.id,
+            event_type=event_type,
+            title=title,
+            message=message,
+            payload=payload,
+            created_at=now,
+            read_at=None,
+        )
+        saved = repository.update(updated)
+        dispatch_notification(saved)
+        return saved
+
+    return _persist_notification(
+        session,
+        user_id=user.id,
+        event_type=event_type,
+        title=title,
+        message=message,
+        payload=payload,
+    )
+
+
 def notify_template_processing(
     session: Session,
     *,
@@ -95,20 +141,18 @@ def notify_template_processing(
     """Inform the load owner that processing has started."""
 
     message = (
-        f"Tu carga '{load.file_name}' para la plantilla '{template.name}' "
-        f"ha iniciado el procesamiento."
+        f"Tu carga '{load.file_name}' para la plantilla '{template.name}' está en proceso. "
+        f"Estado actual: {LOAD_STATUS_PROCESSING}."
     )
-    _persist_notification(
+    _persist_or_update_load_notification(
         session,
-        user_id=user.id,
+        user=user,
+        load=load,
+        template=template,
         event_type="load.processing",
-        title="Procesamiento iniciado",
+        title="Procesamiento en curso",
         message=message,
-        payload={
-            "template_id": template.id,
-            "load_id": load.id,
-            "status": LOAD_STATUS_PROCESSING,
-        },
+        status=LOAD_STATUS_PROCESSING,
     )
 
 
@@ -154,11 +198,17 @@ def notify_load_validated_success(
     if status == LOAD_STATUS_VALIDATED_SUCCESS:
         event_type = "load.validated.success"
         title = "Validación exitosa"
-        message_detail = "finalizó con validación exitosa"
+        message_detail = (
+            "finalizó con validación exitosa"
+            f" (estado: {LOAD_STATUS_VALIDATED_SUCCESS})"
+        )
     elif status == LOAD_STATUS_VALIDATED_WITH_ERRORS:
         event_type = "load.validated.errors"
         title = "Validación con observaciones"
-        message_detail = "finalizó con observaciones de validación"
+        message_detail = (
+            "finalizó con observaciones de validación"
+            f" (estado: {LOAD_STATUS_VALIDATED_WITH_ERRORS})"
+        )
     else:
         return
 
@@ -194,24 +244,24 @@ def notify_load_status_changed(
     status = load.status
     if status == LOAD_STATUS_VALIDATED_SUCCESS:
         event_type = "load.completed.success"
-        title = "Carga validada"
+        title = "Validación exitosa"
         message = (
             f"Tu carga '{load.file_name}' para la plantilla '{template.name}' "
-            "finalizó exitosamente."
+            f"finalizó exitosamente. Estado final: {LOAD_STATUS_VALIDATED_SUCCESS}."
         )
     elif status == LOAD_STATUS_VALIDATED_WITH_ERRORS:
         event_type = "load.completed.errors"
-        title = "Carga con observaciones"
+        title = "Validación con observaciones"
         message = (
             f"Tu carga '{load.file_name}' para la plantilla '{template.name}' "
-            "finalizó con observaciones."
+            f"finalizó con observaciones. Estado final: {LOAD_STATUS_VALIDATED_WITH_ERRORS}."
         )
     elif status == LOAD_STATUS_FAILED:
         event_type = "load.completed.failed"
-        title = "Carga fallida"
+        title = "Validación fallida"
         message = (
             f"Tu carga '{load.file_name}' para la plantilla '{template.name}' "
-            "no pudo completarse."
+            f"no pudo completarse. Estado final: {LOAD_STATUS_FAILED}."
         )
     else:
         return
@@ -223,13 +273,15 @@ def notify_load_status_changed(
         "total_rows": load.total_rows,
         "error_rows": load.error_rows,
     }
-    _persist_notification(
+    _persist_or_update_load_notification(
         session,
-        user_id=user.id,
+        user=user,
+        load=load,
+        template=template,
         event_type=event_type,
         title=title,
         message=message,
-        payload=payload,
+        status=status,
     )
 
 

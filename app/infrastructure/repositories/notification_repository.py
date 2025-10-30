@@ -22,7 +22,9 @@ class NotificationRepository:
         query = (
             self.session.query(NotificationModel)
             .filter(NotificationModel.user_id == user_id)
-            .order_by(NotificationModel.created_at.desc())
+            .order_by(
+                NotificationModel.created_at.desc(), NotificationModel.id.desc()
+            )
         )
         if limit is not None:
             query = query.limit(limit)
@@ -35,7 +37,9 @@ class NotificationRepository:
             self.session.query(NotificationModel)
             .filter(NotificationModel.user_id == user_id)
             .filter(NotificationModel.read_at.is_(None))
-            .order_by(NotificationModel.created_at.desc())
+            .order_by(
+                NotificationModel.created_at.desc(), NotificationModel.id.desc()
+            )
         )
         if limit is not None:
             query = query.limit(limit)
@@ -44,6 +48,21 @@ class NotificationRepository:
     def create(self, notification: Notification) -> Notification:
         model = NotificationModel()
         self._apply_entity_to_model(model, notification, include_creation_fields=True)
+        self.session.add(model)
+        self.session.commit()
+        self.session.refresh(model)
+        return self._to_entity(model)
+
+    def update(self, notification: Notification) -> Notification:
+        if notification.id is None:
+            raise ValueError("Notification id is required for updates")
+        model = self.session.get(NotificationModel, notification.id)
+        if model is None:
+            msg = f"Notification with id {notification.id} not found"
+            raise ValueError(msg)
+        self._apply_entity_to_model(model, notification, include_creation_fields=False)
+        if notification.created_at is not None:
+            model.created_at = notification.created_at
         self.session.add(model)
         self.session.commit()
         self.session.refresh(model)
@@ -58,6 +77,24 @@ class NotificationRepository:
             NotificationModel.user_id == user_id,
         ).update({NotificationModel.read_at: datetime.utcnow()}, synchronize_session=False)
         self.session.commit()
+
+    def get_latest_by_user_and_load(
+        self, *, user_id: int, load_id: int
+    ) -> Notification | None:
+        query = (
+            self.session.query(NotificationModel)
+            .filter(NotificationModel.user_id == user_id)
+            .order_by(NotificationModel.created_at.desc(), NotificationModel.id.desc())
+        )
+        for model in query.all():
+            payload = model.payload or {}
+            try:
+                payload_load_id = int(payload.get("load_id"))
+            except (TypeError, ValueError):
+                continue
+            if payload_load_id == load_id:
+                return self._to_entity(model)
+        return None
 
     @staticmethod
     def _apply_entity_to_model(
