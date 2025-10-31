@@ -5,6 +5,7 @@ from __future__ import annotations
 import inspect
 import json
 import logging
+import unicodedata
 from collections.abc import Sequence
 from typing import Any
 
@@ -18,6 +19,100 @@ from app.schemas import load_regla_de_campo_schema
 
 
 logger = logging.getLogger(__name__)
+
+_RELEVANT_KEYWORDS: tuple[str, ...] = (
+    "regla",
+    "reglas",
+    "validacion",
+    "validación",
+    "validar",
+    "campo",
+    "columna",
+    "plantilla",
+    "header",
+    "lista",
+    "rango",
+    "formato",
+    "dependencia",
+    "error",
+    "rule",
+    "validation",
+    "dataset",
+    "schema",
+)
+
+_LARGE_MESSAGE_THRESHOLD = 1800
+
+
+def _normalize_for_matching(text: str) -> str:
+    """Return a lowercase, accent-free version of the text."""
+
+    normalized = unicodedata.normalize("NFD", text.lower())
+    return "".join(ch for ch in normalized if unicodedata.category(ch) != "Mn")
+
+
+def _is_relevant_message(message: str) -> bool:
+    """Check if the incoming message references validation rule concepts."""
+
+    normalized = _normalize_for_matching(message)
+    return any(keyword in normalized for keyword in _RELEVANT_KEYWORDS)
+
+
+def _build_off_topic_response(user_message: str) -> dict[str, Any]:
+    """Return a minimal rule reminding the caller to provide validation details."""
+
+    snippet = user_message.strip()
+    if len(snippet) > 120:
+        snippet = snippet[:117].rstrip() + "..."
+
+    return {
+        "Nombre de la regla": "Solicitud fuera de contexto",
+        "Tipo de dato": "Texto",
+        "Campo obligatorio": False,
+        "Mensaje de error": (
+            "El mensaje recibido no describe una regla de validación. "
+            "Por favor indica el campo, los límites o el formato que deseas validar."
+        ),
+        "Descripción": (
+            "Se detectó un mensaje ajeno al catálogo de reglas. Resume el contexto de validación "
+            "(campo, tipo de dato, restricciones) para generar una regla útil. Mensaje detectado: "
+            f"\"{snippet}\"."
+        ),
+        "Ejemplo": {
+            "Válidos": [
+                "Genera la regla para el campo 'Número de póliza' asegurando 12 caracteres numéricos.",
+            ],
+            "Inválidos": [
+                "¿Puedes contarme un chiste?",
+            ],
+        },
+        "Header": ["Comentario general"],
+        "Regla": {"Longitud minima": 0, "Longitud maxima": 255},
+    }
+
+
+def _should_retry(error: Exception, user_message: str) -> bool:
+    """Determine if the OpenAI call should be retried with a constrained prompt."""
+
+    if len(user_message) > _LARGE_MESSAGE_THRESHOLD:
+        return True
+
+    message = str(error)
+    retry_markers = (
+        "no es un JSON válido",
+        "no coincide con el esquema",
+        "no contiene el campo obligatorio",
+        "no contiene texto utilizable",
+    )
+    return any(marker in message for marker in retry_markers)
+
+
+def _truncate_message(message: str, limit: int = 2000) -> tuple[str, bool]:
+    """Trim the message to the provided limit, returning the trimmed text and a flag."""
+
+    if len(message) <= limit:
+        return message, False
+    return message[:limit], True
 
 
 def _strip_code_fences(text: str) -> str:
@@ -119,6 +214,37 @@ class StructuredChatService:
         """
         json_schema_definition = load_regla_de_campo_schema()
 
+        if not _is_relevant_message(user_message):
+            return _build_off_topic_response(user_message)
+
+        last_exception: OpenAIServiceError | None = None
+        limit_mode = False
+        for attempt in range(2):
+            try:
+                return self._generate_structured_response_once(
+                    user_message,
+                    json_schema_definition,
+                    recent_rules=recent_rules,
+                    limit_mode=limit_mode,
+                )
+            except OpenAIServiceError as exc:
+                last_exception = exc
+                if attempt == 0 and _should_retry(exc, user_message):
+                    limit_mode = True
+                    continue
+                raise
+
+        assert last_exception is not None  # pragma: no cover - defensive
+        raise last_exception
+
+    def _generate_structured_response_once(
+        self,
+        user_message: str,
+        json_schema_definition: dict[str, Any],
+        *,
+        recent_rules: Sequence[dict[str, Any]] | None,
+        limit_mode: bool,
+    ) -> dict[str, Any]:
         system_prompt = (
             "Eres un asistente que responde ÚNICAMENTE con JSON válido según el schema dado. "
             "No incluyas texto fuera del JSON."
@@ -145,6 +271,22 @@ class StructuredChatService:
             "En el campo 'Ejemplo' entrega un caso detallado que describa valores de entrada valido e invalido que sea los mas reales posibles."
             "Solo brindar un ejemplo de valido y otro de invalido"
         )
+
+        message_to_use = user_message
+        was_truncated = False
+        if limit_mode:
+            message_to_use, was_truncated = _truncate_message(user_message)
+            instruction += (
+                " El mensaje original era muy extenso o difícil de estructurar. "
+                "Prioriza la información esencial, evita catálogos interminables y explica dentro de 'Descripción' "
+                "qué datos adicionales serían necesarios si la solicitud resulta ambigua."
+            )
+            if was_truncated:
+                instruction += (
+                    " El contenido del usuario se truncó para volver a procesarlo; si detectas que faltan parámetros "
+                    "clave, sugiere explícitamente los valores mínimos requeridos sin inventar catálogos completos."
+                )
+
         if not self._supports_response_format:
             schema_text = json.dumps(json_schema_definition, ensure_ascii=False)
             instruction += (
@@ -178,8 +320,13 @@ class StructuredChatService:
                 }
             )
 
+        if was_truncated:
+            message_to_use += (
+                "\n\n[El mensaje original fue truncado automáticamente para facilitar el procesamiento.]"
+            )
+
         messages.append(
-            {"role": "user", "content": [{"type": "input_text", "text": user_message}]}
+            {"role": "user", "content": [{"type": "input_text", "text": message_to_use}]}
         )
 
         response_format = {
@@ -187,8 +334,8 @@ class StructuredChatService:
             "json_schema": {
                 "name": "schema_columna",
                 "strict": True,  # fuerza EXACTAMENTE el JSON válido
-                "schema": json_schema_definition
-            }
+                "schema": json_schema_definition,
+            },
         }
 
         try:
