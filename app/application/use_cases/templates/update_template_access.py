@@ -22,6 +22,11 @@ def update_template_access(
     if template is None:
         raise ValueError("Plantilla no encontrada")
 
+    if template.status != "published":
+        raise ValueError(
+            "No se puede actualizar el acceso porque la plantilla no está publicada"
+        )
+
     repository = TemplateUserAccessRepository(session)
     access = repository.get(access_id)
     if access is None or access.template_id != template_id:
@@ -29,11 +34,15 @@ def update_template_access(
     if access.revoked_at is not None:
         raise ValueError("No se puede actualizar un acceso revocado")
 
-    normalized_start = _normalize_date(start_date) if start_date is not None else access.start_date
-    normalized_end = _normalize_date(end_date) if end_date is not None else access.end_date
-
-    if normalized_end is not None and normalized_end <= normalized_start:
-        raise ValueError("La fecha de finalización debe ser posterior a la fecha de inicio")
+    normalized_start = (
+        _normalize_date(start_date) if start_date is not None else access.start_date
+    )
+    normalized_end = (
+        _normalize_date(end_date, use_end_of_day=True)
+        if end_date is not None
+        else access.end_date
+    )
+    _validate_access_window(normalized_start, normalized_end)
 
     updated_access = TemplateUserAccess(
         id=access.id,
@@ -50,14 +59,27 @@ def update_template_access(
     return repository.update(updated_access)
 
 
-def _normalize_date(value: date | datetime | None) -> datetime | None:
-    """Return a ``datetime`` value normalized to the start of the day."""
+def _normalize_date(
+    value: date | datetime | None, *, use_end_of_day: bool = False
+) -> datetime | None:
+    """Return a ``datetime`` value normalized to the start or end of the day."""
 
     if value is None:
         return None
     if isinstance(value, datetime):
         value = value.date()
-    return datetime.combine(value, time.min)
+    boundary = time.max if use_end_of_day else time.min
+    return datetime.combine(value, boundary)
+
+
+def _validate_access_window(start: datetime, end: datetime | None) -> None:
+    """Validate that the configured access window is chronological."""
+
+    if end is not None and end < start:
+        raise ValueError(
+            "El rango de fechas no es válido: la fecha de fin debe ser"
+            " posterior o igual a la fecha de inicio"
+        )
 
 
 __all__ = ["update_template_access"]

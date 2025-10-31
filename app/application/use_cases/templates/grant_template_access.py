@@ -27,6 +27,11 @@ def grant_template_access(
     if template is None:
         raise ValueError("Plantilla no encontrada")
 
+    if template.status != "published":
+        raise ValueError(
+            "No se puede conceder acceso porque la plantilla no está publicada"
+        )
+
     user = UserRepository(session).get(user_id)
     if user is None:
         raise ValueError("Usuario no encontrado")
@@ -34,9 +39,8 @@ def grant_template_access(
     access_repository = TemplateUserAccessRepository(session)
 
     effective_start = _normalize_date(start_date) or _current_utc_day_start()
-    normalized_end = _normalize_date(end_date)
-    if normalized_end is not None and normalized_end <= effective_start:
-        raise ValueError("La fecha de finalización debe ser posterior a la fecha de inicio")
+    normalized_end = _normalize_date(end_date, use_end_of_day=True)
+    _validate_access_window(effective_start, normalized_end)
 
     existing_access = access_repository.get_active_access(
         user_id=user_id,
@@ -65,14 +69,27 @@ def grant_template_access(
     return saved_access
 
 
-def _normalize_date(value: date | datetime | None) -> datetime | None:
-    """Return a ``datetime`` value normalized to the start of the day."""
+def _normalize_date(
+    value: date | datetime | None, *, use_end_of_day: bool = False
+) -> datetime | None:
+    """Return a ``datetime`` value normalized to the start or end of the day."""
 
     if value is None:
         return None
     if isinstance(value, datetime):
         value = value.date()
-    return datetime.combine(value, time.min)
+    boundary = time.max if use_end_of_day else time.min
+    return datetime.combine(value, boundary)
+
+
+def _validate_access_window(start: datetime, end: datetime | None) -> None:
+    """Validate that the configured access window is chronological."""
+
+    if end is not None and end < start:
+        raise ValueError(
+            "El rango de fechas no es válido: la fecha de fin debe ser"
+            " posterior o igual a la fecha de inicio"
+        )
 
 
 def _current_utc_day_start() -> datetime:
