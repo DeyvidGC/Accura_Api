@@ -40,4 +40,80 @@ class TemplateUserAccessRead(BaseModel):
             orm_mode = True
 
 
-__all__ = ["TemplateUserAccessCreate", "TemplateUserAccessRead"]
+class TemplateUserAccessGrantItem(BaseModel):
+    template_id: int = Field(..., ge=1)
+    user_id: int = Field(..., ge=1)
+    start_date: date | None = None
+    end_date: date | None = None
+
+    if ConfigDict is not None:  # pragma: no branch
+        model_config = ConfigDict(extra="forbid")
+    else:  # pragma: no cover
+        class Config:
+            extra = "forbid"
+
+
+class TemplateUserAccessBulkGrantRequest(BaseModel):
+    grants: list[TemplateUserAccessGrantItem] = Field(..., min_length=1)
+
+    if ConfigDict is not None:  # pragma: no branch
+        model_config = ConfigDict(extra="forbid")
+    else:  # pragma: no cover
+        class Config:
+            extra = "forbid"
+
+
+class TemplateUserAccessRevokeItem(BaseModel):
+    template_id: int = Field(..., ge=1)
+    access_id: int = Field(..., ge=1)
+
+    if ConfigDict is not None:  # pragma: no branch
+        model_config = ConfigDict(extra="forbid")
+    else:  # pragma: no cover
+        class Config:
+            extra = "forbid"
+
+
+class TemplateUserAccessBulkRevokeRequest(BaseModel):
+    revocations: list[TemplateUserAccessRevokeItem] = Field(..., min_length=1)
+
+    if ConfigDict is not None:  # pragma: no branch
+        model_config = ConfigDict(extra="forbid")
+    else:  # pragma: no cover
+        class Config:
+            extra = "forbid"
+
+
+class TemplateUserAccessUpdateItem(BaseModel):
+    template_id: int = Field(..., ge=1)
+    access_id: int = Field(..., ge=1)
+    start_date: date | None = None
+    end_date: date | None = None
+
+    if ConfigDict is not None:  # pragma: no branch
+        model_config = ConfigDict(extra="forbid")
+    else:  # pragma: no cover
+        class Config:
+            extra = "forbid"
+
+
+class TemplateUserAccessBulkUpdateRequest(BaseModel):
+    updates: list[TemplateUserAccessUpdateItem] = Field(..., min_length=1)
+
+    if ConfigDict is not None:  # pragma: no branch
+        model_config = ConfigDict(extra="forbid")
+    else:  # pragma: no cover
+        class Config:
+            extra = "forbid"
+
+
+__all__ = [
+    "TemplateUserAccessCreate",
+    "TemplateUserAccessRead",
+    "TemplateUserAccessGrantItem",
+    "TemplateUserAccessBulkGrantRequest",
+    "TemplateUserAccessRevokeItem",
+    "TemplateUserAccessBulkRevokeRequest",
+    "TemplateUserAccessUpdateItem",
+    "TemplateUserAccessBulkUpdateRequest",
+]

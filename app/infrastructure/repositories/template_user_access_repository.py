@@ -118,6 +118,17 @@ class TemplateUserAccessRepository:
         self.session.refresh(model)
         return self._to_entity(model)
 
+    def update(self, access: TemplateUserAccess) -> TemplateUserAccess:
+        model = self.session.get(TemplateUserAccessModel, access.id)
+        if model is None:
+            msg = f"Template access with id {access.id} not found"
+            raise ValueError(msg)
+        self._apply_entity_to_model(model, access, include_creation_fields=False)
+        self.session.add(model)
+        self.session.commit()
+        self.session.refresh(model)
+        return self._to_entity(model)
+
     @staticmethod
     def _to_entity(model: TemplateUserAccessModel) -> TemplateUserAccess:
         return TemplateUserAccess(
