@@ -9,6 +9,7 @@ from app.application.use_cases.rules import list_recent_rules as list_recent_rul
 from app.domain.entities import User
 from app.infrastructure.database import get_db
 from app.infrastructure.openai_client import (
+    OffTopicMessageError,
     OpenAIServiceError,
     StructuredChatService,
 )
@@ -49,6 +50,11 @@ def analyze_message(
             recent_rules=serialized_rules or None,
         )
         logger.debug("Respuesta sin validar del asistente: %s", raw_response)
+    except OffTopicMessageError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
     except OpenAIServiceError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
