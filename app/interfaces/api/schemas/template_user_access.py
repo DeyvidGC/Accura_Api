@@ -86,9 +86,14 @@ __all__ = [
     "TemplateUserAccessUpdateItem",
 ]
 
-TemplateUserAccessGrantList: TypeAlias = conlist(TemplateUserAccessGrantItem, min_items=1)
-TemplateUserAccessRevokeList: TypeAlias = conlist(TemplateUserAccessRevokeItem, min_items=1)
-TemplateUserAccessUpdateList: TypeAlias = conlist(TemplateUserAccessUpdateItem, min_items=1)
+try:
+    TemplateUserAccessGrantList: TypeAlias = conlist(TemplateUserAccessGrantItem, min_length=1)
+    TemplateUserAccessRevokeList: TypeAlias = conlist(TemplateUserAccessRevokeItem, min_length=1)
+    TemplateUserAccessUpdateList: TypeAlias = conlist(TemplateUserAccessUpdateItem, min_length=1)
+except TypeError:  # pragma: no cover - compatibility with pydantic v1
+    TemplateUserAccessGrantList = conlist(TemplateUserAccessGrantItem, min_items=1)
+    TemplateUserAccessRevokeList = conlist(TemplateUserAccessRevokeItem, min_items=1)
+    TemplateUserAccessUpdateList = conlist(TemplateUserAccessUpdateItem, min_items=1)
 
 __all__ += [
     "TemplateUserAccessGrantList",
