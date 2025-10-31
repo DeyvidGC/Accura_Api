@@ -32,7 +32,16 @@ from .template import (
     TemplateRead,
     TemplateUpdate,
 )
-from .template_user_access import TemplateUserAccessCreate, TemplateUserAccessRead
+from .template_user_access import (
+    TemplateUserAccessBulkGrantRequest,
+    TemplateUserAccessBulkRevokeRequest,
+    TemplateUserAccessBulkUpdateRequest,
+    TemplateUserAccessCreate,
+    TemplateUserAccessGrantItem,
+    TemplateUserAccessRead,
+    TemplateUserAccessRevokeItem,
+    TemplateUserAccessUpdateItem,
+)
 from .user import RoleRead, UserCreate, UserRead, UserUpdate
 
 __all__ = [
@@ -65,8 +74,14 @@ __all__ = [
     "TemplateStatusUpdate",
     "TemplateRead",
     "TemplateUpdate",
+    "TemplateUserAccessBulkGrantRequest",
+    "TemplateUserAccessBulkRevokeRequest",
+    "TemplateUserAccessBulkUpdateRequest",
     "TemplateUserAccessCreate",
+    "TemplateUserAccessGrantItem",
     "TemplateUserAccessRead",
+    "TemplateUserAccessRevokeItem",
+    "TemplateUserAccessUpdateItem",
     "RoleRead",
     "UserCreate",
     "UserRead",
