@@ -12,18 +12,6 @@ except ImportError:  # pragma: no cover - fallback for pydantic v1
     ConfigDict = None  # type: ignore[misc]
 
 
-class TemplateUserAccessCreate(BaseModel):
-    user_id: int = Field(..., ge=1)
-    start_date: date | None = None
-    end_date: date | None = None
-
-    if ConfigDict is not None:  # pragma: no branch
-        model_config = ConfigDict(extra="forbid")
-    else:  # pragma: no cover
-        class Config:
-            extra = "forbid"
-
-
 class TemplateUserAccessRead(BaseModel):
     id: int
     template_id: int
@@ -79,7 +67,6 @@ class TemplateUserAccessUpdateItem(BaseModel):
             extra = "forbid"
 
 __all__ = [
-    "TemplateUserAccessCreate",
     "TemplateUserAccessRead",
     "TemplateUserAccessGrantItem",
     "TemplateUserAccessRevokeItem",

@@ -33,7 +33,6 @@ from .template import (
     TemplateUpdate,
 )
 from .template_user_access import (
-    TemplateUserAccessCreate,
     TemplateUserAccessGrantItem,
     TemplateUserAccessGrantList,
     TemplateUserAccessRead,
@@ -74,7 +73,6 @@ __all__ = [
     "TemplateStatusUpdate",
     "TemplateRead",
     "TemplateUpdate",
-    "TemplateUserAccessCreate",
     "TemplateUserAccessGrantItem",
     "TemplateUserAccessGrantList",
     "TemplateUserAccessRead",

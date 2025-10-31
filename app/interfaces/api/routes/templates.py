@@ -1,6 +1,6 @@
 """Rutas para administrar plantillas, sus columnas y accesos."""
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -14,14 +14,15 @@ from app.application.use_cases.template_columns import (
     update_template_column as update_template_column_uc,
 )
 from app.application.use_cases.templates import (
+    bulk_grant_template_access as bulk_grant_template_access_uc,
+    bulk_revoke_template_access as bulk_revoke_template_access_uc,
+    bulk_update_template_access as bulk_update_template_access_uc,
     create_template as create_template_uc,
     delete_template as delete_template_uc,
     get_template as get_template_uc,
     get_template_excel as get_template_excel_uc,
-    grant_template_access as grant_template_access_uc,
     list_template_access as list_template_access_uc,
     list_templates as list_templates_uc,
-    revoke_template_access as revoke_template_access_uc,
     update_template as update_template_uc,
     update_template_status as update_template_status_uc,
 )
@@ -40,8 +41,10 @@ from app.interfaces.api.schemas import (
     TemplateRead,
     TemplateStatusUpdate,
     TemplateUpdate,
-    TemplateUserAccessCreate,
+    TemplateUserAccessGrantList,
     TemplateUserAccessRead,
+    TemplateUserAccessRevokeList,
+    TemplateUserAccessUpdateList,
 )
 
 router = APIRouter(prefix="/templates", tags=["templates"])
@@ -63,6 +66,14 @@ def _access_to_read_model(access: TemplateUserAccess) -> TemplateUserAccessRead:
     if hasattr(TemplateUserAccessRead, "model_validate"):
         return TemplateUserAccessRead.model_validate(access)
     return TemplateUserAccessRead.from_orm(access)
+
+
+def _dump_model(model: object) -> dict:
+    if hasattr(model, "model_dump"):
+        return model.model_dump()
+    if hasattr(model, "dict"):
+        return model.dict()
+    raise TypeError("Unsupported model type for serialization")
 
 
 @router.post("/", response_model=TemplateRead, status_code=status.HTTP_201_CREATED)
@@ -341,25 +352,21 @@ def delete_template_column(
 
 
 @router.post(
-    "/{template_id}/access",
-    response_model=TemplateUserAccessRead,
+    "/access",
+    response_model=list[TemplateUserAccessRead],
     status_code=status.HTTP_201_CREATED,
 )
-def grant_template_access(
-    template_id: int,
-    payload: TemplateUserAccessCreate,
+def grant_template_accesses(
+    payload: TemplateUserAccessGrantList,
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
-) -> TemplateUserAccessRead:
-    """Concede acceso a la plantilla para el usuario indicado."""
+) -> list[TemplateUserAccessRead]:
+    """Concede acceso a una o varias plantillas para los usuarios indicados."""
 
     try:
-        access = grant_template_access_uc(
+        accesses = bulk_grant_template_access_uc(
             db,
-            template_id=template_id,
-            user_id=payload.user_id,
-            start_date=payload.start_date,
-            end_date=payload.end_date,
+            grants=[_dump_model(item) for item in payload],
         )
     except ValueError as exc:
         detail = str(exc)
@@ -368,20 +375,20 @@ def grant_template_access(
             status_code = status.HTTP_404_NOT_FOUND
         raise HTTPException(status_code=status_code, detail=detail) from exc
 
-    return _access_to_read_model(access)
+    return [_access_to_read_model(access) for access in accesses]
 
 
 @router.get(
-    "/{template_id}/access",
+    "/access",
     response_model=list[TemplateUserAccessRead],
 )
 def list_template_access(
-    template_id: int,
+    template_id: int = Query(..., ge=1),
     include_inactive: bool = False,
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ) -> list[TemplateUserAccessRead]:
-    """Lista los accesos configurados para la plantilla."""
+    """Lista los accesos configurados para la plantilla solicitada."""
 
     try:
         accesses = list_template_access_uc(
@@ -395,23 +402,47 @@ def list_template_access(
     return [_access_to_read_model(access) for access in accesses]
 
 
-@router.delete(
-    "/{template_id}/access/{access_id}",
-    response_model=TemplateUserAccessRead,
+@router.put(
+    "/access",
+    response_model=list[TemplateUserAccessRead],
 )
-def revoke_template_access(
-    template_id: int,
-    access_id: int,
+def update_template_accesses(
+    payload: TemplateUserAccessUpdateList,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin),
-) -> TemplateUserAccessRead:
-    """Revoca un acceso previamente concedido a la plantilla."""
+    _: User = Depends(require_admin),
+) -> list[TemplateUserAccessRead]:
+    """Actualiza la ventana de acceso configurada para uno o varios accesos."""
 
     try:
-        access = revoke_template_access_uc(
+        accesses = bulk_update_template_access_uc(
             db,
-            template_id=template_id,
-            access_id=access_id,
+            updates=[_dump_model(item) for item in payload],
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        status_code = status.HTTP_400_BAD_REQUEST
+        if detail in {"Plantilla no encontrada", "Acceso no encontrado"}:
+            status_code = status.HTTP_404_NOT_FOUND
+        raise HTTPException(status_code=status_code, detail=detail) from exc
+
+    return [_access_to_read_model(access) for access in accesses]
+
+
+@router.post(
+    "/access/revoke",
+    response_model=list[TemplateUserAccessRead],
+)
+def revoke_template_accesses(
+    payload: TemplateUserAccessRevokeList,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+) -> list[TemplateUserAccessRead]:
+    """Revoca uno o varios accesos previamente concedidos."""
+
+    try:
+        accesses = bulk_revoke_template_access_uc(
+            db,
+            revocations=[_dump_model(item) for item in payload],
             revoked_by=current_user.id,
         )
     except ValueError as exc:
@@ -421,7 +452,7 @@ def revoke_template_access(
             status_code = status.HTTP_404_NOT_FOUND
         raise HTTPException(status_code=status_code, detail=detail) from exc
 
-    return _access_to_read_model(access)
+    return [_access_to_read_model(access) for access in accesses]
 
 
 @router.get("/{template_id}/excel")
