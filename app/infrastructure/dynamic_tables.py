@@ -98,6 +98,14 @@ def create_template_table(table_name: str, columns: Sequence[TemplateColumn]) ->
         column_type = _column_type_from_string(column.data_type)
         table_columns.append(Column(safe_column_name, column_type))
 
+    table_columns.extend(
+        [
+            Column("status", String(20), nullable=False, default="Procesado"),
+            Column("observaciones", Text(), nullable=True),
+            Column("numero_operacion", Integer, nullable=False),
+        ]
+    )
+
     table = Table(safe_table_name, metadata, *table_columns)
     try:
         metadata.create_all(bind=engine, tables=[table], checkfirst=True)
