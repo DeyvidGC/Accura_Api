@@ -18,9 +18,13 @@ from app.infrastructure.template_files import (
     delete_template_excel,
     relative_to_project_root,
 )
+from app.application.use_cases.template_columns.validators import (
+    ensure_rule_header_dependencies,
+)
 from app.infrastructure.repositories import (
     AuditLogRepository,
     DigitalFileRepository,
+    RuleRepository,
     TemplateRepository,
 )
 
@@ -46,6 +50,7 @@ def update_template(
     """
 
     repository = TemplateRepository(session)
+    rule_repository = RuleRepository(session)
     current = repository.get(template_id)
     if current is None:
         raise ValueError("Plantilla no encontrada")
@@ -84,6 +89,12 @@ def update_template(
         if status not in ALLOWED_STATUSES:
             raise ValueError("Estado de plantilla no válido")
         new_status = status
+
+    if new_status == "published" and current.status != "published":
+        ensure_rule_header_dependencies(
+            columns=current.columns,
+            rule_repository=rule_repository,
+        )
 
     updated_template = replace(
         current,

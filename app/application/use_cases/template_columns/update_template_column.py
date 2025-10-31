@@ -12,9 +12,12 @@ from app.infrastructure.dynamic_tables import (
     ensure_identifier,
 )
 from app.infrastructure.repositories import (
+    RuleRepository,
     TemplateColumnRepository,
     TemplateRepository,
 )
+
+from .validators import ensure_rule_header_dependencies
 
 
 def update_template_column(
@@ -37,6 +40,7 @@ def update_template_column(
 
     column_repository = TemplateColumnRepository(session)
     template_repository = TemplateRepository(session)
+    rule_repository = RuleRepository(session)
 
     template = template_repository.get(template_id)
     if template is None:
@@ -80,6 +84,16 @@ def update_template_column(
         is_active=is_active if is_active is not None else current.is_active,
         updated_by=updated_by if updated_by is not None else current.updated_by,
         updated_at=datetime.utcnow(),
+    )
+
+    existing_columns = list(column_repository.list_by_template(template_id))
+    updated_columns = [
+        updated_column if col.id == updated_column.id else col for col in existing_columns
+    ]
+
+    ensure_rule_header_dependencies(
+        columns=updated_columns,
+        rule_repository=rule_repository,
     )
 
     return column_repository.update(updated_column)
