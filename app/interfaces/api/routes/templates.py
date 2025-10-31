@@ -63,9 +63,15 @@ def _column_to_read_model(column: TemplateColumn) -> TemplateColumnRead:
 
 
 def _access_to_read_model(access: TemplateUserAccess) -> TemplateUserAccessRead:
+    """Convert a ``TemplateUserAccess`` entity into the API read model."""
+
     if hasattr(TemplateUserAccessRead, "model_validate"):
-        return TemplateUserAccessRead.model_validate(access)
-    return TemplateUserAccessRead.from_orm(access)
+        if isinstance(access, dict):  # pragma: no cover - compatibility path
+            return TemplateUserAccessRead.model_validate(access)
+        return TemplateUserAccessRead.model_validate(access, from_attributes=True)
+    if isinstance(access, dict):  # pragma: no cover - compatibility for pydantic v1
+        return TemplateUserAccessRead(**access)
+    return TemplateUserAccessRead.from_orm(access)  # pragma: no cover
 
 
 def _dump_model(model: object) -> dict:
