@@ -14,10 +14,10 @@ from app.domain.entities import TemplateUserAccess, User
 from app.infrastructure.database import get_db
 from app.interfaces.api.dependencies import require_admin
 from app.interfaces.api.schemas import (
-    TemplateUserAccessBulkGrantRequest,
-    TemplateUserAccessBulkRevokeRequest,
-    TemplateUserAccessBulkUpdateRequest,
+    TemplateUserAccessGrantList,
     TemplateUserAccessRead,
+    TemplateUserAccessRevokeList,
+    TemplateUserAccessUpdateList,
 )
 
 router = APIRouter(prefix="/template-access", tags=["template-access"])
@@ -45,7 +45,7 @@ def _dump_items(items: Iterable) -> list[dict]:
     status_code=status.HTTP_201_CREATED,
 )
 def bulk_grant_template_access(
-    payload: TemplateUserAccessBulkGrantRequest,
+    payload: TemplateUserAccessGrantList,
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ) -> list[TemplateUserAccessRead]:
@@ -54,7 +54,7 @@ def bulk_grant_template_access(
     try:
         accesses = bulk_grant_template_access_uc(
             db,
-            grants=_dump_items(payload.grants),
+            grants=_dump_items(payload),
         )
     except ValueError as exc:
         detail = str(exc)
@@ -71,7 +71,7 @@ def bulk_grant_template_access(
     response_model=list[TemplateUserAccessRead],
 )
 def bulk_revoke_template_access(
-    payload: TemplateUserAccessBulkRevokeRequest,
+    payload: TemplateUserAccessRevokeList,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ) -> list[TemplateUserAccessRead]:
@@ -80,7 +80,7 @@ def bulk_revoke_template_access(
     try:
         accesses = bulk_revoke_template_access_uc(
             db,
-            revocations=_dump_items(payload.revocations),
+            revocations=_dump_items(payload),
             revoked_by=current_user.id,
         )
     except ValueError as exc:
@@ -98,7 +98,7 @@ def bulk_revoke_template_access(
     response_model=list[TemplateUserAccessRead],
 )
 def bulk_update_template_access(
-    payload: TemplateUserAccessBulkUpdateRequest,
+    payload: TemplateUserAccessUpdateList,
     db: Session = Depends(get_db),
     _: User = Depends(require_admin),
 ) -> list[TemplateUserAccessRead]:
@@ -107,7 +107,7 @@ def bulk_update_template_access(
     try:
         accesses = bulk_update_template_access_uc(
             db,
-            updates=_dump_items(payload.updates),
+            updates=_dump_items(payload),
         )
     except ValueError as exc:
         detail = str(exc)
