@@ -314,6 +314,11 @@ def _get_template(session: Session, template_id: int) -> Template:
 
 
 def _ensure_user_has_access(session: Session, template: Template, user: User) -> None:
+    if template.status != "published":
+        raise PermissionError(
+            "No es posible realizar cargas porque la plantilla debe estar publicada."
+            " Comunícate con tu administrador."
+        )
     if user.is_admin():
         return
     access = TemplateUserAccessRepository(session).get_active_access(
