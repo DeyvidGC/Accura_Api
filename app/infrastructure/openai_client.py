@@ -44,6 +44,35 @@ _RELEVANT_KEYWORDS: tuple[str, ...] = (
 _LARGE_MESSAGE_THRESHOLD = 1800
 
 
+def _is_broad_catalog_request(message: str) -> bool:
+    """Detect requests that ask for exhaustive catalog listings."""
+
+    normalized = _normalize_for_matching(message)
+    broad_markers = (
+        "lista de todos",
+        "listado de todos",
+        "todos los",
+        "todas las",
+        "catalogo completo",
+        "catalogo de todos",
+    )
+    if not any(marker in normalized for marker in broad_markers):
+        return False
+
+    catalog_keywords = (
+        "departamento",
+        "provincia",
+        "distrito",
+        "pais",
+        "regla",
+        "reglas",
+        "campos",
+        "plantilla",
+        "catalogo",
+    )
+    return any(keyword in normalized for keyword in catalog_keywords)
+
+
 def _normalize_for_matching(text: str) -> str:
     """Return a lowercase, accent-free version of the text."""
 
@@ -58,37 +87,18 @@ def _is_relevant_message(message: str) -> bool:
     return any(keyword in normalized for keyword in _RELEVANT_KEYWORDS)
 
 
-def _build_off_topic_response(user_message: str) -> dict[str, Any]:
-    """Return a minimal rule reminding the caller to provide validation details."""
+def _build_off_topic_error(user_message: str) -> str:
+    """Return a concise error message for off-topic prompts."""
 
     snippet = user_message.strip()
     if len(snippet) > 120:
         snippet = snippet[:117].rstrip() + "..."
 
-    return {
-        "Nombre de la regla": "Solicitud fuera de contexto",
-        "Tipo de dato": "Texto",
-        "Campo obligatorio": False,
-        "Mensaje de error": (
-            "El mensaje recibido no describe una regla de validación. "
-            "Por favor indica el campo, los límites o el formato que deseas validar."
-        ),
-        "Descripción": (
-            "Se detectó un mensaje ajeno al catálogo de reglas. Resume el contexto de validación "
-            "(campo, tipo de dato, restricciones) para generar una regla útil. Mensaje detectado: "
-            f"\"{snippet}\"."
-        ),
-        "Ejemplo": {
-            "Válidos": [
-                "Genera la regla para el campo 'Número de póliza' asegurando 12 caracteres numéricos.",
-            ],
-            "Inválidos": [
-                "¿Puedes contarme un chiste?",
-            ],
-        },
-        "Header": ["Comentario general"],
-        "Regla": {"Longitud minima": 0, "Longitud maxima": 255},
-    }
+    return (
+        "El mensaje recibido no describe una regla de validación. "
+        "Por favor indica el campo, los límites o el formato que deseas validar para continuar. "
+        f"Mensaje detectado: \"{snippet}\"."
+    )
 
 
 def _should_retry(error: Exception, user_message: str) -> bool:
@@ -149,6 +159,10 @@ class OpenAIConfigurationError(RuntimeError):
 
 class OpenAIServiceError(RuntimeError):
     """Error lanzado cuando la API de OpenAI no responde como se espera."""
+
+
+class OffTopicMessageError(OpenAIServiceError):
+    """Error lanzado cuando el mensaje no está relacionado con reglas de validación."""
 
 
 class StructuredChatService:
@@ -215,10 +229,12 @@ class StructuredChatService:
         json_schema_definition = load_regla_de_campo_schema()
 
         if not _is_relevant_message(user_message):
-            return _build_off_topic_response(user_message)
+            message = _build_off_topic_error(user_message)
+            raise OffTopicMessageError(message)
 
         last_exception: OpenAIServiceError | None = None
         limit_mode = False
+        broad_catalog_request = _is_broad_catalog_request(user_message)
         for attempt in range(2):
             try:
                 return self._generate_structured_response_once(
@@ -226,6 +242,7 @@ class StructuredChatService:
                     json_schema_definition,
                     recent_rules=recent_rules,
                     limit_mode=limit_mode,
+                    broad_catalog_request=broad_catalog_request,
                 )
             except OpenAIServiceError as exc:
                 last_exception = exc
@@ -244,6 +261,7 @@ class StructuredChatService:
         *,
         recent_rules: Sequence[dict[str, Any]] | None,
         limit_mode: bool,
+        broad_catalog_request: bool,
     ) -> dict[str, Any]:
         system_prompt = (
             "Eres un asistente que responde ÚNICAMENTE con JSON válido según el schema dado. "
@@ -286,6 +304,13 @@ class StructuredChatService:
                     " El contenido del usuario se truncó para volver a procesarlo; si detectas que faltan parámetros "
                     "clave, sugiere explícitamente los valores mínimos requeridos sin inventar catálogos completos."
                 )
+
+        if broad_catalog_request:
+            instruction += (
+                " Si la solicitud exige catálogos extensos (por ejemplo, todos los departamentos, provincias o "
+                "reglas posibles), responde únicamente con una muestra representativa de 3 a 5 elementos y explica "
+                "en 'Descripción' cómo obtener el listado completo. Nunca dejes la respuesta sin datos útiles."
+            )
 
         if not self._supports_response_format:
             schema_text = json.dumps(json_schema_definition, ensure_ascii=False)
