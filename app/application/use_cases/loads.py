@@ -157,12 +157,29 @@ def process_template_load(
         rules = _load_rules(session, columns)
         validated_df, row_is_valid = _validate_dataframe(dataframe, columns, rules)
 
-        inserted_rows = _persist_valid_rows(validated_df, row_is_valid, template.table_name)
+        operation_number = load.id or 0
+        if not operation_number:
+            raise ValueError("Identificador de carga inválido")
+        processed_rows = _persist_rows(
+            validated_df,
+            row_is_valid,
+            template.table_name,
+            operation_number=operation_number,
+        )
 
-        report_path = _generate_report(load.id, validated_df, template.table_name)
+        report_df = _prepare_report_dataframe(validated_df)
+        source_df = _prepare_original_dataframe(validated_df)
+
+        report_path = _generate_report(load.id, report_df, template.table_name)
+        _generate_original_file(
+            load.id,
+            source_df,
+            template.table_name,
+            suffix,
+        )
 
         total_rows = len(validated_df.index)
-        error_rows = total_rows - inserted_rows
+        error_rows = total_rows - processed_rows
 
         final_status = (
             LOAD_STATUS_VALIDATED_SUCCESS
@@ -264,6 +281,28 @@ def get_load_report(
     path = project_root / loaded_file.path
     if not path.exists():
         raise FileNotFoundError("Reporte no encontrado en el sistema de archivos")
+    return load, path
+
+
+def get_load_original_file(
+    session: Session,
+    *,
+    load_id: int,
+    current_user: User,
+) -> tuple[Load, Path]:
+    """Return the original data file without status/observations columns for ``load_id``."""
+
+    load = get_load(session, load_id=load_id, current_user=current_user)
+    template = _get_template(session, load.template_id)
+
+    suffix = Path(load.file_name).suffix.lower()
+    extension = ".csv" if suffix == ".csv" else ".xlsx"
+
+    directory = _REPORT_DIRECTORY / template.table_name
+    path = directory / f"load_{load.id}_original{extension}"
+    if not path.exists():
+        raise FileNotFoundError("Archivo original no disponible para esta carga")
+
     return load, path
 
 
@@ -445,9 +484,21 @@ def _validate_dataframe(
     if duplicate_rules:
         _apply_duplicate_rules(df, duplicate_rules, observations, row_is_valid)
 
-    df["Observaciones"] = [
-        "; ".join(messages) if messages else "" for messages in observations
+    df["observaciones"] = [
+        _summarize_observations(messages) for messages in observations
     ]
+    df["status"] = [
+        "Procesado" if is_valid else "No procesado" for is_valid in row_is_valid
+    ]
+
+    ordered_columns = [
+        column
+        for column in df.columns
+        if column not in {"status", "observaciones"}
+    ]
+    ordered_columns.extend(["status", "observaciones"])
+    df = df.loc[:, ordered_columns]
+
     return df, row_is_valid
 
 
@@ -460,19 +511,60 @@ def _normalize_cell_value(value: Any) -> Any:
     return value
 
 
-def _persist_valid_rows(
-    dataframe: DataFrame, row_is_valid: Sequence[bool], table_name: str
+def _summarize_observations(messages: Sequence[str]) -> str:
+    if not messages:
+        return ""
+
+    summary: list[str] = []
+    seen: set[str] = set()
+    for raw_message in messages:
+        simplified = _simplify_error_message(raw_message)
+        if simplified and simplified not in seen:
+            seen.add(simplified)
+            summary.append(simplified)
+    return " | ".join(summary)
+
+
+def _simplify_error_message(message: str) -> str:
+    text = str(message or "").strip()
+    if not text:
+        return ""
+
+    text = re.sub(r"\s+", " ", text)
+
+    if "(" in text and text.endswith(")"):
+        prefix, suffix = text.rsplit("(", 1)
+        candidate = suffix.rstrip(")").strip()
+        if candidate and not prefix.strip():
+            text = candidate
+        elif candidate:
+            text = prefix.strip() or candidate
+
+    if ":" in text:
+        label, detail = text.split(":", 1)
+        label = label.strip()
+        detail = detail.strip()
+        if label and detail:
+            return f"{label}: {detail}"
+        return label or detail
+
+    return text
+
+
+def _persist_rows(
+    dataframe: DataFrame,
+    row_is_valid: Sequence[bool],
+    table_name: str,
+    *,
+    operation_number: int,
 ) -> int:
     pd = _get_pandas_module()
     if not len(dataframe.index):
         return 0
 
-    valid_indices = [index for index, flag in enumerate(row_is_valid) if flag]
-    if not valid_indices:
-        return 0
-
-    payload_df = dataframe.loc[valid_indices, dataframe.columns[:-1]]
-    normalized_df = payload_df.where(pd.notnull(payload_df), None)
+    working_df = dataframe.copy()
+    working_df["numero_operacion"] = operation_number
+    normalized_df = working_df.where(pd.notnull(working_df), None)
     records = []
     for row in normalized_df.to_dict(orient="records"):
         normalized_row: dict[str, Any] = {}
@@ -495,7 +587,7 @@ def _persist_valid_rows(
             f"No se pudo insertar la información validada en la tabla '{table_name}'"
         ) from exc
 
-    return len(records)
+    return sum(1 for flag in row_is_valid if flag)
 
 
 def _generate_report(load_id: int, dataframe: DataFrame, table_name: str) -> Path:
@@ -504,6 +596,45 @@ def _generate_report(load_id: int, dataframe: DataFrame, table_name: str) -> Pat
     report_path = report_directory / f"load_{load_id}_reporte.xlsx"
     dataframe.to_excel(report_path, index=False)
     return report_path
+
+
+def _prepare_report_dataframe(dataframe: DataFrame) -> DataFrame:
+    df = dataframe.copy()
+    renamed = df.rename(columns={"status": "Status", "observaciones": "Observaciones"})
+    ordered_columns = [
+        column
+        for column in renamed.columns
+        if column not in {"Status", "Observaciones"}
+    ]
+    ordered_columns.extend(["Status", "Observaciones"])
+    return renamed.loc[:, ordered_columns]
+
+
+def _prepare_original_dataframe(dataframe: DataFrame) -> DataFrame:
+    drop_columns = [
+        column
+        for column in ("status", "observaciones", "numero_operacion")
+        if column in dataframe.columns
+    ]
+    return dataframe.drop(columns=drop_columns, errors="ignore")
+
+
+def _generate_original_file(
+    load_id: int, dataframe: DataFrame, table_name: str, suffix: str
+) -> Path:
+    directory = _REPORT_DIRECTORY / table_name
+    directory.mkdir(parents=True, exist_ok=True)
+
+    base_path = directory / f"load_{load_id}_original"
+    extension = ".csv" if suffix == ".csv" else ".xlsx"
+    path = base_path.with_suffix(extension)
+
+    if extension == ".csv":
+        dataframe.to_csv(path, index=False)
+    else:
+        dataframe.to_excel(path, index=False)
+
+    return path
 
 
 def _register_loaded_file(
@@ -1793,6 +1924,7 @@ _DEPENDENCY_RULE_HANDLERS: dict[
 __all__ = [
     "get_load",
     "get_load_report",
+    "get_load_original_file",
     "list_loads",
     "upload_template_load",
     "process_template_load",

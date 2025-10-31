@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.application.use_cases.loads import (
     get_load as get_load_uc,
+    get_load_original_file as get_load_original_file_uc,
     get_load_report as get_load_report_uc,
     list_loads as list_loads_uc,
     process_template_load as process_template_load_uc,
@@ -176,6 +177,37 @@ def download_load_report(
         path,
         filename=f"reporte_carga_{load.id}.xlsx",
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
+@router.get("/loads/{load_id}/source")
+def download_load_source_file(
+    load_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+) -> FileResponse:
+    """Descarga el archivo original cargado por el usuario sin columnas adicionales."""
+
+    try:
+        load, path = get_load_original_file_uc(
+            db, load_id=load_id, current_user=current_user
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    suffix = path.suffix.lower()
+    media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    if suffix == ".csv":
+        media_type = "text/csv"
+
+    return FileResponse(
+        path,
+        filename=f"carga_{load.id}_original{suffix}",
+        media_type=media_type,
     )
 
 
