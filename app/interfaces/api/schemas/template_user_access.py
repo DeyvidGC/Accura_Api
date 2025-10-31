@@ -2,7 +2,9 @@
 
 from datetime import date, datetime
 
-from pydantic import BaseModel, Field
+from typing import TypeAlias
+
+from pydantic import BaseModel, Field, conlist
 
 try:  # pragma: no cover - compatibility with pydantic v1/v2
     from pydantic import ConfigDict
@@ -53,29 +55,9 @@ class TemplateUserAccessGrantItem(BaseModel):
             extra = "forbid"
 
 
-class TemplateUserAccessBulkGrantRequest(BaseModel):
-    grants: list[TemplateUserAccessGrantItem] = Field(..., min_length=1)
-
-    if ConfigDict is not None:  # pragma: no branch
-        model_config = ConfigDict(extra="forbid")
-    else:  # pragma: no cover
-        class Config:
-            extra = "forbid"
-
-
 class TemplateUserAccessRevokeItem(BaseModel):
     template_id: int = Field(..., ge=1)
     access_id: int = Field(..., ge=1)
-
-    if ConfigDict is not None:  # pragma: no branch
-        model_config = ConfigDict(extra="forbid")
-    else:  # pragma: no cover
-        class Config:
-            extra = "forbid"
-
-
-class TemplateUserAccessBulkRevokeRequest(BaseModel):
-    revocations: list[TemplateUserAccessRevokeItem] = Field(..., min_length=1)
 
     if ConfigDict is not None:  # pragma: no branch
         model_config = ConfigDict(extra="forbid")
@@ -96,24 +78,20 @@ class TemplateUserAccessUpdateItem(BaseModel):
         class Config:
             extra = "forbid"
 
-
-class TemplateUserAccessBulkUpdateRequest(BaseModel):
-    updates: list[TemplateUserAccessUpdateItem] = Field(..., min_length=1)
-
-    if ConfigDict is not None:  # pragma: no branch
-        model_config = ConfigDict(extra="forbid")
-    else:  # pragma: no cover
-        class Config:
-            extra = "forbid"
-
-
 __all__ = [
     "TemplateUserAccessCreate",
     "TemplateUserAccessRead",
     "TemplateUserAccessGrantItem",
-    "TemplateUserAccessBulkGrantRequest",
     "TemplateUserAccessRevokeItem",
-    "TemplateUserAccessBulkRevokeRequest",
     "TemplateUserAccessUpdateItem",
-    "TemplateUserAccessBulkUpdateRequest",
+]
+
+TemplateUserAccessGrantList: TypeAlias = conlist(TemplateUserAccessGrantItem, min_items=1)
+TemplateUserAccessRevokeList: TypeAlias = conlist(TemplateUserAccessRevokeItem, min_items=1)
+TemplateUserAccessUpdateList: TypeAlias = conlist(TemplateUserAccessUpdateItem, min_items=1)
+
+__all__ += [
+    "TemplateUserAccessGrantList",
+    "TemplateUserAccessRevokeList",
+    "TemplateUserAccessUpdateList",
 ]

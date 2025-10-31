@@ -33,14 +33,14 @@ from .template import (
     TemplateUpdate,
 )
 from .template_user_access import (
-    TemplateUserAccessBulkGrantRequest,
-    TemplateUserAccessBulkRevokeRequest,
-    TemplateUserAccessBulkUpdateRequest,
     TemplateUserAccessCreate,
     TemplateUserAccessGrantItem,
+    TemplateUserAccessGrantList,
     TemplateUserAccessRead,
     TemplateUserAccessRevokeItem,
+    TemplateUserAccessRevokeList,
     TemplateUserAccessUpdateItem,
+    TemplateUserAccessUpdateList,
 )
 from .user import RoleRead, UserCreate, UserRead, UserUpdate
 
@@ -74,14 +74,14 @@ __all__ = [
     "TemplateStatusUpdate",
     "TemplateRead",
     "TemplateUpdate",
-    "TemplateUserAccessBulkGrantRequest",
-    "TemplateUserAccessBulkRevokeRequest",
-    "TemplateUserAccessBulkUpdateRequest",
     "TemplateUserAccessCreate",
     "TemplateUserAccessGrantItem",
+    "TemplateUserAccessGrantList",
     "TemplateUserAccessRead",
     "TemplateUserAccessRevokeItem",
+    "TemplateUserAccessRevokeList",
     "TemplateUserAccessUpdateItem",
+    "TemplateUserAccessUpdateList",
     "RoleRead",
     "UserCreate",
     "UserRead",
