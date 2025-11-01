@@ -11,7 +11,7 @@ from typing import Any
 from app.domain.entities import TemplateColumn
 from app.infrastructure.repositories import RuleRepository
 
-_RULE_TYPES_REQUIRING_HEADER_FIELD = {"lista compleja", "dependencia"}
+_RULE_TYPES_REQUIRING_HEADER_FIELD = {"lista compleja"}
 _RULE_TYPES_REQUIRING_COLUMN_HEADER = {"lista compleja"}
 _NORMALIZATION_STOPWORDS: set[str] = {
     "de",
@@ -168,8 +168,14 @@ def ensure_rule_header_dependencies(
         definitions = _iter_rule_definitions(rule_payload)
         allows_column_header = False
         requires_column_header = False
+        skip_header_enforcement = False
+
         for definition in definitions:
             rule_type = _normalize_type_label(definition.get("Tipo de dato", ""))
+            if rule_type == "dependencia":
+                allows_column_header = True
+                skip_header_enforcement = True
+                continue
             if rule_type not in _RULE_TYPES_REQUIRING_HEADER_FIELD:
                 continue
 
@@ -214,7 +220,7 @@ def ensure_rule_header_dependencies(
                 f"La columna '{column.name}' debe definir headers para la regla asignada."
             )
 
-        if header_values:
+        if header_values and not skip_header_enforcement:
             missing_headers = [
                 header
                 for header in header_values
