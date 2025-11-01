@@ -1241,14 +1241,23 @@ def _validate_full_list_rule(
             )
         ]
 
+    columns_summary = ", ".join(
+        sorted(field for field in related_fields if field is not None)
+    )
     summary = "; ".join(
         " / ".join(f"{field}={expected}" for field, expected in combination.items())
         for combination in resolved_combinations
     )
+    if columns_summary:
+        composed_message = f"{columns_summary}: combinación no permitida"
+        if summary:
+            composed_message = f"{composed_message} ({summary})"
+    else:
+        composed_message = f"{column_name}: combinación no permitida ({summary})"
     return text_value, [
         _compose_error(
             message,
-            f"{column_name}: combinación no permitida ({summary})",
+            composed_message,
         )
     ]
 
