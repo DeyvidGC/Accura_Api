@@ -1268,7 +1268,7 @@ def _validate_full_list_rule(
             composed_message = f"{column_name}: combinación no permitida ({summary})"
     return text_value, [
         _compose_error(
-            message,
+            None,
             composed_message,
         )
     ]
