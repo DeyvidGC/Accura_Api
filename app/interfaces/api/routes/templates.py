@@ -57,9 +57,22 @@ def _template_to_read_model(template: Template) -> TemplateRead:
 
 
 def _column_to_read_model(column: TemplateColumn) -> TemplateColumnRead:
+    payload = {
+        "id": column.id,
+        "template_id": column.template_id,
+        "name": column.name,
+        "data_type": column.data_type,
+        "description": column.description,
+        "rule_id": column.rule_id,
+        "header": list(column.rule_header) if column.rule_header else None,
+        "created_at": column.created_at,
+        "updated_at": column.updated_at,
+        "is_active": column.is_active,
+    }
+
     if hasattr(TemplateColumnRead, "model_validate"):
-        return TemplateColumnRead.model_validate(column)
-    return TemplateColumnRead.from_orm(column)
+        return TemplateColumnRead.model_validate(payload)
+    return TemplateColumnRead(**payload)
 
 
 def _access_to_read_model(access: TemplateUserAccess) -> TemplateUserAccessRead:
