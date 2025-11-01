@@ -92,6 +92,7 @@ class TemplateRepository:
             id=model.id,
             template_id=model.template_id,
             rule_id=model.rule_id,
+            rule_header=tuple(model.rule_header) if model.rule_header else None,
             name=model.name,
             description=model.description,
             data_type=model.data_type,

@@ -1,5 +1,6 @@
 """Use case for updating template columns."""
 
+from collections.abc import Sequence
 from dataclasses import replace
 from datetime import datetime
 
@@ -12,9 +13,12 @@ from app.infrastructure.dynamic_tables import (
     ensure_identifier,
 )
 from app.infrastructure.repositories import (
+    RuleRepository,
     TemplateColumnRepository,
     TemplateRepository,
 )
+
+from .validators import ensure_rule_header_dependencies, normalize_rule_header
 
 
 def update_template_column(
@@ -26,6 +30,8 @@ def update_template_column(
     data_type: str | None = None,
     description: str | None = None,
     rule_id: int | None = None,
+    header: Sequence[str] | None = None,
+    header_provided: bool = False,
     is_active: bool | None = None,
     updated_by: int | None = None,
 ) -> TemplateColumn:
@@ -37,6 +43,7 @@ def update_template_column(
 
     column_repository = TemplateColumnRepository(session)
     template_repository = TemplateRepository(session)
+    rule_repository = RuleRepository(session)
 
     template = template_repository.get(template_id)
     if template is None:
@@ -71,15 +78,30 @@ def update_template_column(
         except ValueError as exc:
             raise ValueError(str(exc)) from exc
 
+    new_header = current.rule_header
+    if header_provided:
+        new_header = normalize_rule_header(header)
+
     updated_column = replace(
         current,
         name=new_name,
         data_type=new_data_type,
         description=description if description is not None else current.description,
         rule_id=rule_id if rule_id is not None else current.rule_id,
+        rule_header=new_header,
         is_active=is_active if is_active is not None else current.is_active,
         updated_by=updated_by if updated_by is not None else current.updated_by,
         updated_at=datetime.utcnow(),
+    )
+
+    existing_columns = list(column_repository.list_by_template(template_id))
+    updated_columns = [
+        updated_column if col.id == updated_column.id else col for col in existing_columns
+    ]
+
+    ensure_rule_header_dependencies(
+        columns=updated_columns,
+        rule_repository=rule_repository,
     )
 
     return column_repository.update(updated_column)

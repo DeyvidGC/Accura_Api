@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from sqlalchemy.orm import Session, joinedload
 
 from app.domain.entities import TemplateColumn
-from app.infrastructure.models import TemplateColumnModel
+from app.infrastructure.models import TemplateColumnModel, TemplateModel
 
 
 class TemplateColumnRepository:
@@ -80,6 +80,7 @@ class TemplateColumnRepository:
             id=model.id,
             template_id=model.template_id,
             rule_id=model.rule_id,
+            rule_header=tuple(model.rule_header) if model.rule_header else None,
             name=model.name,
             description=model.description,
             data_type=model.data_type,
@@ -110,6 +111,7 @@ class TemplateColumnRepository:
             model.updated_at = None
         model.template_id = column.template_id
         model.rule_id = column.rule_id
+        model.rule_header = list(column.rule_header) if column.rule_header else None
         model.name = column.name
         model.description = column.description
         model.data_type = column.data_type
@@ -117,6 +119,27 @@ class TemplateColumnRepository:
             model.updated_by = column.updated_by
             model.updated_at = column.updated_at
         model.is_active = column.is_active
+
+    def is_rule_in_use(self, rule_id: int) -> bool:
+        """Return ``True`` when a rule is linked to any template column."""
+
+        query = self.session.query(TemplateColumnModel.id).filter(
+            TemplateColumnModel.rule_id == rule_id
+        )
+        return query.first() is not None
+
+    def rule_used_in_published_template(self, rule_id: int) -> bool:
+        """Return ``True`` if a rule is assigned to a column of a published template."""
+
+        query = (
+            self.session.query(TemplateColumnModel.id)
+            .join(TemplateModel, TemplateModel.id == TemplateColumnModel.template_id)
+            .filter(
+                TemplateColumnModel.rule_id == rule_id,
+                TemplateModel.status == "published",
+            )
+        )
+        return query.first() is not None
 
 
 __all__ = ["TemplateColumnRepository"]

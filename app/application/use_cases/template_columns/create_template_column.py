@@ -13,9 +13,12 @@ from app.infrastructure.dynamic_tables import (
     ensure_identifier,
 )
 from app.infrastructure.repositories import (
+    RuleRepository,
     TemplateColumnRepository,
     TemplateRepository,
 )
+
+from .validators import ensure_rule_header_dependencies, normalize_rule_header
 
 
 @dataclass(frozen=True)
@@ -26,6 +29,7 @@ class NewTemplateColumnData:
     data_type: str
     description: str | None = None
     rule_id: int | None = None
+    rule_header: Sequence[str] | None = None
 
 
 def _ensure_template_is_editable(template_repository: TemplateRepository, template_id: int):
@@ -61,10 +65,13 @@ def _build_column(
         raise ValueError("Ya existe una columna con ese nombre en la plantilla")
 
     now = datetime.utcnow()
+    normalized_header = normalize_rule_header(payload.rule_header)
+
     return TemplateColumn(
         id=None,
         template_id=template_id,
         rule_id=payload.rule_id,
+        rule_header=normalized_header,
         name=safe_name,
         description=payload.description,
         data_type=normalized_type,
@@ -84,6 +91,7 @@ def create_template_column(
     data_type: str,
     description: str | None = None,
     rule_id: int | None = None,
+    header: Sequence[str] | None = None,
     created_by: int | None = None,
 ) -> TemplateColumn:
     """Create a new column inside a template.
@@ -94,10 +102,11 @@ def create_template_column(
 
     column_repository = TemplateColumnRepository(session)
     template_repository = TemplateRepository(session)
+    rule_repository = RuleRepository(session)
 
     _ensure_template_is_editable(template_repository, template_id)
 
-    existing_columns = column_repository.list_by_template(template_id)
+    existing_columns = list(column_repository.list_by_template(template_id))
     forbidden_names = {column.name.lower() for column in existing_columns}
     column = _build_column(
         template_id=template_id,
@@ -106,9 +115,15 @@ def create_template_column(
             data_type=data_type,
             description=description,
             rule_id=rule_id,
+            rule_header=header,
         ),
         created_by=created_by,
         forbidden_names=forbidden_names,
+    )
+
+    ensure_rule_header_dependencies(
+        columns=[*existing_columns, column],
+        rule_repository=rule_repository,
     )
 
     saved_column = column_repository.create(column)
@@ -130,10 +145,11 @@ def create_template_columns(
 
     column_repository = TemplateColumnRepository(session)
     template_repository = TemplateRepository(session)
+    rule_repository = RuleRepository(session)
 
     _ensure_template_is_editable(template_repository, template_id)
 
-    existing_columns = column_repository.list_by_template(template_id)
+    existing_columns = list(column_repository.list_by_template(template_id))
     forbidden_names = {column.name.lower() for column in existing_columns}
 
     new_columns: list[TemplateColumn] = []
@@ -146,5 +162,10 @@ def create_template_columns(
         )
         forbidden_names.add(column.name.lower())
         new_columns.append(column)
+
+    ensure_rule_header_dependencies(
+        columns=[*existing_columns, *new_columns],
+        rule_repository=rule_repository,
+    )
 
     return column_repository.create_many(new_columns)

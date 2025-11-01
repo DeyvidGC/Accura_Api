@@ -1,9 +1,13 @@
 """SQLAlchemy model for template columns."""
 
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
+from sqlalchemy.types import JSON
 
 from app.infrastructure.database import Base
+
+_header_json_type = JSONB().with_variant(JSON(), "sqlite")
 
 
 class TemplateColumnModel(Base):
@@ -22,6 +26,7 @@ class TemplateColumnModel(Base):
     name = Column(String(50), nullable=False)
     description = Column(String(255), nullable=True)
     data_type = Column(String(50), nullable=False)
+    rule_header = Column(_header_json_type, nullable=True)
     created_by = Column(Integer, nullable=True)
     created_at = Column(DateTime, nullable=False, server_default=func.now())
     updated_by = Column(Integer, nullable=True)

@@ -233,6 +233,7 @@ def register_template_column(
                 data_type=column_in.data_type,
                 description=column_in.description,
                 rule_id=column_in.rule_id,
+                header=column_in.header,
                 created_by=current_user.id,
             )
             result = _column_to_read_model(column)
@@ -247,6 +248,7 @@ def register_template_column(
                     data_type=col.data_type,
                     description=col.description,
                     rule_id=col.rule_id,
+                    rule_header=col.header,
                 )
                 for col in incoming_columns
             ]
@@ -326,6 +328,8 @@ def update_template_column(
             data_type=update_data.get("data_type"),
             description=update_data.get("description"),
             rule_id=update_data.get("rule_id"),
+            header=update_data.get("header"),
+            header_provided="header" in update_data,
             is_active=update_data.get("is_active"),
             updated_by=current_user.id,
         )
