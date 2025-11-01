@@ -11,7 +11,8 @@ from typing import Any
 from app.domain.entities import TemplateColumn
 from app.infrastructure.repositories import RuleRepository
 
-_TARGET_RULE_TYPES = {"lista compleja", "dependencia"}
+_RULE_TYPES_REQUIRING_HEADER_FIELD = {"lista compleja", "dependencia"}
+_RULE_TYPES_REQUIRING_COLUMN_HEADER = {"lista compleja"}
 _NORMALIZATION_STOPWORDS: set[str] = {
     "de",
     "del",
@@ -165,13 +166,16 @@ def ensure_rule_header_dependencies(
             rule_payload = cached.rule
 
         definitions = _iter_rule_definitions(rule_payload)
-        requires_header = False
+        allows_column_header = False
+        requires_column_header = False
         for definition in definitions:
             rule_type = _normalize_type_label(definition.get("Tipo de dato", ""))
-            if rule_type not in _TARGET_RULE_TYPES:
+            if rule_type not in _RULE_TYPES_REQUIRING_HEADER_FIELD:
                 continue
 
-            requires_header = True
+            if rule_type in _RULE_TYPES_REQUIRING_COLUMN_HEADER:
+                allows_column_header = True
+                requires_column_header = True
 
             headers = definition.get("Header")
             if not isinstance(headers, list):
@@ -200,12 +204,12 @@ def ensure_rule_header_dependencies(
                     f"La regla '{_resolve_rule_name(definition, column)}' requiere que la plantilla incluya las columnas {missing_str}."
                 )
 
-        if header_values and not requires_header:
+        if header_values and not allows_column_header:
             raise ValueError(
                 f"La columna '{column.name}' no admite headers para la regla seleccionada."
             )
 
-        if requires_header and not header_values:
+        if requires_column_header and not header_values:
             raise ValueError(
                 f"La columna '{column.name}' debe definir headers para la regla asignada."
             )
