@@ -18,6 +18,7 @@ class TemplateColumnBase(BaseModel):
     data_type: str = Field(..., max_length=50)
     description: str | None = Field(default=None, max_length=255)
     rule_id: int | None = Field(default=None, ge=1)
+    header: list[str] | None = Field(default=None)
 
 
 class TemplateColumnCreate(TemplateColumnBase):
@@ -35,6 +36,7 @@ class TemplateColumnUpdate(BaseModel):
     data_type: str | None = Field(default=None, max_length=50)
     description: str | None = Field(default=None, max_length=255)
     rule_id: int | None = Field(default=None, ge=1)
+    header: list[str] | None = None
     is_active: bool | None = None
 
     if ConfigDict is not None:  # pragma: no branch - runtime configuration

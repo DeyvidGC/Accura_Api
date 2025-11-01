@@ -18,7 +18,7 @@ from app.infrastructure.repositories import (
     TemplateRepository,
 )
 
-from .validators import ensure_rule_header_dependencies
+from .validators import ensure_rule_header_dependencies, normalize_rule_header
 
 
 @dataclass(frozen=True)
@@ -29,6 +29,7 @@ class NewTemplateColumnData:
     data_type: str
     description: str | None = None
     rule_id: int | None = None
+    rule_header: Sequence[str] | None = None
 
 
 def _ensure_template_is_editable(template_repository: TemplateRepository, template_id: int):
@@ -64,10 +65,13 @@ def _build_column(
         raise ValueError("Ya existe una columna con ese nombre en la plantilla")
 
     now = datetime.utcnow()
+    normalized_header = normalize_rule_header(payload.rule_header)
+
     return TemplateColumn(
         id=None,
         template_id=template_id,
         rule_id=payload.rule_id,
+        rule_header=normalized_header,
         name=safe_name,
         description=payload.description,
         data_type=normalized_type,
@@ -87,6 +91,7 @@ def create_template_column(
     data_type: str,
     description: str | None = None,
     rule_id: int | None = None,
+    header: Sequence[str] | None = None,
     created_by: int | None = None,
 ) -> TemplateColumn:
     """Create a new column inside a template.
@@ -110,6 +115,7 @@ def create_template_column(
             data_type=data_type,
             description=description,
             rule_id=rule_id,
+            rule_header=header,
         ),
         created_by=created_by,
         forbidden_names=forbidden_names,

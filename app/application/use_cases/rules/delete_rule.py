@@ -2,7 +2,7 @@
 
 from sqlalchemy.orm import Session
 
-from app.infrastructure.repositories import RuleRepository
+from app.infrastructure.repositories import RuleRepository, TemplateColumnRepository
 
 
 def delete_rule(session: Session, rule_id: int) -> None:
@@ -12,5 +12,11 @@ def delete_rule(session: Session, rule_id: int) -> None:
     rule = repository.get(rule_id)
     if rule is None:
         raise ValueError("Regla no encontrada")
+
+    column_repository = TemplateColumnRepository(session)
+    if column_repository.is_rule_in_use(rule_id):
+        raise ValueError(
+            "No se puede eliminar una regla que está asignada a una columna."
+        )
 
     repository.delete(rule_id)

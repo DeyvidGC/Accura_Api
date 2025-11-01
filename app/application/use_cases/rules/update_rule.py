@@ -7,7 +7,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.domain.entities import Rule
-from app.infrastructure.repositories import RuleRepository
+from app.infrastructure.repositories import RuleRepository, TemplateColumnRepository
 
 
 def update_rule(
@@ -24,6 +24,12 @@ def update_rule(
     current = repository.get(rule_id)
     if current is None:
         raise ValueError("Regla no encontrada")
+
+    column_repository = TemplateColumnRepository(session)
+    if column_repository.rule_used_in_published_template(rule_id):
+        raise ValueError(
+            "No se puede modificar una regla asignada a una columna de una plantilla publicada."
+        )
 
     new_rule = rule if rule is not None else current.rule
 

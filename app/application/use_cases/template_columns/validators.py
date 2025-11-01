@@ -107,6 +107,26 @@ def _header_matches(header: str, candidates: Sequence[_ColumnLabel]) -> bool:
     return False
 
 
+def normalize_rule_header(header: Sequence[str] | None) -> tuple[str, ...] | None:
+    """Normalize user provided headers into a tuple of stripped strings."""
+
+    if header is None:
+        return None
+
+    normalized: list[str] = []
+    for value in header:
+        if not isinstance(value, str):
+            raise ValueError("Los headers de las reglas deben ser texto.")
+        stripped = value.strip()
+        if stripped:
+            normalized.append(stripped)
+
+    if not normalized:
+        return None
+
+    return tuple(normalized)
+
+
 def ensure_rule_header_dependencies(
     *,
     columns: Sequence[TemplateColumn],
@@ -122,7 +142,14 @@ def ensure_rule_header_dependencies(
     rule_cache: dict[int, Any] = {}
 
     for column in active_columns:
+        column_headers = normalize_rule_header(column.rule_header)
+        header_values = list(column_headers) if column_headers else []
+
         if column.rule_id is None:
+            if header_values:
+                raise ValueError(
+                    f"La columna '{column.name}' no puede definir headers sin una regla asociada."
+                )
             continue
 
         cached = rule_cache.get(column.rule_id)
@@ -138,10 +165,13 @@ def ensure_rule_header_dependencies(
             rule_payload = cached.rule
 
         definitions = _iter_rule_definitions(rule_payload)
+        requires_header = False
         for definition in definitions:
             rule_type = _normalize_type_label(definition.get("Tipo de dato", ""))
             if rule_type not in _TARGET_RULE_TYPES:
                 continue
+
+            requires_header = True
 
             headers = definition.get("Header")
             if not isinstance(headers, list):
@@ -170,5 +200,27 @@ def ensure_rule_header_dependencies(
                     f"La regla '{_resolve_rule_name(definition, column)}' requiere que la plantilla incluya las columnas {missing_str}."
                 )
 
+        if header_values and not requires_header:
+            raise ValueError(
+                f"La columna '{column.name}' no admite headers para la regla seleccionada."
+            )
 
-__all__ = ["ensure_rule_header_dependencies"]
+        if requires_header and not header_values:
+            raise ValueError(
+                f"La columna '{column.name}' debe definir headers para la regla asignada."
+            )
+
+        if header_values:
+            missing_headers = [
+                header
+                for header in header_values
+                if not _header_matches(header, labels)
+            ]
+            if missing_headers:
+                missing_str = ", ".join(sorted(set(missing_headers)))
+                raise ValueError(
+                    f"Los headers configurados para la columna '{column.name}' requieren que la plantilla incluya las columnas {missing_str}."
+                )
+
+
+__all__ = ["ensure_rule_header_dependencies", "normalize_rule_header"]
