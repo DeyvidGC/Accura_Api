@@ -1117,6 +1117,52 @@ def _validate_list_rule(
     return text_value, []
 
 
+def _resolve_row_field_reference(
+    field: str,
+    *,
+    row_context: Mapping[str, Any],
+    column_lookup: Mapping[str, str] | None,
+    column_tokens: Mapping[str, tuple[str, ...]] | None,
+) -> str | None:
+    normalized_field = _normalize_type_label(field)
+    if not normalized_field:
+        return None
+
+    for key in row_context:
+        if isinstance(key, str) and _labels_match(key, normalized_field, field):
+            return key
+
+    if column_lookup:
+        mapped = column_lookup.get(normalized_field)
+        if mapped and mapped in row_context:
+            return mapped
+
+    if column_tokens:
+        target_tokens = _tokenize_label(field)
+        if target_tokens:
+            matches = [
+                header
+                for header, tokens in column_tokens.items()
+                if header in row_context and tokens and tokens == target_tokens
+            ]
+            if not matches:
+                target_set = set(target_tokens)
+                matches = [
+                    header
+                    for header, tokens in column_tokens.items()
+                    if header in row_context
+                    and tokens
+                    and (
+                        target_set.issubset(set(tokens))
+                        or set(tokens).issubset(target_set)
+                    )
+                ]
+            if len(matches) == 1:
+                return matches[0]
+
+    return None
+
+
 def _validate_full_list_rule(
     *,
     value: Any,
@@ -1124,6 +1170,8 @@ def _validate_full_list_rule(
     rule_config: Mapping[str, Any],
     message: str | None,
     row_context: Mapping[str, Any] | None,
+    column_lookup: Mapping[str, str] | None = None,
+    column_tokens: Mapping[str, tuple[str, ...]] | None = None,
     **_: Any,
 ) -> tuple[str, list[str]]:
     text_value = str(value)
@@ -1133,8 +1181,31 @@ def _validate_full_list_rule(
 
     row_snapshot: Mapping[str, Any] = row_context or {}
     related_fields: set[str] = {column_name}
+
+    resolver_cache: dict[str, str | None] = {}
+    resolved_combinations: list[dict[str, str]] = []
     for combination in combinations:
-        related_fields.update(combination.keys())
+        resolved_entry: dict[str, str] = {}
+        for field, expected in combination.items():
+            if field in resolver_cache:
+                resolved_field = resolver_cache[field]
+            else:
+                resolved_field = _resolve_row_field_reference(
+                    field,
+                    row_context=row_snapshot,
+                    column_lookup=column_lookup,
+                    column_tokens=column_tokens,
+                )
+                resolver_cache[field] = resolved_field
+
+            target_field = resolved_field or field
+            related_fields.add(target_field)
+            resolved_entry[target_field] = expected
+        if resolved_entry:
+            resolved_combinations.append(resolved_entry)
+
+    if not resolved_combinations:
+        return text_value, []
 
     def _stringify(raw: Any) -> str | None:
         normalized = _normalize_cell_value(raw)
@@ -1148,7 +1219,7 @@ def _validate_full_list_rule(
         text_related = _stringify(raw_value)
         current_values[field] = text_related
     missing_for_viable: set[str] = set()
-    for combination in combinations:
+    for combination in resolved_combinations:
         missing_fields = [field for field in combination if current_values.get(field) is None]
         if missing_fields:
             if all(
@@ -1172,7 +1243,7 @@ def _validate_full_list_rule(
 
     summary = "; ".join(
         " / ".join(f"{field}={expected}" for field, expected in combination.items())
-        for combination in combinations
+        for combination in resolved_combinations
     )
     return text_value, [
         _compose_error(
@@ -1498,6 +1569,9 @@ def _validate_dependency_rule(
                 column_name,
                 config,
                 message,
+                row_context=row_context,
+                column_lookup=column_lookup,
+                column_tokens=column_tokens,
             )
             if dependency_errors:
                 candidate_errors.extend(dependency_errors)
@@ -1557,7 +1631,11 @@ def _validate_joint_rule(
 
 
 def _dependency_text_validator(
-    value: Any, column_name: str, rule_config: Mapping[str, Any], message: str | None
+    value: Any,
+    column_name: str,
+    rule_config: Mapping[str, Any],
+    message: str | None,
+    **_: Any,
 ) -> tuple[str, list[str]]:
     return _validate_text_rule(
         value=value,
@@ -1568,7 +1646,11 @@ def _dependency_text_validator(
 
 
 def _dependency_number_validator(
-    value: Any, column_name: str, rule_config: Mapping[str, Any], message: str | None
+    value: Any,
+    column_name: str,
+    rule_config: Mapping[str, Any],
+    message: str | None,
+    **_: Any,
 ) -> tuple[Any, list[str]]:
     return _validate_number_rule(
         value=value,
@@ -1579,7 +1661,11 @@ def _dependency_number_validator(
 
 
 def _dependency_document_validator(
-    value: Any, column_name: str, rule_config: Mapping[str, Any], message: str | None
+    value: Any,
+    column_name: str,
+    rule_config: Mapping[str, Any],
+    message: str | None,
+    **_: Any,
 ) -> tuple[str, list[str]]:
     return _validate_document_rule(
         value=value,
@@ -1590,7 +1676,11 @@ def _dependency_document_validator(
 
 
 def _dependency_list_validator(
-    value: Any, column_name: str, rule_config: Mapping[str, Any], message: str | None
+    value: Any,
+    column_name: str,
+    rule_config: Mapping[str, Any],
+    message: str | None,
+    **_: Any,
 ) -> tuple[str, list[str]]:
     return _validate_list_rule(
         value=value,
@@ -1601,18 +1691,33 @@ def _dependency_list_validator(
 
 
 def _dependency_full_list_validator(
-    value: Any, column_name: str, rule_config: Mapping[str, Any], message: str | None
+    value: Any,
+    column_name: str,
+    rule_config: Mapping[str, Any],
+    message: str | None,
+    *,
+    row_context: Mapping[str, Any] | None = None,
+    column_lookup: Mapping[str, str] | None = None,
+    column_tokens: Mapping[str, tuple[str, ...]] | None = None,
+    **_: Any,
 ) -> tuple[str, list[str]]:
     return _validate_full_list_rule(
         value=value,
         column_name=column_name,
         rule_config=rule_config,
         message=message,
+        row_context=row_context,
+        column_lookup=column_lookup,
+        column_tokens=column_tokens,
     )
 
 
 def _dependency_phone_validator(
-    value: Any, column_name: str, rule_config: Mapping[str, Any], message: str | None
+    value: Any,
+    column_name: str,
+    rule_config: Mapping[str, Any],
+    message: str | None,
+    **_: Any,
 ) -> tuple[str, list[str]]:
     return _validate_phone_rule(
         value=value,
@@ -1623,7 +1728,11 @@ def _dependency_phone_validator(
 
 
 def _dependency_email_validator(
-    value: Any, column_name: str, rule_config: Mapping[str, Any], message: str | None
+    value: Any,
+    column_name: str,
+    rule_config: Mapping[str, Any],
+    message: str | None,
+    **_: Any,
 ) -> tuple[str, list[str]]:
     return _validate_email_rule(
         value=value,
@@ -1634,7 +1743,11 @@ def _dependency_email_validator(
 
 
 def _dependency_date_validator(
-    value: Any, column_name: str, rule_config: Mapping[str, Any], message: str | None
+    value: Any,
+    column_name: str,
+    rule_config: Mapping[str, Any],
+    message: str | None,
+    **_: Any,
 ) -> tuple[date, list[str]]:
     return _validate_date_rule(
         value=value,
