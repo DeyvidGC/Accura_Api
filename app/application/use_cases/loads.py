@@ -1255,13 +1255,9 @@ def _validate_full_list_rule(
                 display_value = "(vacío)"
             else:
                 display_value = str(current_value)
-            detailed_values.append(f"{field}: {display_value}")
-        combination_details = ", ".join(detailed_values)
-        composed_message = (
-            "La combinación "
-            f"{combination_details} "
-            "no es válida."
-        )
+            detailed_values.append(f"{field} : {display_value}")
+        combination_details = " , ".join(detailed_values)
+        composed_message = f"La combinación {combination_details}, no es válida"
     else:
         columns_summary = ", ".join(sorted_fields)
         if columns_summary:
