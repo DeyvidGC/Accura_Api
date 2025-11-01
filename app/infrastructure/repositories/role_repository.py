@@ -1,6 +1,5 @@
 """Persistence layer for roles data."""
 
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.domain.entities import Role
@@ -15,14 +14,6 @@ class RoleRepository:
 
     def get(self, role_id: int) -> Role | None:
         model = self.session.query(RoleModel).filter_by(id=role_id).first()
-        return self._to_entity(model) if model else None
-
-    def get_by_alias(self, alias: str) -> Role | None:
-        model = (
-            self.session.query(RoleModel)
-            .filter(func.lower(RoleModel.alias) == alias.lower())
-            .first()
-        )
         return self._to_entity(model) if model else None
 
     def list_aliases(self) -> set[str]:
