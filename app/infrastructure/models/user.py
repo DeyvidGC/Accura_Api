@@ -1,7 +1,5 @@
 """SQLAlchemy model for the user table."""
 
-from datetime import datetime
-
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.sql import expression
 from sqlalchemy.orm import relationship
@@ -42,7 +40,3 @@ class UserModel(Base):
         passive_deletes=True,
     )
 
-    def touch_last_login(self) -> None:
-        """Update the last login timestamp to now."""
-
-        self.last_login = datetime.utcnow()

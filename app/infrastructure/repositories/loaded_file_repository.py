@@ -42,12 +42,6 @@ class LoadedFileRepository:
         self.session.refresh(model)
         return self._to_entity(model)
 
-    def delete_for_load(self, load_id: int) -> None:
-        self.session.query(LoadedFileModel).filter(
-            LoadedFileModel.load_id == load_id
-        ).delete()
-        self.session.commit()
-
     @staticmethod
     def _to_entity(model: LoadedFileModel) -> LoadedFile:
         return LoadedFile(
