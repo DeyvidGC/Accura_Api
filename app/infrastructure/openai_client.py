@@ -39,7 +39,22 @@ _RELEVANT_KEYWORDS: tuple[str, ...] = (
     "validation",
     "dataset",
     "schema",
+    "correo",
+    "email",
+    "telefono",
+    "fecha",
 )
+
+_SIMPLE_RULE_HEADERS: dict[str, tuple[str, ...]] = {
+    "Texto": ("Longitud minima", "Longitud maxima"),
+    "Número": ("Valor mínimo", "Valor máximo", "Número de decimales"),
+    "Documento": ("Longitud minima", "Longitud maxima"),
+    "Lista": ("Lista",),
+    "Lista compleja": ("Lista compleja",),
+    "Telefono": ("Longitud minima", "Código de país"),
+    "Correo": ("Formato", "Longitud máxima"),
+    "Fecha": ("Formato", "Fecha mínima", "Fecha máxima"),
+}
 
 _LARGE_MESSAGE_THRESHOLD = 1800
 
@@ -84,7 +99,54 @@ def _is_relevant_message(message: str) -> bool:
     """Check if the incoming message references validation rule concepts."""
 
     normalized = _normalize_for_matching(message)
-    return any(keyword in normalized for keyword in _RELEVANT_KEYWORDS)
+    if any(keyword in normalized for keyword in _RELEVANT_KEYWORDS):
+        return True
+    return _looks_like_validation_constraint(normalized)
+
+
+def _looks_like_validation_constraint(normalized_message: str) -> bool:
+    """Identify free-form requests that still describe validation constraints."""
+
+    constraint_markers = (
+        "longitud",
+        "caracter",
+        "caracteres",
+        "digito",
+        "digitos",
+        "maximo",
+        "maxima",
+        "minimo",
+        "minima",
+        "formato",
+        "obligatorio",
+        "permitid",
+        "rango",
+    )
+    domain_markers = (
+        "campo",
+        "columna",
+        "cliente",
+        "nombre",
+        "poliza",
+        "documento",
+        "numero",
+        "codigo",
+        "identificador",
+        "correo",
+        "email",
+        "telefono",
+        "asegur",
+        "riesgo",
+        "cobertura",
+    )
+
+    has_constraint = any(marker in normalized_message for marker in constraint_markers)
+    if not has_constraint:
+        return False
+
+    has_domain = any(marker in normalized_message for marker in domain_markers)
+    has_numeric_detail = any(ch.isdigit() for ch in normalized_message)
+    return has_domain or has_numeric_detail
 
 
 def _build_off_topic_error(user_message: str) -> str:
@@ -458,6 +520,20 @@ class StructuredChatService:
                     "Cada elemento de 'Header' debe ser una cadena no vacía. "
                     f"Elemento inválido en la posición {index}."
                 )
+
+        expected_simple_headers = _SIMPLE_RULE_HEADERS.get(tipo)
+        if expected_simple_headers is not None:
+            normalized_header = [_normalize_for_matching(item) for item in header]
+            expected_list = list(expected_simple_headers)
+            normalized_expected = [_normalize_for_matching(item) for item in expected_list]
+            if normalized_header != normalized_expected:
+                logger.debug(
+                    "Normalizando header para el tipo '%s': recibido=%s, esperado=%s",
+                    tipo,
+                    header,
+                    expected_list,
+                )
+                payload["Header"] = expected_list
 
         if not isinstance(payload.get("Regla"), dict):
             raise OpenAIServiceError("'Regla' debe ser un objeto JSON.")
