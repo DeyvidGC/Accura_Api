@@ -70,6 +70,14 @@ class TemplateCreate(TemplateBase):
     """Payload required to create a template."""
 
 
+class TemplateDuplicate(BaseModel):
+    """Payload required to duplicate an existing template."""
+
+    name: str = Field(..., max_length=50)
+    table_name: str = Field(..., max_length=63)
+    description: str = Field(..., max_length=255)
+
+
 class TemplateUpdate(BaseModel):
     name: str | None = Field(default=None, max_length=50)
     description: str | None = Field(default=None, max_length=255)
