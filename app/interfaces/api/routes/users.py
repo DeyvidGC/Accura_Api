@@ -160,7 +160,22 @@ def update_user(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="El cliente no puede cambiar su estado",
             )
-        if "password" not in update_data or not update_data["password"]:
+        provided_password = bool(update_data.get("password"))
+        allowed_without_password = {"name"}
+        non_password_fields = {
+            field
+            for field in update_data
+            if field != "password" and update_data[field] is not None
+        }
+
+        name_only_update = (
+            non_password_fields
+            and non_password_fields <= allowed_without_password
+            and "name" in non_password_fields
+            and update_data.get("name") is not None
+        )
+
+        if not provided_password and not name_only_update:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="El cliente debe proporcionar su contraseña para actualizar sus datos",

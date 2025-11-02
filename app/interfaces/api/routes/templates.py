@@ -18,6 +18,7 @@ from app.application.use_cases.templates import (
     bulk_revoke_template_access as bulk_revoke_template_access_uc,
     bulk_update_template_access as bulk_update_template_access_uc,
     create_template as create_template_uc,
+    duplicate_template as duplicate_template_uc,
     delete_template as delete_template_uc,
     get_template as get_template_uc,
     get_template_excel as get_template_excel_uc,
@@ -38,6 +39,7 @@ from app.interfaces.api.schemas import (
     TemplateColumnRead,
     TemplateColumnUpdate,
     TemplateCreate,
+    TemplateDuplicate,
     TemplateRead,
     TemplateStatusUpdate,
     TemplateUpdate,
@@ -114,6 +116,38 @@ def register_template(
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    return _template_to_read_model(template)
+
+
+@router.post(
+    "/{template_id}/duplicate",
+    response_model=TemplateRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def duplicate_template(
+    template_id: int,
+    payload: TemplateDuplicate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+) -> TemplateRead:
+    """Duplica una plantilla existente con nuevos metadatos."""
+
+    try:
+        template = duplicate_template_uc(
+            db,
+            template_id=template_id,
+            name=payload.name,
+            table_name=payload.table_name,
+            description=payload.description,
+            created_by=current_user.id,
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        status_code = status.HTTP_400_BAD_REQUEST
+        if detail == "Plantilla no encontrada":
+            status_code = status.HTTP_404_NOT_FOUND
+        raise HTTPException(status_code=status_code, detail=detail) from exc
 
     return _template_to_read_model(template)
 
