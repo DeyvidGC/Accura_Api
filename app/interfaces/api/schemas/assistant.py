@@ -29,6 +29,7 @@ class TipoDatoEnum(str, Enum):
     FECHA = "Fecha"
     DEPENDENCIA = "Dependencia"
     VALIDACION_CONJUNTA = "Validación conjunta"
+    DUPLICADOS = "Duplicados"
 
 
 DEPENDENCY_TYPE_HEADERS: dict[str, tuple[str, ...]] = {
@@ -431,6 +432,51 @@ class AssistantMessageResponse(BaseModel):
                     "El header debe incluir los siguientes campos para la regla dependiente: "
                     + ", ".join(sorted(missing_headers))
                 )
+
+        elif tipo == TipoDatoEnum.DUPLICADOS:
+            candidate_keys = ("Campos", "Columnas", "Fields", "fields")
+            extracted_fields: list[str] = []
+
+            for key in candidate_keys:
+                raw_fields = regla.get(key)
+                if raw_fields is None:
+                    continue
+                if not isinstance(raw_fields, list) or not raw_fields:
+                    raise ValueError(
+                        f"'{key}' debe ser una lista con al menos un elemento."
+                    )
+
+                normalized_fields: list[str] = []
+                for field in raw_fields:
+                    if not isinstance(field, str) or not field.strip():
+                        raise ValueError(
+                            "Cada elemento definido en la lista de campos debe ser una cadena no vacía."
+                        )
+                    normalized_fields.append(field.strip())
+
+                if normalized_fields:
+                    extracted_fields.extend(normalized_fields)
+                    break
+
+            if not extracted_fields:
+                raise ValueError(
+                    "La configuración para la regla de duplicados debe incluir al menos un listado de campos."
+                )
+
+            allowed_booleans = (
+                "Ignorar vacios",
+                "Ignorar vacíos",
+                "Ignorar vacias",
+                "Ignorar vacías",
+                "Ignore empty",
+                "Ignore empties",
+            )
+            for flag in allowed_booleans:
+                value = regla.get(flag)
+                if value is None:
+                    continue
+                if not isinstance(value, bool):
+                    raise ValueError(f"'{flag}' debe ser un valor booleano.")
 
         elif tipo == TipoDatoEnum.VALIDACION_CONJUNTA:
             ensure_keys({"Nombre de campos"})
