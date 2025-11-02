@@ -6,6 +6,7 @@ import re
 import unicodedata
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from difflib import SequenceMatcher
 from typing import Any
 
 from app.domain.entities import TemplateColumn
@@ -13,6 +14,7 @@ from app.infrastructure.repositories import RuleRepository
 
 _RULE_TYPES_REQUIRING_HEADER_FIELD = {"lista compleja"}
 _RULE_TYPES_REQUIRING_COLUMN_HEADER = {"lista compleja"}
+_DUPLICATE_FIELD_KEYS: tuple[str, ...] = ("Campos", "Columnas", "Fields", "fields")
 _NORMALIZATION_STOPWORDS: set[str] = {
     "de",
     "del",
@@ -128,6 +130,92 @@ def normalize_rule_header(header: Sequence[str] | None) -> tuple[str, ...] | Non
     return tuple(normalized)
 
 
+def _find_best_duplicate_match(
+    field: str, candidates: Sequence[_ColumnLabel]
+) -> tuple[str | None, float]:
+    normalized = _normalize_type_label(field)
+    tokens = _tokenize_label(field)
+    token_set = frozenset(tokens)
+
+    best_score = 0.0
+    best_candidate: _ColumnLabel | None = None
+
+    for candidate in candidates:
+        if normalized and normalized == candidate.normalized:
+            return candidate.name, 1.0
+        if tokens and tokens == candidate.tokens:
+            return candidate.name, 0.99
+
+        score = 0.0
+        if token_set and candidate.token_set:
+            intersection = len(token_set & candidate.token_set)
+            if intersection:
+                score = intersection / max(len(token_set), len(candidate.token_set))
+
+        if normalized:
+            ratio = SequenceMatcher(None, normalized, candidate.normalized).ratio()
+            score = max(score, ratio)
+
+        if score > best_score:
+            best_score = score
+            best_candidate = candidate
+
+    if best_candidate and best_score >= 0.65:
+        return best_candidate.name, best_score
+    return None, 0.0
+
+
+def _validate_duplicate_fields(
+    definition: Mapping[str, Any],
+    column: TemplateColumn,
+    labels: Sequence[_ColumnLabel],
+) -> None:
+    rule_config = definition.get("Regla")
+    if not isinstance(rule_config, Mapping):
+        raise ValueError(
+            f"La regla '{_resolve_rule_name(definition, column)}' debe definir la configuración de duplicados."
+        )
+
+    requested_fields: list[str] = []
+    for key in _DUPLICATE_FIELD_KEYS:
+        raw_fields = rule_config.get(key)
+        if raw_fields is None:
+            continue
+        if not isinstance(raw_fields, Sequence) or isinstance(raw_fields, (str, bytes)):
+            raise ValueError(
+                f"'{key}' en la regla '{_resolve_rule_name(definition, column)}' debe ser una lista de campos."
+            )
+        normalized_fields = [
+            field.strip()
+            for field in raw_fields
+            if isinstance(field, str) and field.strip()
+        ]
+        if not normalized_fields:
+            raise ValueError(
+                f"'{key}' en la regla '{_resolve_rule_name(definition, column)}' debe incluir al menos un valor."
+            )
+        requested_fields.extend(normalized_fields)
+        break
+
+    if not requested_fields:
+        return
+
+    unmatched_fields: list[str] = []
+    for field in requested_fields:
+        match, score = _find_best_duplicate_match(field, labels)
+        if match is None or score <= 0.0:
+            unmatched_fields.append(field)
+
+    if unmatched_fields:
+        missing_str = ", ".join(sorted(set(unmatched_fields)))
+        raise ValueError(
+            "La regla '"
+            + _resolve_rule_name(definition, column)
+            + "' requiere columnas existentes en la plantilla para: "
+            + missing_str
+        )
+
+
 def ensure_rule_header_dependencies(
     *,
     columns: Sequence[TemplateColumn],
@@ -172,6 +260,9 @@ def ensure_rule_header_dependencies(
 
         for definition in definitions:
             rule_type = _normalize_type_label(definition.get("Tipo de dato", ""))
+            if rule_type == "duplicados":
+                _validate_duplicate_fields(definition, column, labels)
+                continue
             if rule_type == "dependencia":
                 allows_column_header = True
                 skip_header_enforcement = True

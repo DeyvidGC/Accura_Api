@@ -12,6 +12,7 @@ from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from io import BytesIO
 from pathlib import Path
+from difflib import SequenceMatcher
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any, Callable
 from sqlalchemy import MetaData, Table, insert
@@ -438,7 +439,10 @@ def _validate_dataframe(
 
         if rule_definition is not None:
             duplicate_configs = _gather_duplicate_rule_configs(
-                rule_definition, column.name
+                rule_definition,
+                column.name,
+                column_lookup=normalized_column_lookup,
+                column_tokens=column_token_lookup,
             )
             for config in duplicate_configs:
                 key = (
@@ -756,12 +760,23 @@ def _validate_value_with_rule(
 
 
 def _gather_duplicate_rule_configs(
-    rule_definition: Any, column_name: str
+    rule_definition: Any,
+    column_name: str,
+    *,
+    column_lookup: Mapping[str, str],
+    column_tokens: Mapping[str, tuple[str, ...]],
 ) -> list[dict[str, Any]]:
     if isinstance(rule_definition, list):
         configs: list[dict[str, Any]] = []
         for definition in rule_definition:
-            configs.extend(_gather_duplicate_rule_configs(definition, column_name))
+            configs.extend(
+                _gather_duplicate_rule_configs(
+                    definition,
+                    column_name,
+                    column_lookup=column_lookup,
+                    column_tokens=column_tokens,
+                )
+            )
         return configs
 
     if not isinstance(rule_definition, Mapping):
@@ -814,6 +829,19 @@ def _gather_duplicate_rule_configs(
     if not unique_fields:
         return []
 
+    matched_fields, missing_fields = _resolve_duplicate_field_matches(
+        unique_fields, column_lookup, column_tokens
+    )
+
+    if missing_fields:
+        missing_str = ", ".join(sorted(set(missing_fields)))
+        rule_label = normalized_name or rule_name or column_name or "Regla de duplicados"
+        raise ValueError(
+            f"La regla de duplicados '{rule_label}' hace referencia a columnas inexistentes: {missing_str}"
+        )
+
+    resolved_fields = matched_fields or unique_fields
+
     ignore_empty = bool(
         config.get("Ignorar vacios")
         or config.get("Ignorar vacíos")
@@ -825,12 +853,79 @@ def _gather_duplicate_rule_configs(
 
     return [
         {
-            "fields": unique_fields,
+            "fields": resolved_fields,
             "message": normalized_message,
             "name": normalized_name,
             "ignore_empty": ignore_empty,
         }
     ]
+
+
+def _resolve_duplicate_field_matches(
+    fields: Sequence[str],
+    column_lookup: Mapping[str, str],
+    column_tokens: Mapping[str, tuple[str, ...]],
+) -> tuple[list[str], list[str]]:
+    matched: list[str] = []
+    missing: list[str] = []
+    used: set[str] = set()
+
+    for field in fields:
+        normalized = _normalize_type_label(field)
+        candidate: str | None = None
+
+        if normalized and normalized in column_lookup:
+            candidate = column_lookup[normalized]
+        else:
+            candidate = _find_best_column_match(field, column_tokens)
+
+        if candidate is None:
+            missing.append(field)
+            continue
+
+        if candidate not in used:
+            matched.append(candidate)
+            used.add(candidate)
+
+    return matched, missing
+
+
+def _find_best_column_match(
+    field: str, column_tokens: Mapping[str, tuple[str, ...]]
+) -> str | None:
+    tokens = _tokenize_label(field)
+    token_set = frozenset(tokens)
+    normalized_field = _normalize_type_label(field)
+
+    best_score = 0.0
+    best_candidate: str | None = None
+
+    for column_name, candidate_tokens in column_tokens.items():
+        normalized_candidate = _normalize_type_label(column_name)
+
+        if normalized_field and normalized_field == normalized_candidate:
+            return column_name
+        if tokens and tokens == candidate_tokens:
+            return column_name
+
+        score = 0.0
+        candidate_token_set = frozenset(candidate_tokens)
+        if token_set and candidate_token_set:
+            intersection = len(token_set & candidate_token_set)
+            if intersection:
+                score = intersection / max(len(token_set), len(candidate_token_set))
+
+        if normalized_field:
+            ratio = SequenceMatcher(None, normalized_field, normalized_candidate).ratio()
+            score = max(score, ratio)
+
+        if score > best_score:
+            best_score = score
+            best_candidate = column_name
+
+    if best_candidate and best_score >= 0.6:
+        return best_candidate
+    return None
 
 
 def _apply_base_parser(
