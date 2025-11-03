@@ -11,6 +11,9 @@ from .get_template_excel import get_template_excel
 from .grant_template_access import grant_template_access
 from .list_template_access import list_template_access
 from .list_templates import list_templates
+from .list_templates_by_creator_with_assignments import (
+    list_templates_by_creator_with_assignments,
+)
 from .revoke_template_access import revoke_template_access
 from .update_template import update_template
 from .update_template_access import update_template_access
@@ -28,6 +31,7 @@ __all__ = [
     "grant_template_access",
     "list_template_access",
     "list_templates",
+    "list_templates_by_creator_with_assignments",
     "revoke_template_access",
     "update_template",
     "update_template_access",

@@ -29,5 +29,8 @@ def create_rule(
         updated_by=None,
         updated_at=None,
         is_active=is_active,
+        deleted=False,
+        deleted_by=None,
+        deleted_at=None,
     )
     return repository.create(entity)

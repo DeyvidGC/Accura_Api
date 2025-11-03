@@ -99,6 +99,22 @@ class UserRepository:
         )
         return [user_id for (user_id,) in query.all()]
 
+    def get_map_by_ids(
+        self, user_ids: Sequence[int], *, include_deleted: bool = False
+    ) -> dict[int, User]:
+        if not user_ids:
+            return {}
+
+        unique_ids = {int(user_id) for user_id in user_ids}
+        query = (
+            self.session.query(UserModel)
+            .options(joinedload(UserModel.role))
+            .filter(UserModel.id.in_(unique_ids))
+        )
+        if not include_deleted:
+            query = query.filter(UserModel.deleted.is_(False))
+        return {model.id: self._to_entity(model) for model in query.all()}
+
     @staticmethod
     def _to_entity(model: UserModel) -> User:
         return User(

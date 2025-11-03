@@ -8,6 +8,7 @@ from app.application.use_cases.rules import (
     delete_rule as delete_rule_uc,
     get_rule as get_rule_uc,
     list_rules as list_rules_uc,
+    list_rules_by_creator as list_rules_by_creator_uc,
     update_rule as update_rule_uc,
 )
 from app.domain.entities import Rule, User
@@ -54,6 +55,17 @@ def list_rules(
     """Devuelve una lista paginada de reglas de validación."""
 
     rules = list_rules_uc(db, skip=skip, limit=limit)
+    return [_to_read_model(rule) for rule in rules]
+
+
+@router.get("/created-by/me", response_model=list[RuleRead])
+def list_rules_created_by_admin(
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(require_admin),
+) -> list[RuleRead]:
+    """Devuelve todas las reglas creadas por el administrador autenticado."""
+
+    rules = list_rules_by_creator_uc(db, creator_id=current_admin.id)
     return [_to_read_model(rule) for rule in rules]
 
 
@@ -109,12 +121,12 @@ def update_rule(
 def delete_rule(
     rule_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    current_user: User = Depends(require_admin),
 ) -> Response:
     """Elimina una regla de validación."""
 
     try:
-        delete_rule_uc(db, rule_id)
+        delete_rule_uc(db, rule_id, deleted_by=current_user.id)
     except ValueError as exc:
         detail = str(exc)
         status_code = status.HTTP_400_BAD_REQUEST

@@ -24,7 +24,7 @@ def delete_template(
     if template is None:
         raise ValueError("Plantilla no encontrada")
 
-    repository.delete(template_id)
+    repository.delete(template_id, deleted_by=deleted_by)
 
     try:
         drop_template_table(template.table_name)

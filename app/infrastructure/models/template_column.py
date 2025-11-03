@@ -4,6 +4,7 @@ from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, f
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.types import JSON
+from sqlalchemy.sql import expression
 
 from app.infrastructure.database import Base
 
@@ -32,6 +33,14 @@ class TemplateColumnModel(Base):
     updated_by = Column(Integer, nullable=True)
     updated_at = Column(DateTime, nullable=True, onupdate=func.now())
     is_active = Column(Boolean, nullable=False, default=True)
+    deleted = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=expression.false(),
+    )
+    deleted_by = Column(Integer, nullable=True)
+    deleted_at = Column(DateTime, nullable=True)
 
     template = relationship("TemplateModel", back_populates="columns")
     rule = relationship("RuleModel", lazy="joined")

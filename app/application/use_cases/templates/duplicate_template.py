@@ -63,6 +63,9 @@ def duplicate_template(
                 updated_by=None,
                 updated_at=None,
                 is_active=column.is_active,
+                deleted=False,
+                deleted_by=None,
+                deleted_at=None,
             )
         )
 
