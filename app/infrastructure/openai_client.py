@@ -6,7 +6,7 @@ import inspect
 import json
 import logging
 import unicodedata
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from openai import OpenAI, OpenAIError
@@ -50,7 +50,6 @@ _SIMPLE_RULE_HEADERS: dict[str, tuple[str, ...]] = {
     "Número": ("Valor mínimo", "Valor máximo", "Número de decimales"),
     "Documento": ("Longitud minima", "Longitud maxima"),
     "Lista": ("Lista",),
-    "Lista compleja": ("Lista compleja",),
     "Telefono": ("Longitud minima", "Código de país"),
     "Correo": ("Formato", "Longitud máxima"),
     "Fecha": ("Formato", "Fecha mínima", "Fecha máxima"),
@@ -93,6 +92,42 @@ def _normalize_for_matching(text: str) -> str:
 
     normalized = unicodedata.normalize("NFD", text.lower())
     return "".join(ch for ch in normalized if unicodedata.category(ch) != "Mn")
+
+
+def _extract_composite_header_fields(rule_config: Any) -> list[str]:
+    """Derive header labels from the combinations defined in a complex list rule."""
+
+    if not isinstance(rule_config, Mapping):
+        return []
+
+    candidate_keys = ("Lista compleja", "Lista", "Listas", "Combinaciones")
+    collected: list[str] = []
+    seen: set[str] = set()
+
+    for key in candidate_keys:
+        entries = rule_config.get(key)
+        if not isinstance(entries, Sequence) or isinstance(entries, (str, bytes)):
+            continue
+
+        for entry in entries:
+            if not isinstance(entry, Mapping):
+                continue
+            for field_name in entry.keys():
+                if not isinstance(field_name, str):
+                    continue
+                candidate = field_name.strip()
+                if not candidate:
+                    continue
+                normalized = _normalize_for_matching(candidate)
+                if normalized in seen:
+                    continue
+                seen.add(normalized)
+                collected.append(candidate)
+
+        if collected:
+            break
+
+    return collected
 
 
 def _is_relevant_message(message: str) -> bool:
@@ -520,6 +555,12 @@ class StructuredChatService:
                     "Cada elemento de 'Header' debe ser una cadena no vacía. "
                     f"Elemento inválido en la posición {index}."
                 )
+
+        if tipo == "Lista compleja":
+            derived_header = _extract_composite_header_fields(payload.get("Regla"))
+            if derived_header:
+                payload["Header"] = derived_header
+                header = derived_header
 
         expected_simple_headers = _SIMPLE_RULE_HEADERS.get(tipo)
         if expected_simple_headers is not None:
