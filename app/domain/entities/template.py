@@ -21,6 +21,9 @@ class Template:
     updated_by: int | None
     updated_at: datetime | None
     is_active: bool
+    deleted: bool = False
+    deleted_by: int | None = None
+    deleted_at: datetime | None = None
     columns: list[TemplateColumn] = field(default_factory=list)
 
 

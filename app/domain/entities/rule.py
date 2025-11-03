@@ -16,6 +16,9 @@ class Rule:
     updated_by: int | None
     updated_at: datetime | None
     is_active: bool
+    deleted: bool
+    deleted_by: int | None
+    deleted_at: datetime | None
 
 
 __all__ = ["Rule"]

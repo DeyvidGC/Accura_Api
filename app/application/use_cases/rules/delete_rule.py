@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.infrastructure.repositories import RuleRepository, TemplateColumnRepository
 
 
-def delete_rule(session: Session, rule_id: int) -> None:
+def delete_rule(session: Session, rule_id: int, *, deleted_by: int | None = None) -> None:
     """Delete the specified validation rule."""
 
     repository = RuleRepository(session)
@@ -19,4 +19,4 @@ def delete_rule(session: Session, rule_id: int) -> None:
             "No se puede eliminar una regla que está asignada a una columna."
         )
 
-    repository.delete(rule_id)
+    repository.delete(rule_id, deleted_by=deleted_by)

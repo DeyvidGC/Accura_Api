@@ -1,6 +1,7 @@
 """Persistence layer for templates."""
 
 from collections.abc import Sequence
+from datetime import datetime
 
 from sqlalchemy.orm import Session, joinedload
 
@@ -18,6 +19,7 @@ class TemplateRepository:
         query = (
             self.session.query(TemplateModel)
             .options(joinedload(TemplateModel.columns))
+            .filter(TemplateModel.deleted.is_(False))
             .offset(skip)
             .limit(limit)
         )
@@ -30,6 +32,16 @@ class TemplateRepository:
     def get_by_table_name(self, table_name: str) -> Template | None:
         model = self._get_model(table_name=table_name)
         return self._to_entity(model) if model else None
+
+    def list_by_creator(self, creator_id: int) -> Sequence[Template]:
+        query = (
+            self.session.query(TemplateModel)
+            .options(joinedload(TemplateModel.columns))
+            .filter(TemplateModel.deleted.is_(False))
+            .filter(TemplateModel.created_by == creator_id)
+            .order_by(TemplateModel.created_at.desc())
+        )
+        return [self._to_entity(model) for model in query.all()]
 
     def create(self, template: Template) -> Template:
         model = TemplateModel()
@@ -54,18 +66,29 @@ class TemplateRepository:
             self.session.refresh(model, attribute_names=["columns"])
         return self._to_entity(model)
 
-    def delete(self, template_id: int) -> None:
-        model = self._get_model(id=template_id)
+    def delete(self, template_id: int, *, deleted_by: int | None = None) -> None:
+        model = self._get_model(id=template_id, include_deleted=True)
         if not model:
             msg = f"Template with id {template_id} not found"
             raise ValueError(msg)
-        self.session.delete(model)
+        if model.deleted:
+            return
+        now = datetime.utcnow()
+        model.deleted = True
+        model.deleted_by = deleted_by
+        model.deleted_at = now
+        model.is_active = False
+        model.updated_by = deleted_by
+        model.updated_at = now
+        self.session.add(model)
         self.session.commit()
 
-    def _get_model(self, **filters) -> TemplateModel | None:
+    def _get_model(self, include_deleted: bool = False, **filters) -> TemplateModel | None:
         query = self.session.query(TemplateModel).options(
             joinedload(TemplateModel.columns)
         )
+        if not include_deleted:
+            query = query.filter(TemplateModel.deleted.is_(False))
         return query.filter_by(**filters).first()
 
     @staticmethod
@@ -83,6 +106,9 @@ class TemplateRepository:
             updated_by=model.updated_by,
             updated_at=model.updated_at,
             is_active=model.is_active,
+            deleted=model.deleted,
+            deleted_by=model.deleted_by,
+            deleted_at=model.deleted_at,
             columns=columns,
         )
 
@@ -101,6 +127,9 @@ class TemplateRepository:
             updated_by=model.updated_by,
             updated_at=model.updated_at,
             is_active=model.is_active,
+            deleted=model.deleted,
+            deleted_by=model.deleted_by,
+            deleted_at=model.deleted_at,
         )
 
     @staticmethod
@@ -124,6 +153,9 @@ class TemplateRepository:
             model.updated_by = template.updated_by
             model.updated_at = template.updated_at
         model.is_active = template.is_active
+        model.deleted = template.deleted
+        model.deleted_by = template.deleted_by
+        model.deleted_at = template.deleted_at
 
     @staticmethod
     def _relationship_loaded(model: TemplateModel) -> bool:

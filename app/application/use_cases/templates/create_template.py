@@ -47,6 +47,9 @@ def create_template(
         updated_by=None,
         updated_at=None,
         is_active=True,
+        deleted=False,
+        deleted_by=None,
+        deleted_at=None,
     )
 
     saved_template = repository.create(template)

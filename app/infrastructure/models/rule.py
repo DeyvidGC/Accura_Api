@@ -1,6 +1,7 @@
 """SQLAlchemy model for validation rules."""
 
 from sqlalchemy import Boolean, Column, DateTime, Integer, func
+from sqlalchemy.sql import expression
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.types import JSON
 
@@ -21,6 +22,14 @@ class RuleModel(Base):
     updated_by = Column(Integer, nullable=True)
     updated_at = Column(DateTime, nullable=True, onupdate=func.now())
     is_active = Column(Boolean, nullable=False, default=True)
+    deleted = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=expression.false(),
+    )
+    deleted_by = Column(Integer, nullable=True)
+    deleted_at = Column(DateTime, nullable=True)
 
 
 __all__ = ["RuleModel"]

@@ -6,7 +6,7 @@ from app.infrastructure.repositories import TemplateColumnRepository, TemplateRe
 
 
 def delete_template_column(
-    session: Session, *, template_id: int, column_id: int
+    session: Session, *, template_id: int, column_id: int, deleted_by: int | None = None
 ) -> None:
     """Delete a template column.
 
@@ -28,4 +28,4 @@ def delete_template_column(
     if column is None or column.template_id != template_id:
         raise ValueError("Columna no encontrada")
 
-    column_repository.delete(column_id)
+    column_repository.delete(column_id, deleted_by=deleted_by)

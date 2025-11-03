@@ -23,6 +23,7 @@ from .kpi import (
     ValidationEffectivenessRead,
 )
 from .template import (
+    TemplateAssignmentUserRead,
     TemplateColumnBulkCreate,
     TemplateColumnCreate,
     TemplateColumnRead,
@@ -32,6 +33,7 @@ from .template import (
     TemplateStatusUpdate,
     TemplateRead,
     TemplateUpdate,
+    TemplateWithAssignmentsRead,
 )
 from .template_user_access import (
     TemplateUserAccessGrantItem,
@@ -66,6 +68,7 @@ __all__ = [
     "MonthlyComparisonRead",
     "TemplatePublicationSummaryRead",
     "ValidationEffectivenessRead",
+    "TemplateAssignmentUserRead",
     "TemplateColumnBulkCreate",
     "TemplateColumnCreate",
     "TemplateColumnRead",
@@ -75,6 +78,7 @@ __all__ = [
     "TemplateStatusUpdate",
     "TemplateRead",
     "TemplateUpdate",
+    "TemplateWithAssignmentsRead",
     "TemplateUserAccessGrantItem",
     "TemplateUserAccessGrantList",
     "TemplateUserAccessRead",

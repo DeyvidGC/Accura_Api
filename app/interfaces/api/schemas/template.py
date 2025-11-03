@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 
 try:  # pragma: no cover - compatibility with pydantic v1/v2
     from pydantic import ConfigDict
@@ -52,6 +52,9 @@ class TemplateColumnRead(TemplateColumnBase):
     created_at: datetime | None
     updated_at: datetime | None
     is_active: bool
+    deleted: bool
+    deleted_by: int | None
+    deleted_at: datetime | None
 
     if ConfigDict is not None:  # pragma: no branch - runtime configuration
         model_config = ConfigDict(from_attributes=True)
@@ -112,7 +115,34 @@ class TemplateRead(BaseModel):
     created_at: datetime | None
     updated_at: datetime | None
     is_active: bool
+    deleted: bool
+    deleted_by: int | None
+    deleted_at: datetime | None
     columns: list[TemplateColumnRead]
+
+    if ConfigDict is not None:  # pragma: no branch - runtime configuration
+        model_config = ConfigDict(from_attributes=True)
+    else:  # pragma: no cover - compatibility path for pydantic v1
+        class Config:
+            orm_mode = True
+
+
+class TemplateAssignmentUserRead(BaseModel):
+    id: int
+    name: str
+    email: EmailStr
+
+    if ConfigDict is not None:  # pragma: no branch - runtime configuration
+        model_config = ConfigDict(from_attributes=True)
+    else:  # pragma: no cover - compatibility path for pydantic v1
+        class Config:
+            orm_mode = True
+
+
+class TemplateWithAssignmentsRead(BaseModel):
+    template: TemplateRead
+    creator: TemplateAssignmentUserRead | None
+    assigned_users: list[TemplateAssignmentUserRead]
 
     if ConfigDict is not None:  # pragma: no branch - runtime configuration
         model_config = ConfigDict(from_attributes=True)

@@ -1,6 +1,7 @@
 """Persistence layer for template columns."""
 
 from collections.abc import Sequence
+from datetime import datetime
 
 from sqlalchemy.orm import Session, joinedload
 
@@ -19,6 +20,7 @@ class TemplateColumnRepository:
             self.session.query(TemplateColumnModel)
             .options(joinedload(TemplateColumnModel.rule))
             .filter(TemplateColumnModel.template_id == template_id)
+            .filter(TemplateColumnModel.deleted.is_(False))
         )
         return [self._to_entity(model) for model in query.all()]
 
@@ -66,12 +68,21 @@ class TemplateColumnRepository:
             self.session.refresh(model, attribute_names=["rule"])
         return self._to_entity(model)
 
-    def delete(self, column_id: int) -> None:
-        model = self._get_model(id=column_id)
+    def delete(self, column_id: int, *, deleted_by: int | None = None) -> None:
+        model = self._get_model(id=column_id, include_deleted=True)
         if not model:
             msg = f"Template column with id {column_id} not found"
             raise ValueError(msg)
-        self.session.delete(model)
+        if model.deleted:
+            return
+        now = datetime.utcnow()
+        model.deleted = True
+        model.deleted_by = deleted_by
+        model.deleted_at = now
+        model.is_active = False
+        model.updated_by = deleted_by
+        model.updated_at = now
+        self.session.add(model)
         self.session.commit()
 
     @staticmethod
@@ -89,12 +100,17 @@ class TemplateColumnRepository:
             updated_by=model.updated_by,
             updated_at=model.updated_at,
             is_active=model.is_active,
+            deleted=model.deleted,
+            deleted_by=model.deleted_by,
+            deleted_at=model.deleted_at,
         )
 
-    def _get_model(self, **filters) -> TemplateColumnModel | None:
+    def _get_model(self, include_deleted: bool = False, **filters) -> TemplateColumnModel | None:
         query = self.session.query(TemplateColumnModel).options(
             joinedload(TemplateColumnModel.rule)
         )
+        if not include_deleted:
+            query = query.filter(TemplateColumnModel.deleted.is_(False))
         return query.filter_by(**filters).first()
 
     @staticmethod
@@ -119,12 +135,16 @@ class TemplateColumnRepository:
             model.updated_by = column.updated_by
             model.updated_at = column.updated_at
         model.is_active = column.is_active
+        model.deleted = column.deleted
+        model.deleted_by = column.deleted_by
+        model.deleted_at = column.deleted_at
 
     def is_rule_in_use(self, rule_id: int) -> bool:
         """Return ``True`` when a rule is linked to any template column."""
 
         query = self.session.query(TemplateColumnModel.id).filter(
-            TemplateColumnModel.rule_id == rule_id
+            TemplateColumnModel.rule_id == rule_id,
+            TemplateColumnModel.deleted.is_(False),
         )
         return query.first() is not None
 
@@ -136,6 +156,7 @@ class TemplateColumnRepository:
             .join(TemplateModel, TemplateModel.id == TemplateColumnModel.template_id)
             .filter(
                 TemplateColumnModel.rule_id == rule_id,
+                TemplateColumnModel.deleted.is_(False),
                 TemplateModel.status == "published",
             )
         )

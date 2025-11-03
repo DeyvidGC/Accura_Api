@@ -24,6 +24,7 @@ from app.application.use_cases.templates import (
     get_template_excel as get_template_excel_uc,
     list_template_access as list_template_access_uc,
     list_templates as list_templates_uc,
+    list_templates_by_creator_with_assignments as list_templates_by_creator_with_assignments_uc,
     update_template as update_template_uc,
     update_template_status as update_template_status_uc,
 )
@@ -40,9 +41,11 @@ from app.interfaces.api.schemas import (
     TemplateColumnUpdate,
     TemplateCreate,
     TemplateDuplicate,
+    TemplateAssignmentUserRead,
     TemplateRead,
     TemplateStatusUpdate,
     TemplateUpdate,
+    TemplateWithAssignmentsRead,
     TemplateUserAccessGrantList,
     TemplateUserAccessRead,
     TemplateUserAccessRevokeList,
@@ -70,6 +73,9 @@ def _column_to_read_model(column: TemplateColumn) -> TemplateColumnRead:
         "created_at": column.created_at,
         "updated_at": column.updated_at,
         "is_active": column.is_active,
+        "deleted": column.deleted,
+        "deleted_by": column.deleted_by,
+        "deleted_at": column.deleted_at,
     }
 
     if hasattr(TemplateColumnRead, "model_validate"):
@@ -95,6 +101,18 @@ def _dump_model(model: object) -> dict:
     if hasattr(model, "dict"):
         return model.dict()
     raise TypeError("Unsupported model type for serialization")
+
+
+def _assignment_user_to_read_model(
+    user: User | None,
+) -> TemplateAssignmentUserRead | None:
+    if user is None:
+        return None
+
+    payload = {"id": user.id, "name": user.name, "email": user.email}
+    if hasattr(TemplateAssignmentUserRead, "model_validate"):
+        return TemplateAssignmentUserRead.model_validate(payload)
+    return TemplateAssignmentUserRead(**payload)
 
 
 @router.post("/", response_model=TemplateRead, status_code=status.HTTP_201_CREATED)
@@ -163,6 +181,43 @@ def list_templates(
 
     templates = list_templates_uc(db, skip=skip, limit=limit)
     return [_template_to_read_model(template) for template in templates]
+
+
+@router.get(
+    "/created-by/me/overview",
+    response_model=list[TemplateWithAssignmentsRead],
+)
+def list_templates_with_assignments(
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(require_admin),
+) -> list[TemplateWithAssignmentsRead]:
+    """Devuelve las plantillas creadas por el administrador actual con sus asignaciones."""
+
+    overviews = list_templates_by_creator_with_assignments_uc(
+        db, creator_id=current_admin.id
+    )
+
+    result: list[TemplateWithAssignmentsRead] = []
+    for template, creator, assigned_users in overviews:
+        template_model = _template_to_read_model(template)
+        creator_model = _assignment_user_to_read_model(creator)
+        assigned_models = [
+            user_model
+            for user in assigned_users
+            if (user_model := _assignment_user_to_read_model(user)) is not None
+        ]
+
+        payload = {
+            "template": _dump_model(template_model),
+            "creator": _dump_model(creator_model) if creator_model else None,
+            "assigned_users": [_dump_model(model) for model in assigned_models],
+        }
+        if hasattr(TemplateWithAssignmentsRead, "model_validate"):
+            result.append(TemplateWithAssignmentsRead.model_validate(payload))
+        else:  # pragma: no cover - compatibility path for pydantic v1
+            result.append(TemplateWithAssignmentsRead(**payload))
+
+    return result
 
 
 @router.get("/{template_id}", response_model=TemplateRead)
@@ -402,7 +457,12 @@ def delete_template_column(
     """Elimina una columna de la plantilla."""
 
     try:
-        delete_template_column_uc(db, template_id=template_id, column_id=column_id)
+        delete_template_column_uc(
+            db,
+            template_id=template_id,
+            column_id=column_id,
+            deleted_by=current_user.id,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)
