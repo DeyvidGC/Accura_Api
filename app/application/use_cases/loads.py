@@ -729,7 +729,14 @@ def _validate_value_with_rule(
 
     if value is None:
         if required:
-            return None, [_compose_error(normalized_message, f"{column_name}: es obligatorio")]
+            return None, [
+                _compose_error(
+                    normalized_message,
+                    "es obligatorio",
+                    column_name=column_name,
+                    cell_value=value,
+                )
+            ]
         return None, []
 
     tipo = rule_definition.get("Tipo de dato")
@@ -938,14 +945,75 @@ def _apply_base_parser(
         return value, []
     parsed_value, parse_error = base_parser(value)
     if parse_error:
-        return value, [_compose_error(message, f"{column_name}: {parse_error}")]
+        return value, [
+            _compose_error(
+                message,
+                parse_error,
+                column_name=column_name,
+                cell_value=value,
+            )
+        ]
     return parsed_value, []
 
 
-def _compose_error(message: str | None, fallback: str) -> str:
+def _format_cell_display(value: Any) -> str:
+    if value is None:
+        return "vacío"
+    if isinstance(value, float):
+        try:
+            if math.isnan(value):
+                return "vacío"
+        except TypeError:
+            pass
+    if isinstance(value, str):
+        if not value:
+            return "vacío"
+        sanitized = value.replace("\"", "'")
+        return f'"{sanitized}"'
+    if isinstance(value, (list, dict)):
+        try:
+            serialized = json.dumps(value, ensure_ascii=False)
+        except (TypeError, ValueError):
+            serialized = str(value)
+        sanitized = serialized.replace("\"", "'")
+        return f'"{sanitized}"'
+    representation = str(value)
+    if not representation:
+        return "vacío"
+    sanitized = representation.replace("\"", "'")
+    return f'"{sanitized}"'
+
+
+def _compose_column_error_detail(
+    column_name: str,
+    cell_value: Any,
+    reason: str,
+) -> str:
+    display_value = _format_cell_display(cell_value)
+    normalized_reason = str(reason or "").strip()
+    base_detail = f'El valor {display_value} de la columna "{column_name}" no es válido'
+    if normalized_reason:
+        normalized_reason = normalized_reason.rstrip(".")
+        base_detail = f"{base_detail}: {normalized_reason}."
+    else:
+        base_detail = f"{base_detail}."
+    return f"{base_detail} Revisa la configuración en Accura de la plantilla."
+
+
+def _compose_error(
+    message: str | None,
+    fallback: str,
+    *,
+    column_name: str | None = None,
+    cell_value: Any | None = None,
+) -> str:
+    if column_name is not None:
+        detail = _compose_column_error_detail(column_name, cell_value, fallback)
+    else:
+        detail = fallback
     if message:
-        return f"{message} ({fallback})"
-    return fallback
+        return f"{message} ({detail})"
+    return detail
 
 
 def _apply_duplicate_rules(
@@ -996,7 +1064,8 @@ def _apply_duplicate_rules(
                 for field in fields
             )
             fallback = (
-                f"Registros duplicados en campos {', '.join(fields)} ({values})"
+                f"Registros duplicados en campos {', '.join(fields)} ({values}). "
+                "Revisa la configuración en Accura de la plantilla para la regla de duplicados."
             )
             observations[idx].append(_compose_error(message, fallback))
             row_is_valid[idx] = False
@@ -1083,14 +1152,18 @@ def _validate_text_rule(
         errors.append(
             _compose_error(
                 message,
-                f"{column_name}: longitud mínima {min_length} caracteres",
+                f"longitud mínima {min_length} caracteres",
+                column_name=column_name,
+                cell_value=value,
             )
         )
     if isinstance(max_length, int) and len(text_value) > max_length:
         errors.append(
             _compose_error(
                 message,
-                f"{column_name}: longitud máxima {max_length} caracteres",
+                f"longitud máxima {max_length} caracteres",
+                column_name=column_name,
+                cell_value=value,
             )
         )
     return text_value, errors
@@ -1112,14 +1185,18 @@ def _validate_document_rule(
         errors.append(
             _compose_error(
                 message,
-                f"{column_name}: longitud mínima {min_length} caracteres",
+                f"longitud mínima {min_length} caracteres",
+                column_name=column_name,
+                cell_value=value,
             )
         )
     if isinstance(max_length, int) and len(text_value) > max_length:
         errors.append(
             _compose_error(
                 message,
-                f"{column_name}: longitud máxima {max_length} caracteres",
+                f"longitud máxima {max_length} caracteres",
+                column_name=column_name,
+                cell_value=value,
             )
         )
     return text_value, errors
@@ -1137,7 +1214,14 @@ def _validate_number_rule(
     try:
         numeric_value = Decimal(str(value))
     except (InvalidOperation, ValueError):
-        errors.append(_compose_error(message, f"{column_name}: debe ser numérico"))
+        errors.append(
+            _compose_error(
+                message,
+                "debe ser numérico",
+                column_name=column_name,
+                cell_value=value,
+            )
+        )
         return value, errors
 
     decimals_allowed = rule_config.get("Número de decimales")
@@ -1147,7 +1231,9 @@ def _validate_number_rule(
             errors.append(
                 _compose_error(
                     message,
-                    f"{column_name}: máximo {decimals_allowed} decimales",
+                    f"máximo {decimals_allowed} decimales",
+                    column_name=column_name,
+                    cell_value=value,
                 )
             )
 
@@ -1158,12 +1244,19 @@ def _validate_number_rule(
                 errors.append(
                     _compose_error(
                         message,
-                        f"{column_name}: valor mínimo {min_value}",
+                        f"valor mínimo {min_value}",
+                        column_name=column_name,
+                        cell_value=value,
                     )
                 )
         except (InvalidOperation, ValueError):
             errors.append(
-                _compose_error(message, f"{column_name}: límite mínimo inválido"),
+                _compose_error(
+                    message,
+                    "límite mínimo inválido",
+                    column_name=column_name,
+                    cell_value=value,
+                ),
             )
 
     max_value = rule_config.get("Valor máximo")
@@ -1173,12 +1266,19 @@ def _validate_number_rule(
                 errors.append(
                     _compose_error(
                         message,
-                        f"{column_name}: valor máximo {max_value}",
+                        f"valor máximo {max_value}",
+                        column_name=column_name,
+                        cell_value=value,
                     )
                 )
         except (InvalidOperation, ValueError):
             errors.append(
-                _compose_error(message, f"{column_name}: límite máximo inválido"),
+                _compose_error(
+                    message,
+                    "límite máximo inválido",
+                    column_name=column_name,
+                    cell_value=value,
+                ),
             )
 
     if errors:
@@ -1206,7 +1306,9 @@ def _validate_list_rule(
         return text_value, [
             _compose_error(
                 message,
-                f"{column_name}: valor no permitido ({', '.join(sorted(normalized_choices))})",
+                f"valor no permitido ({', '.join(sorted(normalized_choices))})",
+                column_name=column_name,
+                cell_value=value,
             )
         ]
     return text_value, []
@@ -1332,7 +1434,9 @@ def _validate_full_list_rule(
         return text_value, [
             _compose_error(
                 message,
-                f"{column_name}: completa los campos relacionados ({missing})",
+                f"completa los campos relacionados ({missing})",
+                column_name=column_name,
+                cell_value=value,
             )
         ]
 
@@ -1352,19 +1456,23 @@ def _validate_full_list_rule(
                 display_value = str(current_value)
             detailed_values.append(f"{field} : {display_value}")
         combination_details = " , ".join(detailed_values)
-        composed_message = f"La combinación {combination_details}, no es válida"
+        reason = f"la combinación {combination_details} no es válida"
     else:
         columns_summary = ", ".join(sorted_fields)
         if columns_summary:
-            composed_message = f"{columns_summary}: combinación no permitida"
+            reason = f"combinación no permitida entre {columns_summary}"
             if summary:
-                composed_message = f"{composed_message} ({summary})"
+                reason = f"{reason} ({summary})"
         else:
-            composed_message = f"{column_name}: combinación no permitida ({summary})"
+            reason = "combinación no permitida"
+            if summary:
+                reason = f"{reason} ({summary})"
     return text_value, [
         _compose_error(
             None,
-            composed_message,
+            reason,
+            column_name=column_name,
+            cell_value=value,
         )
     ]
 
@@ -1381,7 +1489,12 @@ def _validate_phone_rule(
     digits = re.sub(r"[^0-9]", "", text_value)
     if not digits:
         return text_value, [
-            _compose_error(message, f"{column_name}: debe contener solo números"),
+            _compose_error(
+                message,
+                "debe contener solo números",
+                column_name=column_name,
+                cell_value=value,
+            ),
         ]
 
     country_code = str(rule_config.get("Código de país") or "")
@@ -1392,7 +1505,9 @@ def _validate_phone_rule(
             return text_value, [
                 _compose_error(
                     message,
-                    f"{column_name}: debe iniciar con el código de país {country_code}",
+                    f"debe iniciar con el código de país {country_code}",
+                    column_name=column_name,
+                    cell_value=value,
                 )
             ]
         local_digits = digits[len(code_digits) :]
@@ -1402,7 +1517,9 @@ def _validate_phone_rule(
         return text_value, [
             _compose_error(
                 message,
-                f"{column_name}: longitud mínima de {min_length} dígitos",
+                f"longitud mínima de {min_length} dígitos",
+                column_name=column_name,
+                cell_value=value,
             )
         ]
 
@@ -1423,7 +1540,12 @@ def _validate_email_rule(
     if isinstance(pattern, str) and pattern.strip():
         if not re.fullmatch(pattern, text_value):
             return text_value, [
-                _compose_error(message, f"{column_name}: formato de correo inválido"),
+                _compose_error(
+                    message,
+                    "formato de correo inválido",
+                    column_name=column_name,
+                    cell_value=value,
+                ),
             ]
 
     max_length = rule_config.get("Longitud máxima")
@@ -1431,7 +1553,9 @@ def _validate_email_rule(
         return text_value, [
             _compose_error(
                 message,
-                f"{column_name}: longitud máxima {max_length} caracteres",
+                f"longitud máxima {max_length} caracteres",
+                column_name=column_name,
+                cell_value=value,
             )
         ]
 
@@ -1465,14 +1589,24 @@ def _validate_date_rule(
             return parsed.date(), []
         except (ValueError, TypeError):
             return value, [
-                _compose_error(message, f"{column_name}: formato de fecha inválido"),
+                _compose_error(
+                    message,
+                    "formato de fecha inválido",
+                    column_name=column_name,
+                    cell_value=value,
+                ),
             ]
 
     try:
         timestamp = pd.to_datetime(value, errors="raise")
     except Exception:  # pragma: no cover - pandas raises multiple exceptions
         return value, [
-            _compose_error(message, f"{column_name}: fecha inválida"),
+            _compose_error(
+                message,
+                "fecha inválida",
+                column_name=column_name,
+                cell_value=value,
+            ),
         ]
     return timestamp.date(), []
 
@@ -1600,7 +1734,12 @@ def _validate_dependency_rule(
     for entry in specific_rules:
         if not isinstance(entry, Mapping) or len(entry) < 2:
             accumulated_errors.append(
-                _compose_error(message, f"{column_name}: configuración dependiente inválida")
+                _compose_error(
+                    message,
+                    "configuración dependiente inválida",
+                    column_name=column_name,
+                    cell_value=value,
+                )
             )
             continue
 
@@ -1610,7 +1749,12 @@ def _validate_dependency_rule(
         for raw_key, config in entry.items():
             if not isinstance(raw_key, str) or not raw_key.strip():
                 accumulated_errors.append(
-                    _compose_error(message, f"{column_name}: clave de dependencia inválida")
+                    _compose_error(
+                        message,
+                        "clave de dependencia inválida",
+                        column_name=column_name,
+                        cell_value=value,
+                    )
                 )
                 validators = []
                 trigger_value = None
@@ -1629,7 +1773,9 @@ def _validate_dependency_rule(
                     accumulated_errors.append(
                         _compose_error(
                             message,
-                            f"{column_name}: el valor del campo dependiente '{raw_key}' no puede ser un objeto",
+                            f"el valor del campo dependiente '{raw_key}' no puede ser un objeto",
+                            column_name=column_name,
+                            cell_value=value,
                         )
                     )
                     validators = []
@@ -1647,7 +1793,9 @@ def _validate_dependency_rule(
                 accumulated_errors.append(
                     _compose_error(
                         message,
-                        f"{column_name}: tipo dependiente '{raw_key}' no soportado",
+                        f"tipo dependiente '{raw_key}' no soportado",
+                        column_name=column_name,
+                        cell_value=value,
                     )
                 )
                 continue
@@ -1656,7 +1804,9 @@ def _validate_dependency_rule(
                 accumulated_errors.append(
                     _compose_error(
                         message,
-                        f"{column_name}: la configuración asociada a '{raw_key}' debe ser un objeto",
+                        f"la configuración asociada a '{raw_key}' debe ser un objeto",
+                        column_name=column_name,
+                        cell_value=value,
                     )
                 )
                 continue
@@ -1667,7 +1817,9 @@ def _validate_dependency_rule(
             accumulated_errors.append(
                 _compose_error(
                     message,
-                    f"{column_name}: falta indicar el valor para '{dependent_name}' en la configuración dependiente",
+                    f"falta indicar el valor para '{dependent_name}' en la configuración dependiente",
+                    column_name=column_name,
+                    cell_value=value,
                 )
             )
             continue
@@ -1736,7 +1888,9 @@ def _validate_joint_rule(
         return value, [
             _compose_error(
                 message,
-                f"{column_name}: completa todos los campos relacionados ({', '.join(fields)})",
+                f"completa todos los campos relacionados ({', '.join(fields)})",
+                column_name=column_name,
+                cell_value=value,
             )
         ]
 
