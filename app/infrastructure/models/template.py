@@ -17,7 +17,7 @@ class TemplateModel(Base):
     name = Column(String(50), nullable=False)
     status = Column(String(20), nullable=False, default="unpublished")
     description = Column(String(255), nullable=True)
-    table_name = Column(String(63), nullable=False, unique=True)
+    table_name = Column(String(63), nullable=False)
     created_by = Column(Integer, nullable=True)
     created_at = Column(DateTime, nullable=False, server_default=func.now())
     updated_by = Column(Integer, nullable=True)

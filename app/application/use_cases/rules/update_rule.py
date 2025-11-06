@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.domain.entities import Rule
 from app.infrastructure.repositories import RuleRepository, TemplateColumnRepository
+from .validators import ensure_unique_rule_names
 
 
 def update_rule(
@@ -32,6 +33,8 @@ def update_rule(
         )
 
     new_rule = rule if rule is not None else current.rule
+    if rule is not None:
+        ensure_unique_rule_names(rule, repository, exclude_rule_id=rule_id)
 
     updated_rule = replace(
         current,
