@@ -26,9 +26,13 @@ def create_user(
 
     normalized_email = ensure_valid_gmail(email)
 
-    if repository.get_by_email(normalized_email):
-        msg = "El correo electrónico ya está registrado"
-        raise ValueError(msg)
+    existing_user = repository.get_by_email(normalized_email)
+    if existing_user:
+        if not existing_user.is_active:
+            raise ValueError(
+                "El correo electrónico pertenece a un usuario inactivo"
+            )
+        raise ValueError("El correo electrónico ya está registrado")
 
     role = role_repository.get(role_id)
     if role is None:

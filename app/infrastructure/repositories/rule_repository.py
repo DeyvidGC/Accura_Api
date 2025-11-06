@@ -1,6 +1,8 @@
 """Persistence layer for validation rules."""
 
-from collections.abc import Sequence
+from __future__ import annotations
+
+from collections.abc import Mapping, Sequence
 from datetime import datetime
 
 from sqlalchemy import desc
@@ -104,6 +106,32 @@ class RuleRepository:
             query = query.filter(RuleModel.deleted.is_(False))
         return query.filter_by(**filters).first()
 
+    def find_conflicting_rule_name(
+        self,
+        candidate_names: Sequence[str],
+        *,
+        exclude_rule_id: int | None = None,
+    ) -> str | None:
+        normalized_candidates = {
+            name.strip().lower()
+            for name in candidate_names
+            if isinstance(name, str) and name.strip()
+        }
+        if not normalized_candidates:
+            return None
+
+        query = self.session.query(RuleModel.id, RuleModel.rule).filter(
+            RuleModel.deleted.is_(False)
+        )
+        if exclude_rule_id is not None:
+            query = query.filter(RuleModel.id != exclude_rule_id)
+
+        for _, rule_data in query.all():
+            for existing_name in self._extract_rule_names(rule_data):
+                if existing_name.lower() in normalized_candidates:
+                    return existing_name
+        return None
+
     @staticmethod
     def _apply_entity_to_model(model: RuleModel, rule: Rule) -> None:
         model.rule = rule.rule
@@ -116,6 +144,36 @@ class RuleRepository:
         model.deleted = rule.deleted
         model.deleted_by = rule.deleted_by
         model.deleted_at = rule.deleted_at
+
+    @staticmethod
+    def _extract_rule_names(rule_data) -> list[str]:
+        names: list[str] = []
+        RuleRepository._collect_rule_names(rule_data, names)
+
+        unique_names: list[str] = []
+        seen: set[str] = set()
+        for name in names:
+            normalized = name.lower()
+            if normalized not in seen:
+                seen.add(normalized)
+                unique_names.append(name)
+        return unique_names
+
+    @staticmethod
+    def _collect_rule_names(rule_data, names: list[str]) -> None:
+        if isinstance(rule_data, Mapping):
+            raw_name = rule_data.get("Nombre de la regla")
+            if isinstance(raw_name, str):
+                stripped = raw_name.strip()
+                if stripped:
+                    names.append(stripped)
+            for value in rule_data.values():
+                RuleRepository._collect_rule_names(value, names)
+            return
+
+        if isinstance(rule_data, Sequence) and not isinstance(rule_data, (str, bytes)):
+            for entry in rule_data:
+                RuleRepository._collect_rule_names(entry, names)
 
 
 __all__ = ["RuleRepository"]

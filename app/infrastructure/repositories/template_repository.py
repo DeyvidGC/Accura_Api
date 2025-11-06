@@ -3,6 +3,7 @@
 from collections.abc import Sequence
 from datetime import datetime
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.domain.entities import Template, TemplateColumn
@@ -31,6 +32,19 @@ class TemplateRepository:
 
     def get_by_table_name(self, table_name: str) -> Template | None:
         model = self._get_model(table_name=table_name)
+        return self._to_entity(model) if model else None
+
+    def get_by_name(self, name: str) -> Template | None:
+        query = (
+            self.session.query(TemplateModel)
+            .options(joinedload(TemplateModel.columns))
+            .filter(TemplateModel.deleted.is_(False))
+        )
+        normalized_name = name.strip().lower()
+        model = (
+            query.filter(func.lower(TemplateModel.name) == normalized_name)
+            .first()
+        )
         return self._to_entity(model) if model else None
 
     def list_by_creator(self, creator_id: int) -> Sequence[Template]:

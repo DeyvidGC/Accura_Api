@@ -25,6 +25,10 @@ def create_template(
 
     repository = TemplateRepository(session)
 
+    normalized_name = name.strip()
+    if not normalized_name:
+        raise ValueError("El nombre de la plantilla no puede estar vacío")
+
     try:
         safe_table_name = ensure_identifier(table_name, kind="table")
     except IdentifierError as exc:
@@ -34,11 +38,15 @@ def create_template(
     if existing is not None:
         raise ValueError("El nombre de la tabla ya está en uso")
 
+    existing_by_name = repository.get_by_name(normalized_name)
+    if existing_by_name is not None:
+        raise ValueError("El nombre de la plantilla ya está en uso")
+
     now = datetime.utcnow()
     template = Template(
         id=None,
         user_id=user_id,
-        name=name,
+        name=normalized_name,
         status=DEFAULT_TEMPLATE_STATUS,
         description=description,
         table_name=safe_table_name,
