@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.domain.entities import Rule
 from app.infrastructure.repositories import RuleRepository
+from .validators import ensure_unique_rule_names
 
 
 def create_rule(
@@ -19,6 +20,7 @@ def create_rule(
     """Create a new validation rule."""
 
     repository = RuleRepository(session)
+    ensure_unique_rule_names(rule, repository)
 
     now = datetime.utcnow()
     entity = Rule(

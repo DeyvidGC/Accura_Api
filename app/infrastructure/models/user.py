@@ -14,7 +14,7 @@ class UserModel(Base):
     id = Column(Integer, primary_key=True, index=True)
     role_id = Column(Integer, ForeignKey("role.id"), nullable=False, index=True)
     name = Column(String(50), nullable=False)
-    email = Column(String(120), unique=True, nullable=False, index=True)
+    email = Column(String(120), nullable=False, index=True)
     password = Column(String(255), nullable=False)
     must_change_password = Column(Boolean, nullable=False, default=False)
     last_login = Column(DateTime, nullable=True)
