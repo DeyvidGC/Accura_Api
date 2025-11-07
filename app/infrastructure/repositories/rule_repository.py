@@ -18,22 +18,32 @@ class RuleRepository:
     def __init__(self, session: Session) -> None:
         self.session = session
 
-    def list(self, skip: int = 0, limit: int = 100) -> Sequence[Rule]:
-        query = (
-            self.session.query(RuleModel)
-            .filter(RuleModel.deleted.is_(False))
-            .offset(skip)
-            .limit(limit)
-        )
+    def list(
+        self,
+        *,
+        skip: int = 0,
+        limit: int = 100,
+        creator_id: int | None = None,
+    ) -> Sequence[Rule]:
+        query = self.session.query(RuleModel).filter(RuleModel.deleted.is_(False))
+        if creator_id is not None:
+            query = query.filter(RuleModel.created_by == creator_id)
+        query = query.order_by(desc(RuleModel.created_at), desc(RuleModel.id))
+        if skip:
+            query = query.offset(skip)
+        if limit is not None:
+            query = query.limit(limit)
         return [self._to_entity(model) for model in query.all()]
 
-    def list_recent(self, limit: int = 5) -> Sequence[Rule]:
-        query = (
-            self.session.query(RuleModel)
-            .filter(RuleModel.deleted.is_(False))
-            .order_by(desc(RuleModel.id))
-            .limit(limit)
-        )
+    def list_recent(
+        self, *, limit: int = 5, creator_id: int | None = None
+    ) -> Sequence[Rule]:
+        query = self.session.query(RuleModel).filter(RuleModel.deleted.is_(False))
+        if creator_id is not None:
+            query = query.filter(RuleModel.created_by == creator_id)
+        query = query.order_by(desc(RuleModel.id))
+        if limit is not None:
+            query = query.limit(limit)
         return [self._to_entity(model) for model in query.all()]
 
     def list_by_creator(self, creator_id: int) -> Sequence[Rule]:

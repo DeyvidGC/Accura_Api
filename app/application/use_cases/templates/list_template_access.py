@@ -2,7 +2,7 @@
 
 from sqlalchemy.orm import Session
 
-from app.domain.entities import TemplateUserAccess
+from app.domain.entities import TemplateUserAccess, User
 from app.infrastructure.repositories import TemplateRepository, TemplateUserAccessRepository
 
 
@@ -11,11 +11,14 @@ def list_template_access(
     *,
     template_id: int,
     include_inactive: bool = False,
+    current_user: User,
 ) -> list[TemplateUserAccess]:
     """Return access assignments for the given template."""
 
     template = TemplateRepository(session).get(template_id)
     if template is None:
+        raise ValueError("Plantilla no encontrada")
+    if current_user.is_admin() and template.created_by != current_user.id:
         raise ValueError("Plantilla no encontrada")
 
     repository = TemplateUserAccessRepository(session)

@@ -3,11 +3,11 @@
 from collections.abc import Sequence
 from datetime import datetime
 
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.domain.entities import Template, TemplateColumn
-from app.infrastructure.models import TemplateModel
+from app.infrastructure.models import TemplateModel, TemplateUserAccessModel
 
 
 class TemplateRepository:
@@ -16,14 +16,40 @@ class TemplateRepository:
     def __init__(self, session: Session) -> None:
         self.session = session
 
-    def list(self, skip: int = 0, limit: int = 100) -> Sequence[Template]:
+    def list(
+        self,
+        *,
+        skip: int = 0,
+        limit: int = 100,
+        creator_id: int | None = None,
+        user_id: int | None = None,
+    ) -> Sequence[Template]:
         query = (
             self.session.query(TemplateModel)
             .options(joinedload(TemplateModel.columns))
             .filter(TemplateModel.deleted.is_(False))
-            .offset(skip)
-            .limit(limit)
         )
+        if creator_id is not None:
+            query = query.filter(TemplateModel.created_by == creator_id)
+        if user_id is not None:
+            now = datetime.utcnow()
+            query = (
+                query.join(TemplateModel.access_records)
+                .filter(TemplateUserAccessModel.user_id == user_id)
+                .filter(TemplateUserAccessModel.revoked_at.is_(None))
+                .filter(TemplateUserAccessModel.start_date <= now)
+                .filter(
+                    or_(
+                        TemplateUserAccessModel.end_date.is_(None),
+                        TemplateUserAccessModel.end_date >= now,
+                    )
+                )
+            ).distinct(TemplateModel.id)
+        query = query.order_by(TemplateModel.created_at.desc(), TemplateModel.id.desc())
+        if skip:
+            query = query.offset(skip)
+        if limit is not None:
+            query = query.limit(limit)
         return [self._to_entity(model) for model in query.all()]
 
     def get(self, template_id: int) -> Template | None:

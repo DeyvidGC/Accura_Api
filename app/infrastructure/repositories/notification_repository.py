@@ -6,10 +6,11 @@ from collections.abc import Sequence
 from datetime import datetime
 from typing import Iterable
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.domain.entities import Notification
-from app.infrastructure.models import NotificationModel
+from app.infrastructure.models import NotificationModel, UserModel
 
 
 class NotificationRepository:
@@ -18,13 +19,25 @@ class NotificationRepository:
     def __init__(self, session: Session) -> None:
         self.session = session
 
-    def list_for_user(self, user_id: int, *, limit: int | None = 50) -> Sequence[Notification]:
-        query = (
-            self.session.query(NotificationModel)
-            .filter(NotificationModel.user_id == user_id)
-            .order_by(
-                NotificationModel.created_at.desc(), NotificationModel.id.desc()
+    def list_for_user(
+        self,
+        user_id: int,
+        *,
+        limit: int | None = 50,
+        include_created_users: bool = False,
+    ) -> Sequence[Notification]:
+        query = self.session.query(NotificationModel)
+        if include_created_users:
+            query = query.join(NotificationModel.user).filter(
+                or_(
+                    NotificationModel.user_id == user_id,
+                    UserModel.created_by == user_id,
+                )
             )
+        else:
+            query = query.filter(NotificationModel.user_id == user_id)
+        query = query.order_by(
+            NotificationModel.created_at.desc(), NotificationModel.id.desc()
         )
         if limit is not None:
             query = query.limit(limit)

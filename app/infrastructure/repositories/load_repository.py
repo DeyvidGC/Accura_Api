@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Sequence
 
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.domain.entities import (
@@ -13,7 +13,7 @@ from app.domain.entities import (
     LOAD_STATUS_VALIDATED_WITH_ERRORS,
     Load,
 )
-from app.infrastructure.models import LoadModel
+from app.infrastructure.models import LoadModel, UserModel
 
 _COMPLETED_STATUSES = (
     LOAD_STATUS_VALIDATED_SUCCESS,
@@ -31,6 +31,7 @@ class LoadRepository:
         self,
         *,
         user_id: int | None = None,
+        creator_id: int | None = None,
         template_id: int | None = None,
         skip: int = 0,
         limit: int | None = None,
@@ -38,6 +39,13 @@ class LoadRepository:
         query = self.session.query(LoadModel)
         if user_id is not None:
             query = query.filter(LoadModel.user_id == user_id)
+        if creator_id is not None:
+            query = query.filter(
+                or_(
+                    LoadModel.user_id == creator_id,
+                    LoadModel.user.has(UserModel.created_by == creator_id),
+                )
+            )
         if template_id is not None:
             query = query.filter(LoadModel.template_id == template_id)
         query = query.order_by(LoadModel.created_at.desc(), LoadModel.id.desc())
