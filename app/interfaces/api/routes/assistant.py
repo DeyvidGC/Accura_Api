@@ -145,13 +145,15 @@ def _build_rules_catalog(rules: Sequence[Rule]) -> list[dict[str, Any]]:
 def analyze_message(
     payload: AssistantMessageRequest,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    current_user: User = Depends(require_admin),
     assistant: StructuredChatService = Depends(get_structured_chat_service),
 ) -> AssistantMessageResponse:
     """Genera una respuesta estructurada que indica cómo atender el mensaje del usuario."""
 
     try:
-        recent_rules = list_recent_rules_uc(db, limit=5)
+        recent_rules = list_recent_rules_uc(
+            db, current_user=current_user, limit=5
+        )
         serialized_rules = _build_rules_catalog(recent_rules)
         raw_response = assistant.generate_structured_response(
             payload.message,

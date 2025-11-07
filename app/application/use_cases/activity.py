@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from app.domain.entities import ActivityEvent
+from app.domain.entities import ActivityEvent, User
 from app.infrastructure.models import (
     LoadModel,
     TemplateModel,
@@ -23,10 +24,12 @@ def _safe_datetime(*candidates: datetime | None) -> datetime:
     return datetime.utcnow()
 
 
-def get_recent_activity(session: Session, *, limit: int = 20) -> list[ActivityEvent]:
+def get_recent_activity(
+    session: Session, *, current_user: User, limit: int = 20
+) -> list[ActivityEvent]:
     """Return a merged list with the most recent relevant events."""
 
-    load_rows = (
+    load_query = (
         session.query(
             LoadModel.id,
             LoadModel.created_at,
@@ -38,12 +41,8 @@ def get_recent_activity(session: Session, *, limit: int = 20) -> list[ActivityEv
         )
         .join(TemplateModel, LoadModel.template_id == TemplateModel.id)
         .join(UserModel, LoadModel.user_id == UserModel.id)
-        .order_by(LoadModel.created_at.desc())
-        .limit(limit)
-        .all()
     )
-
-    access_rows = (
+    access_query = (
         session.query(
             TemplateUserAccessModel.id,
             TemplateUserAccessModel.created_at,
@@ -55,12 +54,8 @@ def get_recent_activity(session: Session, *, limit: int = 20) -> list[ActivityEv
         )
         .join(TemplateModel, TemplateUserAccessModel.template_id == TemplateModel.id)
         .join(UserModel, TemplateUserAccessModel.user_id == UserModel.id)
-        .order_by(TemplateUserAccessModel.created_at.desc())
-        .limit(limit)
-        .all()
     )
-
-    user_rows = (
+    user_query = (
         session.query(
             UserModel.id,
             UserModel.created_at,
@@ -71,7 +66,44 @@ def get_recent_activity(session: Session, *, limit: int = 20) -> list[ActivityEv
         )
         .join(RoleModel, UserModel.role_id == RoleModel.id)
         .filter(UserModel.deleted.is_(False))
-        .order_by(UserModel.created_at.desc())
+    )
+
+    if current_user.is_admin():
+        load_query = load_query.filter(
+            or_(
+                LoadModel.user_id == current_user.id,
+                UserModel.created_by == current_user.id,
+            )
+        )
+        access_query = access_query.filter(
+            or_(
+                TemplateModel.created_by == current_user.id,
+                UserModel.created_by == current_user.id,
+                UserModel.id == current_user.id,
+            )
+        )
+        user_query = user_query.filter(UserModel.created_by == current_user.id)
+    else:
+        load_query = load_query.filter(LoadModel.user_id == current_user.id)
+        access_query = access_query.filter(
+            TemplateUserAccessModel.user_id == current_user.id
+        )
+        user_query = user_query.filter(UserModel.id == current_user.id)
+
+    load_rows = (
+        load_query.order_by(LoadModel.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+    access_rows = (
+        access_query.order_by(TemplateUserAccessModel.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+    user_rows = (
+        user_query.order_by(UserModel.created_at.desc())
         .limit(limit)
         .all()
     )

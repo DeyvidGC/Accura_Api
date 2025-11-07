@@ -4,15 +4,22 @@ from collections.abc import Sequence
 
 from sqlalchemy.orm import Session
 
-from app.domain.entities import Rule
+from app.domain.entities import Rule, User
 from app.infrastructure.repositories import RuleRepository
 
 
-def list_recent_rules(session: Session, *, limit: int = 5) -> Sequence[Rule]:
+def list_recent_rules(
+    session: Session, *, current_user: User, limit: int = 5
+) -> Sequence[Rule]:
     """Return the most recently created validation rules up to ``limit`` entries."""
 
     repository = RuleRepository(session)
-    return repository.list_recent(limit=limit)
+    creator_id = (
+        current_user.id if current_user.is_admin() else current_user.created_by
+    )
+    if creator_id is None:
+        return []
+    return repository.list_recent(limit=limit, creator_id=creator_id)
 
 
 __all__ = ["list_recent_rules"]

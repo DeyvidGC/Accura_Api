@@ -50,11 +50,13 @@ def list_rules(
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    current_user: User = Depends(require_admin),
 ) -> list[RuleRead]:
     """Devuelve una lista paginada de reglas de validación."""
 
-    rules = list_rules_uc(db, skip=skip, limit=limit)
+    rules = list_rules_uc(
+        db, current_user=current_user, skip=skip, limit=limit
+    )
     return [_to_read_model(rule) for rule in rules]
 
 

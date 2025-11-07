@@ -293,7 +293,12 @@ def list_loads(
 
     repository = LoadRepository(session)
     if current_user.is_admin():
-        return repository.list(template_id=template_id, skip=skip, limit=limit)
+        return repository.list(
+            template_id=template_id,
+            creator_id=current_user.id,
+            skip=skip,
+            limit=limit,
+        )
     return repository.list(
         template_id=template_id, user_id=current_user.id, skip=skip, limit=limit
     )
@@ -311,7 +316,17 @@ def get_load(
     load = repository.get(load_id)
     if load is None:
         raise ValueError("Carga no encontrada")
-    if not current_user.is_admin() and load.user_id != current_user.id:
+    if current_user.is_admin():
+        if load.user_id == current_user.id:
+            return load
+        user_map = UserRepository(session).get_map_by_ids(
+            [load.user_id], include_deleted=True
+        )
+        user = user_map.get(load.user_id)
+        if user is None or user.created_by != current_user.id:
+            raise PermissionError("No autorizado")
+        return load
+    if load.user_id != current_user.id:
         raise PermissionError("No autorizado")
     return load
 

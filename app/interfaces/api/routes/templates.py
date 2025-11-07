@@ -197,11 +197,13 @@ def list_templates(
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    current_user: User = Depends(require_admin),
 ) -> list[TemplateRead]:
     """Devuelve una lista paginada de plantillas registradas."""
 
-    templates = list_templates_uc(db, skip=skip, limit=limit)
+    templates = list_templates_uc(
+        db, current_user=current_user, skip=skip, limit=limit
+    )
     return [_template_to_read_model(template) for template in templates]
 
 
@@ -525,7 +527,7 @@ def list_template_access(
     template_id: int = Query(..., ge=1),
     include_inactive: bool = False,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    current_user: User = Depends(require_admin),
 ) -> list[TemplateUserAccessRead]:
     """Lista los accesos configurados para la plantilla solicitada."""
 
@@ -534,6 +536,7 @@ def list_template_access(
             db,
             template_id=template_id,
             include_inactive=include_inactive,
+            current_user=current_user,
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
