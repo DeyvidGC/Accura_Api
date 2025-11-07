@@ -474,7 +474,7 @@ def delete_template_column(
     template_id: int,
     column_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    current_user: User = Depends(require_admin),
 ) -> Response:
     """Elimina una columna de la plantilla."""
 
