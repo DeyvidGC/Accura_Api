@@ -178,7 +178,9 @@ def download_load_report(
     """Descarga el reporte en Excel generado para la carga solicitada."""
 
     try:
-        load, path = get_load_report_uc(db, load_id=load_id, current_user=current_user)
+        load, path, filename = get_load_report_uc(
+            db, load_id=load_id, current_user=current_user
+        )
     except PermissionError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     except FileNotFoundError as exc:
@@ -189,7 +191,7 @@ def download_load_report(
     _schedule_cleanup(background_tasks, path)
     return FileResponse(
         path,
-        filename=f"reporte_carga_{load.id}.xlsx",
+        filename=filename,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         background=background_tasks,
     )
@@ -205,7 +207,7 @@ def download_load_source_file(
     """Descarga el archivo original cargado por el usuario sin columnas adicionales."""
 
     try:
-        load, path = get_load_original_file_uc(
+        load, path, filename = get_load_original_file_uc(
             db, load_id=load_id, current_user=current_user
         )
     except PermissionError as exc:
@@ -223,7 +225,7 @@ def download_load_source_file(
     _schedule_cleanup(background_tasks, path)
     return FileResponse(
         path,
-        filename=f"carga_{load.id}_original{suffix}",
+        filename=filename,
         media_type=media_type,
         background=background_tasks,
     )
