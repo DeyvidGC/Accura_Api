@@ -23,6 +23,18 @@ _EXCEL_CONTENT_TYPE = (
 _DOWNLOAD_DIRECTORY = Path(tempfile.gettempdir()) / "accura_api_templates"
 
 
+def _display_excel_filename(template_name: str) -> str:
+    """Return the user-facing filename for a template workbook."""
+
+    base = template_name.strip() or "Plantilla"
+    lower = base.lower()
+    if lower.endswith(".xlsx"):
+        base = base[:-5]
+    elif lower.endswith(".xls"):
+        base = base[:-4]
+    return f"{base}.xlsx"
+
+
 @dataclass
 class TemplateExcelInfo:
     """Metadata returned after uploading a template workbook."""
@@ -100,12 +112,14 @@ def create_template_excel(
     workbook.save(buffer)
     data = buffer.getvalue()
 
-    filename = f"{template_id}_{_sanitize_filename(template_name)}.xlsx"
-    blob_path = _build_blob_path(template_id, user_id, table_name, filename)
+    sanitized = _sanitize_filename(template_name)
+    storage_filename = f"{template_id}_{sanitized or 'plantilla'}.xlsx"
+    display_filename = _display_excel_filename(template_name)
+    blob_path = _build_blob_path(template_id, user_id, table_name, storage_filename)
     upload_blob(blob_path, data, content_type=_EXCEL_CONTENT_TYPE)
 
     return TemplateExcelInfo(
-        filename=filename,
+        filename=display_filename,
         blob_path=blob_path,
         size_bytes=len(data),
     )

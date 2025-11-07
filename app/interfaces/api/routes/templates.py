@@ -604,7 +604,7 @@ def download_template_excel(
     """Descarga el archivo de Excel generado para la plantilla."""
 
     try:
-        path = get_template_excel_uc(
+        path, filename = get_template_excel_uc(
             db,
             template_id=template_id,
             requesting_user=current_user,
@@ -625,6 +625,6 @@ def download_template_excel(
     return FileResponse(
         path,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        filename=path.name,
+        filename=filename,
         background=background_tasks,
     )

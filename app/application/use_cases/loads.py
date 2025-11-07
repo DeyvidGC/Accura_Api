@@ -55,6 +55,23 @@ _CSV_CONTENT_TYPE = "text/csv"
 _DOWNLOAD_DIRECTORY = Path(tempfile.gettempdir()) / "accura_api_downloads"
 
 
+def _sanitize_filename(name: str) -> str:
+    """Return ``name`` transformed into a filesystem-safe slug."""
+
+    cleaned = re.sub(r"[^A-Za-z0-9_-]+", "_", name.strip())
+    return cleaned.strip("_")
+
+
+def _build_display_excel_name(name: str, *, default: str) -> str:
+    base = name.strip() or default
+    lower = base.lower()
+    if lower.endswith(".xlsx"):
+        base = base[:-5]
+    elif lower.endswith(".xls"):
+        base = base[:-4]
+    return f"{base}.xlsx"
+
+
 @lru_cache(maxsize=1)
 def _get_pandas_module() -> Any:
     """Load :mod:`pandas` lazily to avoid import-time circular errors."""
@@ -62,12 +79,21 @@ def _get_pandas_module() -> Any:
     return importlib.import_module("pandas")
 
 
-def _report_filename(load_id: int) -> str:
-    return f"load_{load_id}_reporte.xlsx"
+def _report_storage_filename(load_id: int, template_name: str) -> str:
+    sanitized = _sanitize_filename(template_name)
+    core = sanitized or "reporte"
+    return f"load_{load_id}_{core}.xlsx"
 
 
-def _original_filename(load_id: int, extension: str) -> str:
-    return f"load_{load_id}_original{extension}"
+def _report_display_filename(template_name: str) -> str:
+    return _build_display_excel_name(template_name, default="Reporte")
+
+
+def _original_storage_filename(load_id: int, original_filename: str, extension: str) -> str:
+    stem = Path(original_filename).stem
+    sanitized = _sanitize_filename(stem)
+    core = sanitized or "original"
+    return f"load_{load_id}_{core}{extension}"
 
 
 def _build_report_blob_path(
@@ -198,12 +224,12 @@ def process_template_load(
         report_blob_path, report_filename, report_size = _generate_report(
             load,
             report_df,
-            template.table_name,
+            template,
         )
         _generate_original_file(
             load,
             source_df,
-            template.table_name,
+            template,
             suffix,
         )
 
@@ -295,8 +321,8 @@ def get_load_report(
     *,
     load_id: int,
     current_user: User,
-) -> tuple[Load, Path]:
-    """Return the filesystem path to the report generated for ``load_id``."""
+) -> tuple[Load, Path, str]:
+    """Return the filesystem path and display name for the report generated for ``load_id``."""
 
     load = get_load(session, load_id=load_id, current_user=current_user)
     loaded_file = LoadedFileRepository(session).get_latest_by_load(load.id)
@@ -313,7 +339,8 @@ def get_load_report(
         path = _download_to_tempfile(blob_path, ".xlsx")
     except FileNotFoundError as exc:
         raise FileNotFoundError("Reporte no encontrado en el sistema de archivos") from exc
-    return load, path
+    download_name = loaded_file.name or _report_display_filename(load.file_name)
+    return load, path, download_name
 
 
 def get_load_original_file(
@@ -321,8 +348,8 @@ def get_load_original_file(
     *,
     load_id: int,
     current_user: User,
-) -> tuple[Load, Path]:
-    """Return the original data file without status/observations columns for ``load_id``."""
+) -> tuple[Load, Path, str]:
+    """Return the original data file path and display name without extra columns for ``load_id``."""
 
     load = get_load(session, load_id=load_id, current_user=current_user)
     template = _get_template(session, load.template_id)
@@ -344,7 +371,8 @@ def get_load_original_file(
     except FileNotFoundError as exc:
         raise FileNotFoundError("Archivo original no disponible para esta carga") from exc
 
-    return load, path
+    download_name = Path(load.file_name).name or f"carga_{load.id}{extension}"
+    return load, path, download_name
 
 
 def _get_template(session: Session, template_id: int) -> Template:
@@ -640,22 +668,23 @@ def _persist_rows(
 
 
 def _generate_report(
-    load: Load, dataframe: DataFrame, table_name: str
+    load: Load, dataframe: DataFrame, template: Template
 ) -> tuple[str, str, int]:
     if load.id is None:
         raise ValueError("Identificador de carga inválido")
-    filename = _report_filename(load.id)
+    display_filename = _report_display_filename(template.name)
+    storage_filename = _report_storage_filename(load.id, template.name)
     blob_path = _build_report_blob_path(
-        table_name,
+        template.table_name,
         load.template_id,
         load.user_id,
-        filename,
+        storage_filename,
     )
     buffer = BytesIO()
     dataframe.to_excel(buffer, index=False)
     data = buffer.getvalue()
     upload_blob(blob_path, data, content_type=_EXCEL_CONTENT_TYPE)
-    return blob_path, filename, len(data)
+    return blob_path, display_filename, len(data)
 
 
 def _prepare_report_dataframe(dataframe: DataFrame) -> DataFrame:
@@ -680,14 +709,14 @@ def _prepare_original_dataframe(dataframe: DataFrame) -> DataFrame:
 
 
 def _generate_original_file(
-    load: Load, dataframe: DataFrame, table_name: str, suffix: str
+    load: Load, dataframe: DataFrame, template: Template, suffix: str
 ) -> str:
     if load.id is None:
         raise ValueError("Identificador de carga inválido")
     extension = ".csv" if suffix == ".csv" else ".xlsx"
-    filename = _original_filename(load.id, extension)
+    filename = _original_storage_filename(load.id, load.file_name, extension)
     blob_path = _build_report_blob_path(
-        table_name,
+        template.table_name,
         load.template_id,
         load.user_id,
         filename,

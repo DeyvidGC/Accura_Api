@@ -19,8 +19,8 @@ def get_template_excel(
     *,
     template_id: int,
     requesting_user: User,
-) -> Path:
-    """Return the filesystem path to the template Excel file."""
+) -> tuple[Path, str]:
+    """Return the filesystem path and download name for the template Excel file."""
 
     repository = TemplateRepository(session)
     template = repository.get(template_id)
@@ -43,9 +43,12 @@ def get_template_excel(
         raise ValueError("Archivo de plantilla no encontrado")
 
     try:
-        return download_template_excel(digital_file.path)
+        path = download_template_excel(digital_file.path)
     except FileNotFoundError as exc:
         raise ValueError("Archivo de plantilla no encontrado") from exc
+
+    download_name = digital_file.name or f"{template.name}.xlsx"
+    return path, download_name
 
 
 __all__ = ["get_template_excel"]
