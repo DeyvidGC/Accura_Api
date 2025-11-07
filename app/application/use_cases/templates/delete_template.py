@@ -24,6 +24,9 @@ def delete_template(
     if template is None:
         raise ValueError("Plantilla no encontrada")
 
+    digital_file_repository = DigitalFileRepository(session)
+    existing_digital_file = digital_file_repository.get_by_template_id(template.id)
+
     repository.delete(template_id, deleted_by=deleted_by)
 
     try:
@@ -31,8 +34,8 @@ def delete_template(
     except RuntimeError as exc:
         raise ValueError(str(exc)) from exc
 
-    delete_template_excel(template.id, template.name)
-    digital_file_repository = DigitalFileRepository(session)
+    if existing_digital_file is not None:
+        delete_template_excel(existing_digital_file.path)
     digital_file_repository.delete_by_template_id(template.id)
 
     if template.status == "published":

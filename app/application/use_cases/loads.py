@@ -6,15 +6,17 @@ import importlib
 import json
 import math
 import re
+import tempfile
 import unicodedata
 from collections.abc import Mapping, Sequence
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
-from io import BytesIO
+from io import BytesIO, StringIO
 from pathlib import Path
 from difflib import SequenceMatcher
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any, Callable
+from uuid import uuid4
 from sqlalchemy import MetaData, Table, insert
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -44,11 +46,13 @@ from app.infrastructure.repositories import (
     TemplateUserAccessRepository,
     UserRepository,
 )
-from app.infrastructure.template_files import relative_to_project_root
-
-_REPORT_DIRECTORY = Path(__file__).resolve().parents[3] / "Files" / "Reports"
+from app.infrastructure.storage import download_blob_to_path, upload_blob
 
 _SUPPORTED_EXTENSIONS = {".xlsx", ".xls", ".csv"}
+_REPORT_PREFIX = "Reports"
+_EXCEL_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+_CSV_CONTENT_TYPE = "text/csv"
+_DOWNLOAD_DIRECTORY = Path(tempfile.gettempdir()) / "accura_api_downloads"
 
 
 @lru_cache(maxsize=1)
@@ -56,6 +60,26 @@ def _get_pandas_module() -> Any:
     """Load :mod:`pandas` lazily to avoid import-time circular errors."""
 
     return importlib.import_module("pandas")
+
+
+def _report_filename(load_id: int) -> str:
+    return f"load_{load_id}_reporte.xlsx"
+
+
+def _original_filename(load_id: int, extension: str) -> str:
+    return f"load_{load_id}_original{extension}"
+
+
+def _build_report_blob_path(
+    table_name: str, template_id: int, user_id: int, filename: str
+) -> str:
+    return f"{_REPORT_PREFIX}/{table_name}/{template_id}-{user_id}-{filename}"
+
+
+def _download_to_tempfile(blob_path: str, suffix: str) -> Path:
+    _DOWNLOAD_DIRECTORY.mkdir(parents=True, exist_ok=True)
+    destination = _DOWNLOAD_DIRECTORY / f"{uuid4().hex}{suffix}"
+    return download_blob_to_path(blob_path, destination)
 
 
 if TYPE_CHECKING:
@@ -171,9 +195,13 @@ def process_template_load(
         report_df = _prepare_report_dataframe(validated_df)
         source_df = _prepare_original_dataframe(validated_df)
 
-        report_path = _generate_report(load.id, report_df, template.table_name)
+        report_blob_path, report_filename, report_size = _generate_report(
+            load,
+            report_df,
+            template.table_name,
+        )
         _generate_original_file(
-            load.id,
+            load,
             source_df,
             template.table_name,
             suffix,
@@ -188,7 +216,6 @@ def process_template_load(
             else LOAD_STATUS_VALIDATED_WITH_ERRORS
         )
         finished_at = datetime.utcnow()
-        relative_report_path = relative_to_project_root(report_path)
         load = load_repo.update(
             Load(
                 id=load.id,
@@ -198,7 +225,7 @@ def process_template_load(
                 file_name=load.file_name,
                 total_rows=total_rows,
                 error_rows=error_rows,
-                report_path=relative_report_path,
+                report_path=report_blob_path,
                 created_at=load.created_at,
                 started_at=load.started_at,
                 finished_at=finished_at,
@@ -211,8 +238,9 @@ def process_template_load(
             load=load,
             template=template,
             user=user,
-            report_path=report_path,
-            relative_report_path=relative_report_path,
+            report_blob_path=report_blob_path,
+            report_filename=report_filename,
+            report_size=report_size,
         )
         notify_load_status_changed(
             session, load=load, template=template, user=user
@@ -278,10 +306,13 @@ def get_load_report(
     if not current_user.is_admin() and loaded_file.created_user_id != current_user.id:
         raise PermissionError("No autorizado")
 
-    project_root = Path(__file__).resolve().parents[3]
-    path = project_root / loaded_file.path
-    if not path.exists():
-        raise FileNotFoundError("Reporte no encontrado en el sistema de archivos")
+    blob_path = loaded_file.path or load.report_path
+    if not blob_path:
+        raise FileNotFoundError("Reporte no disponible para esta carga")
+    try:
+        path = _download_to_tempfile(blob_path, ".xlsx")
+    except FileNotFoundError as exc:
+        raise FileNotFoundError("Reporte no encontrado en el sistema de archivos") from exc
     return load, path
 
 
@@ -299,10 +330,19 @@ def get_load_original_file(
     suffix = Path(load.file_name).suffix.lower()
     extension = ".csv" if suffix == ".csv" else ".xlsx"
 
-    directory = _REPORT_DIRECTORY / template.table_name
-    path = directory / f"load_{load.id}_original{extension}"
-    if not path.exists():
-        raise FileNotFoundError("Archivo original no disponible para esta carga")
+    if load.id is None:
+        raise ValueError("Identificador de carga inválido")
+    filename = _original_filename(load.id, extension)
+    blob_path = _build_report_blob_path(
+        template.table_name,
+        template.id,
+        load.user_id,
+        filename,
+    )
+    try:
+        path = _download_to_tempfile(blob_path, extension)
+    except FileNotFoundError as exc:
+        raise FileNotFoundError("Archivo original no disponible para esta carga") from exc
 
     return load, path
 
@@ -599,12 +639,23 @@ def _persist_rows(
     return sum(1 for flag in row_is_valid if flag)
 
 
-def _generate_report(load_id: int, dataframe: DataFrame, table_name: str) -> Path:
-    report_directory = _REPORT_DIRECTORY / table_name
-    report_directory.mkdir(parents=True, exist_ok=True)
-    report_path = report_directory / f"load_{load_id}_reporte.xlsx"
-    dataframe.to_excel(report_path, index=False)
-    return report_path
+def _generate_report(
+    load: Load, dataframe: DataFrame, table_name: str
+) -> tuple[str, str, int]:
+    if load.id is None:
+        raise ValueError("Identificador de carga inválido")
+    filename = _report_filename(load.id)
+    blob_path = _build_report_blob_path(
+        table_name,
+        load.template_id,
+        load.user_id,
+        filename,
+    )
+    buffer = BytesIO()
+    dataframe.to_excel(buffer, index=False)
+    data = buffer.getvalue()
+    upload_blob(blob_path, data, content_type=_EXCEL_CONTENT_TYPE)
+    return blob_path, filename, len(data)
 
 
 def _prepare_report_dataframe(dataframe: DataFrame) -> DataFrame:
@@ -629,21 +680,32 @@ def _prepare_original_dataframe(dataframe: DataFrame) -> DataFrame:
 
 
 def _generate_original_file(
-    load_id: int, dataframe: DataFrame, table_name: str, suffix: str
-) -> Path:
-    directory = _REPORT_DIRECTORY / table_name
-    directory.mkdir(parents=True, exist_ok=True)
-
-    base_path = directory / f"load_{load_id}_original"
+    load: Load, dataframe: DataFrame, table_name: str, suffix: str
+) -> str:
+    if load.id is None:
+        raise ValueError("Identificador de carga inválido")
     extension = ".csv" if suffix == ".csv" else ".xlsx"
-    path = base_path.with_suffix(extension)
+    filename = _original_filename(load.id, extension)
+    blob_path = _build_report_blob_path(
+        table_name,
+        load.template_id,
+        load.user_id,
+        filename,
+    )
 
     if extension == ".csv":
-        dataframe.to_csv(path, index=False)
+        buffer = StringIO()
+        dataframe.to_csv(buffer, index=False)
+        data = buffer.getvalue().encode("utf-8")
+        content_type = _CSV_CONTENT_TYPE
     else:
-        dataframe.to_excel(path, index=False)
+        buffer = BytesIO()
+        dataframe.to_excel(buffer, index=False)
+        data = buffer.getvalue()
+        content_type = _EXCEL_CONTENT_TYPE
 
-    return path
+    upload_blob(blob_path, data, content_type=content_type)
+    return blob_path
 
 
 def _register_loaded_file(
@@ -653,21 +715,21 @@ def _register_loaded_file(
     load: Load,
     template: Template,
     user: User,
-    report_path: Path,
-    relative_report_path: str,
+    report_blob_path: str,
+    report_filename: str,
+    report_size: int,
 ) -> None:
     loaded_file_repo = LoadedFileRepository(session)
     num_load = load_repo.count_completed_by_user_and_template(
         user_id=user.id, template_id=template.id
     )
-    size_bytes = report_path.stat().st_size if report_path.exists() else 0
     loaded_file_repo.create(
         LoadedFile(
             id=None,
             load_id=load.id,
-            name=report_path.name,
-            path=relative_report_path,
-            size_bytes=size_bytes,
+            name=report_filename,
+            path=report_blob_path,
+            size_bytes=report_size,
             num_load=num_load,
             created_user_id=user.id,
             created_at=None,
