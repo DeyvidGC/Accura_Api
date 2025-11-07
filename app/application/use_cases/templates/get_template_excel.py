@@ -6,8 +6,12 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from app.domain.entities import User
-from app.infrastructure.repositories import TemplateRepository, TemplateUserAccessRepository
-from app.infrastructure.template_files import template_excel_path
+from app.infrastructure.repositories import (
+    DigitalFileRepository,
+    TemplateRepository,
+    TemplateUserAccessRepository,
+)
+from app.infrastructure.template_files import download_template_excel
 
 
 def get_template_excel(
@@ -33,11 +37,15 @@ def get_template_excel(
         if access is None:
             raise ValueError("El usuario no tiene acceso a la plantilla")
 
-    path = template_excel_path(template.id, template.name)
-    if not path.exists():
+    digital_file_repository = DigitalFileRepository(session)
+    digital_file = digital_file_repository.get_by_template_id(template_id)
+    if digital_file is None:
         raise ValueError("Archivo de plantilla no encontrado")
 
-    return path
+    try:
+        return download_template_excel(digital_file.path)
+    except FileNotFoundError as exc:
+        raise ValueError("Archivo de plantilla no encontrado") from exc
 
 
 __all__ = ["get_template_excel"]

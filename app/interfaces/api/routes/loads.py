@@ -13,6 +13,7 @@ from fastapi import (
     status,
 )
 from fastapi.responses import FileResponse
+from pathlib import Path
 from sqlalchemy.orm import Session
 
 from app.application.use_cases.loads import (
@@ -36,6 +37,17 @@ def _load_to_read_model(load: Load) -> LoadRead:
     if hasattr(LoadRead, "model_validate"):
         return LoadRead.model_validate(load)
     return LoadRead.from_orm(load)
+
+
+def _schedule_cleanup(background_tasks: BackgroundTasks, path: Path) -> None:
+    background_tasks.add_task(_remove_file_safely, path)
+
+
+def _remove_file_safely(path: Path) -> None:
+    try:
+        path.unlink()
+    except FileNotFoundError:  # pragma: no cover - best effort cleanup
+        pass
 
 
 @router.post(
@@ -159,6 +171,7 @@ def read_load(
 @router.get("/loads/{load_id}/report")
 def download_load_report(
     load_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ) -> FileResponse:
@@ -173,16 +186,19 @@ def download_load_report(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
+    _schedule_cleanup(background_tasks, path)
     return FileResponse(
         path,
         filename=f"reporte_carga_{load.id}.xlsx",
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        background=background_tasks,
     )
 
 
 @router.get("/loads/{load_id}/source")
 def download_load_source_file(
     load_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ) -> FileResponse:
@@ -204,10 +220,12 @@ def download_load_source_file(
     if suffix == ".csv":
         media_type = "text/csv"
 
+    _schedule_cleanup(background_tasks, path)
     return FileResponse(
         path,
         filename=f"carga_{load.id}_original{suffix}",
         media_type=media_type,
+        background=background_tasks,
     )
 
 

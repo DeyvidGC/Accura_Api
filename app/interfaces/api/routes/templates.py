@@ -1,6 +1,17 @@
 """Rutas para administrar plantillas, sus columnas y accesos."""
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response, status
+from pathlib import Path
+
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Body,
+    Depends,
+    HTTPException,
+    Query,
+    Response,
+    status,
+)
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -59,6 +70,17 @@ def _template_to_read_model(template: Template) -> TemplateRead:
     if hasattr(TemplateRead, "model_validate"):
         return TemplateRead.model_validate(template)
     return TemplateRead.from_orm(template)
+
+
+def _remove_file_safely(path: Path) -> None:
+    try:
+        path.unlink()
+    except FileNotFoundError:  # pragma: no cover - best-effort cleanup
+        pass
+
+
+def _schedule_cleanup(background_tasks: BackgroundTasks, path: Path) -> None:
+    background_tasks.add_task(_remove_file_safely, path)
 
 
 def _column_to_read_model(column: TemplateColumn) -> TemplateColumnRead:
@@ -575,6 +597,7 @@ def revoke_template_accesses(
 @router.get("/{template_id}/excel")
 def download_template_excel(
     template_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
@@ -598,8 +621,10 @@ def download_template_excel(
             status_code = status.HTTP_400_BAD_REQUEST
         raise HTTPException(status_code=status_code, detail=detail) from exc
 
+    _schedule_cleanup(background_tasks, path)
     return FileResponse(
         path,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         filename=path.name,
+        background=background_tasks,
     )
