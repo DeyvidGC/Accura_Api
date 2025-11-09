@@ -1,7 +1,7 @@
 """Rutas para administrar usuarios y sus credenciales."""
 
 import logging
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from app.application.use_cases.users import (
@@ -9,7 +9,6 @@ from app.application.use_cases.users import (
     delete_user as delete_user_uc,
     get_user as get_user_uc,
     list_users as list_users_uc,
-    list_users_by_creator as list_users_by_creator_uc,
     update_user as update_user_uc,
 )
 from app.domain.entities import User
@@ -70,26 +69,17 @@ def read_current_user(current_user: User = Depends(get_current_active_user)):
 def list_users(
     skip: int = 0,
     limit: int = 100,
-    created_by_me: bool = Query(
-        False,
-        description=(
-            "Si es verdadero, devuelve únicamente los usuarios creados por el administrador "
-            "autenticado."
-        ),
-    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
     """Devuelve una lista de usuarios registrados."""
 
-    if created_by_me:
-        users = list(list_users_by_creator_uc(db, creator_id=current_user.id))
-        if skip:
-            users = users[skip:]
-        if limit is not None:
-            users = users[:limit]
-    else:
-        users = list_users_uc(db, skip=skip, limit=limit)
+    users = list_users_uc(
+        db,
+        current_user=current_user,
+        skip=skip,
+        limit=limit,
+    )
     return [_to_read_model(user) for user in users]
 
 
