@@ -22,8 +22,10 @@ class MonthlyComparisonRead(BaseModel):
 
 
 class TemplatePublicationSummaryRead(BaseModel):
+    total: int = Field(..., description="Cantidad total de plantillas registradas")
     published: int = Field(..., description="Cantidad de plantillas publicadas")
     unpublished: int = Field(..., description="Cantidad de plantillas no publicadas")
+    active: int = Field(..., description="Cantidad de plantillas activas")
 
     if ConfigDict is not None:  # pragma: no branch - runtime configuration
         model_config = ConfigDict(from_attributes=True)
@@ -46,11 +48,43 @@ class ValidationEffectivenessRead(BaseModel):
             orm_mode = True
 
 
+class RuleSummaryRead(BaseModel):
+    total: int = Field(..., description="Cantidad total de reglas registradas")
+    active: int = Field(..., description="Cantidad de reglas activas")
+    assigned: int = Field(
+        ..., description="Cantidad de reglas asignadas a columnas de plantillas"
+    )
+
+    if ConfigDict is not None:  # pragma: no branch - runtime configuration
+        model_config = ConfigDict(from_attributes=True)
+    else:  # pragma: no cover - compatibility path for pydantic v1
+        class Config:
+            orm_mode = True
+
+
+class HistorySnapshotRead(BaseModel):
+    total_loads: int = Field(..., description="Cantidad total de cargas realizadas")
+    active_users: int = Field(
+        ..., description="Cantidad de usuarios activos pertenecientes al administrador"
+    )
+    processed_rows: int = Field(
+        ..., description="Cantidad total de filas procesadas en las cargas"
+    )
+
+    if ConfigDict is not None:  # pragma: no branch - runtime configuration
+        model_config = ConfigDict(from_attributes=True)
+    else:  # pragma: no cover - compatibility path for pydantic v1
+        class Config:
+            orm_mode = True
+
+
 class KPIReportRead(BaseModel):
     active_users: MonthlyComparisonRead
     templates: TemplatePublicationSummaryRead
     loads: MonthlyComparisonRead
     validations: ValidationEffectivenessRead
+    rules: RuleSummaryRead
+    history: HistorySnapshotRead
 
     if ConfigDict is not None:  # pragma: no branch - runtime configuration
         model_config = ConfigDict(from_attributes=True)
@@ -64,4 +98,6 @@ __all__ = [
     "MonthlyComparisonRead",
     "TemplatePublicationSummaryRead",
     "ValidationEffectivenessRead",
+    "RuleSummaryRead",
+    "HistorySnapshotRead",
 ]
