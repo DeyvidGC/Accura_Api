@@ -267,20 +267,12 @@ def get_kpis(
         .scalar()
     ) or 0
 
-    history_active_users_filters = [
-        UserModel.is_active.is_(True),
-        UserModel.deleted.is_(False),
-    ]
-    if admin_user_id is not None:
-        history_active_users_filters.extend(
-            [UserModel.created_by == admin_user_id, UserModel.id != admin_user_id]
-        )
-
-    history_active_users = (
-        session.query(func.count(UserModel.id))
-        .filter(and_(*history_active_users_filters))
-        .scalar()
-    ) or 0
+    history_active_users_query = (
+        session.query(func.count(func.distinct(LoadModel.user_id)))
+        .join(TemplateModel, LoadModel.template_id == TemplateModel.id)
+        .filter(and_(*loads_filters))
+    )
+    history_active_users = history_active_users_query.scalar() or 0
 
     effectiveness = (
         (successful_validations / total_validations) * 100 if total_validations else 0.0
