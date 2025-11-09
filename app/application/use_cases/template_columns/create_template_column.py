@@ -7,17 +7,14 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from app.domain.entities import TemplateColumn
-from app.infrastructure.dynamic_tables import (
-    IdentifierError,
-    ensure_data_type,
-    ensure_identifier,
-)
+from app.infrastructure.dynamic_tables import ensure_data_type
 from app.infrastructure.repositories import (
     RuleRepository,
     TemplateColumnRepository,
     TemplateRepository,
 )
 
+from .naming import derive_column_identifier, normalize_column_display_name
 from .validators import ensure_rule_header_dependencies, normalize_rule_header
 
 
@@ -49,20 +46,22 @@ def _build_column(
     payload: NewTemplateColumnData,
     created_by: int | None,
     forbidden_names: set[str],
+    forbidden_identifiers: set[str],
 ) -> TemplateColumn:
-    try:
-        safe_name = ensure_identifier(payload.name, kind="column")
-    except IdentifierError as exc:
-        raise ValueError(str(exc)) from exc
+    normalized_name = normalize_column_display_name(payload.name)
+    identifier = derive_column_identifier(normalized_name)
+
+    normalized_key = normalized_name.lower()
+    if normalized_key in forbidden_names or identifier in forbidden_identifiers:
+        raise ValueError("Ya existe una columna con ese nombre en la plantilla")
+
+    forbidden_names.add(normalized_key)
+    forbidden_identifiers.add(identifier)
 
     try:
         normalized_type = ensure_data_type(payload.data_type)
     except ValueError as exc:
         raise ValueError(str(exc)) from exc
-
-    normalized_name = safe_name.lower()
-    if normalized_name in forbidden_names:
-        raise ValueError("Ya existe una columna con ese nombre en la plantilla")
 
     now = datetime.utcnow()
     normalized_header = normalize_rule_header(payload.rule_header)
@@ -72,7 +71,7 @@ def _build_column(
         template_id=template_id,
         rule_id=payload.rule_id,
         rule_header=normalized_header,
-        name=safe_name,
+        name=normalized_name,
         description=payload.description,
         data_type=normalized_type,
         created_by=created_by,
@@ -111,6 +110,9 @@ def create_template_column(
 
     existing_columns = list(column_repository.list_by_template(template_id))
     forbidden_names = {column.name.lower() for column in existing_columns}
+    forbidden_identifiers = {
+        derive_column_identifier(column.name) for column in existing_columns
+    }
     column = _build_column(
         template_id=template_id,
         payload=NewTemplateColumnData(
@@ -122,6 +124,7 @@ def create_template_column(
         ),
         created_by=created_by,
         forbidden_names=forbidden_names,
+        forbidden_identifiers=forbidden_identifiers,
     )
 
     ensure_rule_header_dependencies(
@@ -154,6 +157,9 @@ def create_template_columns(
 
     existing_columns = list(column_repository.list_by_template(template_id))
     forbidden_names = {column.name.lower() for column in existing_columns}
+    forbidden_identifiers = {
+        derive_column_identifier(column.name) for column in existing_columns
+    }
 
     new_columns: list[TemplateColumn] = []
     for payload in columns:
@@ -162,8 +168,8 @@ def create_template_columns(
             payload=payload,
             created_by=created_by,
             forbidden_names=forbidden_names,
+            forbidden_identifiers=forbidden_identifiers,
         )
-        forbidden_names.add(column.name.lower())
         new_columns.append(column)
 
     ensure_rule_header_dependencies(

@@ -26,6 +26,9 @@ from app.application.use_cases.notifications import (
     notify_load_validated_success,
     notify_template_processing,
 )
+from app.application.use_cases.template_columns.naming import (
+    derive_column_identifier,
+)
 from app.domain.entities import (
     LOAD_STATUS_FAILED,
     LOAD_STATUS_PROCESSING,
@@ -211,11 +214,16 @@ def process_template_load(
         operation_number = load.id or 0
         if not operation_number:
             raise ValueError("Identificador de carga inválido")
+        identifier_map = {
+            column.name: derive_column_identifier(column.name) for column in columns
+        }
+
         processed_rows = _persist_rows(
             validated_df,
             row_is_valid,
             template.table_name,
             operation_number=operation_number,
+            column_identifier_map=identifier_map,
         )
 
         report_df = _prepare_report_dataframe(validated_df)
@@ -649,6 +657,7 @@ def _persist_rows(
     table_name: str,
     *,
     operation_number: int,
+    column_identifier_map: Mapping[str, str] | None = None,
 ) -> int:
     pd = _get_pandas_module()
     if not len(dataframe.index):
@@ -657,16 +666,18 @@ def _persist_rows(
     working_df = dataframe.copy()
     working_df["numero_operacion"] = operation_number
     normalized_df = working_df.where(pd.notnull(working_df), None)
+    identifier_map = column_identifier_map or {}
     records = []
     for row in normalized_df.to_dict(orient="records"):
         normalized_row: dict[str, Any] = {}
         for key, value in row.items():
+            target_key = identifier_map.get(key, key)
             if isinstance(value, pd.Timestamp):
-                normalized_row[key] = _coerce_timestamp(value)
+                normalized_row[target_key] = _coerce_timestamp(value)
             elif value is None:
-                normalized_row[key] = None
+                normalized_row[target_key] = None
             else:
-                normalized_row[key] = value
+                normalized_row[target_key] = value
         records.append(normalized_row)
 
     metadata = MetaData()
@@ -1046,6 +1057,9 @@ def _apply_base_parser(
     column_name: str,
     base_parser: Callable[[Any], tuple[Any, str | None]] | None,
     message: str | None,
+    *,
+    dependent_field: str | None = None,
+    dependent_value: Any | None = None,
 ) -> tuple[Any, list[str]]:
     if base_parser is None:
         return value, []
@@ -1057,6 +1071,8 @@ def _apply_base_parser(
                 parse_error,
                 column_name=column_name,
                 cell_value=value,
+                dependent_field=dependent_field,
+                dependent_value=dependent_value,
             )
         ]
     return parsed_value, []
@@ -1094,15 +1110,31 @@ def _compose_column_error_detail(
     column_name: str,
     cell_value: Any,
     reason: str,
+    *,
+    dependent_field: str | None = None,
+    dependent_value: Any | None = None,
+    invalid_values: Sequence[str] | None = None,
 ) -> str:
-    display_value = _format_cell_display(cell_value)
     normalized_reason = str(reason or "").strip()
-    base_detail = f'El valor {display_value} de la columna "{column_name}" no es válido'
+
+    if invalid_values:
+        values_text = ", ".join(invalid_values)
+        base_detail = f"El conjunto de valores {values_text} no es válido"
+    elif dependent_field:
+        base_detail = f'La columna "{column_name}" no es válida para "{dependent_field}"'
+        if dependent_value is not None:
+            dependent_display = _format_cell_display(dependent_value)
+            base_detail = f"{base_detail} con el valor {dependent_display}"
+    else:
+        base_detail = f'La columna "{column_name}" tiene un valor no válido'
+
     if normalized_reason:
         normalized_reason = normalized_reason.rstrip(".")
         base_detail = f"{base_detail}: {normalized_reason}."
     else:
-        base_detail = f"{base_detail}."
+        if not base_detail.endswith("."):
+            base_detail = f"{base_detail}."
+
     return f"{base_detail} Revisa la configuración en Accura de la plantilla."
 
 
@@ -1112,13 +1144,23 @@ def _compose_error(
     *,
     column_name: str | None = None,
     cell_value: Any | None = None,
+    dependent_field: str | None = None,
+    dependent_value: Any | None = None,
+    invalid_values: Sequence[str] | None = None,
 ) -> str:
     if column_name is not None:
-        detail = _compose_column_error_detail(column_name, cell_value, fallback)
+        detail = _compose_column_error_detail(
+            column_name,
+            cell_value,
+            fallback,
+            dependent_field=dependent_field,
+            dependent_value=dependent_value,
+            invalid_values=invalid_values,
+        )
     else:
         detail = fallback
     if message:
-        return f"{message} ({detail})"
+        return message
     return detail
 
 
@@ -1248,6 +1290,8 @@ def _validate_text_rule(
     column_name: str,
     rule_config: Mapping[str, Any],
     message: str | None,
+    dependent_field: str | None = None,
+    dependent_value: Any | None = None,
     **_: Any,
 ) -> tuple[str, list[str]]:
     text_value = str(value)
@@ -1261,6 +1305,8 @@ def _validate_text_rule(
                 f"longitud mínima {min_length} caracteres",
                 column_name=column_name,
                 cell_value=value,
+                dependent_field=dependent_field,
+                dependent_value=dependent_value,
             )
         )
     if isinstance(max_length, int) and len(text_value) > max_length:
@@ -1270,6 +1316,8 @@ def _validate_text_rule(
                 f"longitud máxima {max_length} caracteres",
                 column_name=column_name,
                 cell_value=value,
+                dependent_field=dependent_field,
+                dependent_value=dependent_value,
             )
         )
     return text_value, errors
@@ -1281,6 +1329,8 @@ def _validate_document_rule(
     column_name: str,
     rule_config: Mapping[str, Any],
     message: str | None,
+    dependent_field: str | None = None,
+    dependent_value: Any | None = None,
     **_: Any,
 ) -> tuple[str, list[str]]:
     text_value = str(value)
@@ -1294,6 +1344,8 @@ def _validate_document_rule(
                 f"longitud mínima {min_length} caracteres",
                 column_name=column_name,
                 cell_value=value,
+                dependent_field=dependent_field,
+                dependent_value=dependent_value,
             )
         )
     if isinstance(max_length, int) and len(text_value) > max_length:
@@ -1303,6 +1355,8 @@ def _validate_document_rule(
                 f"longitud máxima {max_length} caracteres",
                 column_name=column_name,
                 cell_value=value,
+                dependent_field=dependent_field,
+                dependent_value=dependent_value,
             )
         )
     return text_value, errors
@@ -1314,6 +1368,8 @@ def _validate_number_rule(
     column_name: str,
     rule_config: Mapping[str, Any],
     message: str | None,
+    dependent_field: str | None = None,
+    dependent_value: Any | None = None,
     **_: Any,
 ) -> tuple[Any, list[str]]:
     errors: list[str] = []
@@ -1326,6 +1382,8 @@ def _validate_number_rule(
                 "debe ser numérico",
                 column_name=column_name,
                 cell_value=value,
+                dependent_field=dependent_field,
+                dependent_value=dependent_value,
             )
         )
         return value, errors
@@ -1340,6 +1398,8 @@ def _validate_number_rule(
                     f"máximo {decimals_allowed} decimales",
                     column_name=column_name,
                     cell_value=value,
+                    dependent_field=dependent_field,
+                    dependent_value=dependent_value,
                 )
             )
 
@@ -1353,6 +1413,8 @@ def _validate_number_rule(
                         f"valor mínimo {min_value}",
                         column_name=column_name,
                         cell_value=value,
+                        dependent_field=dependent_field,
+                        dependent_value=dependent_value,
                     )
                 )
         except (InvalidOperation, ValueError):
@@ -1362,6 +1424,8 @@ def _validate_number_rule(
                     "límite mínimo inválido",
                     column_name=column_name,
                     cell_value=value,
+                    dependent_field=dependent_field,
+                    dependent_value=dependent_value,
                 ),
             )
 
@@ -1375,6 +1439,8 @@ def _validate_number_rule(
                         f"valor máximo {max_value}",
                         column_name=column_name,
                         cell_value=value,
+                        dependent_field=dependent_field,
+                        dependent_value=dependent_value,
                     )
                 )
         except (InvalidOperation, ValueError):
@@ -1384,6 +1450,8 @@ def _validate_number_rule(
                     "límite máximo inválido",
                     column_name=column_name,
                     cell_value=value,
+                    dependent_field=dependent_field,
+                    dependent_value=dependent_value,
                 ),
             )
 
@@ -1401,6 +1469,8 @@ def _validate_list_rule(
     column_name: str,
     rule_config: Mapping[str, Any],
     message: str | None,
+    dependent_field: str | None = None,
+    dependent_value: Any | None = None,
     **_: Any,
 ) -> tuple[str, list[str]]:
     text_value = str(value)
@@ -1415,6 +1485,8 @@ def _validate_list_rule(
                 f"valor no permitido ({', '.join(sorted(normalized_choices))})",
                 column_name=column_name,
                 cell_value=value,
+                dependent_field=dependent_field,
+                dependent_value=dependent_value,
             )
         ]
     return text_value, []
@@ -1521,6 +1593,17 @@ def _validate_full_list_rule(
         raw_value = value if field == column_name else row_snapshot.get(field)
         text_related = _stringify(raw_value)
         current_values[field] = text_related
+
+    def _compose_invalid_pairs(fields: Sequence[str]) -> list[str]:
+        pairs: list[str] = []
+        for field in fields:
+            current_value = current_values.get(field)
+            if current_value in (None, ""):
+                display_value = "(vacío)"
+            else:
+                display_value = str(current_value)
+            pairs.append(f"{field} = {display_value}")
+        return pairs
     missing_for_viable: set[str] = set()
     for combination in resolved_combinations:
         missing_fields = [field for field in combination if current_values.get(field) is None]
@@ -1543,6 +1626,7 @@ def _validate_full_list_rule(
                 f"completa los campos relacionados ({missing})",
                 column_name=column_name,
                 cell_value=value,
+                invalid_values=_compose_invalid_pairs(sorted(field for field in related_fields if field is not None)),
             )
         ]
 
@@ -1579,6 +1663,7 @@ def _validate_full_list_rule(
             reason,
             column_name=column_name,
             cell_value=value,
+            invalid_values=_compose_invalid_pairs(sorted_fields),
         )
     ]
 
@@ -1589,6 +1674,8 @@ def _validate_phone_rule(
     column_name: str,
     rule_config: Mapping[str, Any],
     message: str | None,
+    dependent_field: str | None = None,
+    dependent_value: Any | None = None,
     **_: Any,
 ) -> tuple[str, list[str]]:
     text_value = str(value)
@@ -1600,6 +1687,8 @@ def _validate_phone_rule(
                 "debe contener solo números",
                 column_name=column_name,
                 cell_value=value,
+                dependent_field=dependent_field,
+                dependent_value=dependent_value,
             ),
         ]
 
@@ -1614,6 +1703,8 @@ def _validate_phone_rule(
                     f"debe iniciar con el código de país {country_code}",
                     column_name=column_name,
                     cell_value=value,
+                    dependent_field=dependent_field,
+                    dependent_value=dependent_value,
                 )
             ]
         local_digits = digits[len(code_digits) :]
@@ -1626,6 +1717,8 @@ def _validate_phone_rule(
                 f"longitud mínima de {min_length} dígitos",
                 column_name=column_name,
                 cell_value=value,
+                dependent_field=dependent_field,
+                dependent_value=dependent_value,
             )
         ]
 
@@ -1639,6 +1732,8 @@ def _validate_email_rule(
     column_name: str,
     rule_config: Mapping[str, Any],
     message: str | None,
+    dependent_field: str | None = None,
+    dependent_value: Any | None = None,
     **_: Any,
 ) -> tuple[str, list[str]]:
     text_value = str(value)
@@ -1651,6 +1746,8 @@ def _validate_email_rule(
                     "formato de correo inválido",
                     column_name=column_name,
                     cell_value=value,
+                    dependent_field=dependent_field,
+                    dependent_value=dependent_value,
                 ),
             ]
 
@@ -1662,6 +1759,8 @@ def _validate_email_rule(
                 f"longitud máxima {max_length} caracteres",
                 column_name=column_name,
                 cell_value=value,
+                dependent_field=dependent_field,
+                dependent_value=dependent_value,
             )
         ]
 
@@ -1674,6 +1773,8 @@ def _validate_date_rule(
     column_name: str,
     rule_config: Mapping[str, Any],
     message: str | None,
+    dependent_field: str | None = None,
+    dependent_value: Any | None = None,
     **_: Any,
 ) -> tuple[date, list[str]]:
     pd = _get_pandas_module()
@@ -1700,6 +1801,8 @@ def _validate_date_rule(
                     "formato de fecha inválido",
                     column_name=column_name,
                     cell_value=value,
+                    dependent_field=dependent_field,
+                    dependent_value=dependent_value,
                 ),
             ]
 
@@ -1712,6 +1815,8 @@ def _validate_date_rule(
                 "fecha inválida",
                 column_name=column_name,
                 cell_value=value,
+                dependent_field=dependent_field,
+                dependent_value=dependent_value,
             ),
         ]
     return timestamp.date(), []
@@ -1845,6 +1950,8 @@ def _validate_dependency_rule(
                     "configuración dependiente inválida",
                     column_name=column_name,
                     cell_value=value,
+                    dependent_field=dependent_name,
+                    dependent_value=dependent_current,
                 )
             )
             continue
@@ -1860,6 +1967,8 @@ def _validate_dependency_rule(
                         "clave de dependencia inválida",
                         column_name=column_name,
                         cell_value=value,
+                        dependent_field=dependent_name,
+                        dependent_value=dependent_current,
                     )
                 )
                 validators = []
@@ -1882,6 +1991,8 @@ def _validate_dependency_rule(
                             f"el valor del campo dependiente '{raw_key}' no puede ser un objeto",
                             column_name=column_name,
                             cell_value=value,
+                            dependent_field=dependent_name,
+                            dependent_value=dependent_current,
                         )
                     )
                     validators = []
@@ -1902,6 +2013,8 @@ def _validate_dependency_rule(
                         f"tipo dependiente '{raw_key}' no soportado",
                         column_name=column_name,
                         cell_value=value,
+                        dependent_field=dependent_name,
+                        dependent_value=dependent_current,
                     )
                 )
                 continue
@@ -1913,6 +2026,8 @@ def _validate_dependency_rule(
                         f"la configuración asociada a '{raw_key}' debe ser un objeto",
                         column_name=column_name,
                         cell_value=value,
+                        dependent_field=dependent_name,
+                        dependent_value=dependent_current,
                     )
                 )
                 continue
@@ -1926,6 +2041,8 @@ def _validate_dependency_rule(
                     f"falta indicar el valor para '{dependent_name}' en la configuración dependiente",
                     column_name=column_name,
                     cell_value=value,
+                    dependent_field=dependent_name,
+                    dependent_value=dependent_current,
                 )
             )
             continue
@@ -1946,6 +2063,8 @@ def _validate_dependency_rule(
                 row_context=row_context,
                 column_lookup=column_lookup,
                 column_tokens=column_tokens,
+                dependent_field=dependent_name,
+                dependent_value=dependent_current,
             )
             if dependency_errors:
                 candidate_errors.extend(dependency_errors)
@@ -2011,6 +2130,8 @@ def _dependency_text_validator(
     column_name: str,
     rule_config: Mapping[str, Any],
     message: str | None,
+    dependent_field: str | None = None,
+    dependent_value: Any | None = None,
     **_: Any,
 ) -> tuple[str, list[str]]:
     return _validate_text_rule(
@@ -2018,6 +2139,8 @@ def _dependency_text_validator(
         column_name=column_name,
         rule_config=rule_config,
         message=message,
+        dependent_field=dependent_field,
+        dependent_value=dependent_value,
     )
 
 
@@ -2026,6 +2149,8 @@ def _dependency_number_validator(
     column_name: str,
     rule_config: Mapping[str, Any],
     message: str | None,
+    dependent_field: str | None = None,
+    dependent_value: Any | None = None,
     **_: Any,
 ) -> tuple[Any, list[str]]:
     return _validate_number_rule(
@@ -2033,6 +2158,8 @@ def _dependency_number_validator(
         column_name=column_name,
         rule_config=rule_config,
         message=message,
+        dependent_field=dependent_field,
+        dependent_value=dependent_value,
     )
 
 
@@ -2041,6 +2168,8 @@ def _dependency_document_validator(
     column_name: str,
     rule_config: Mapping[str, Any],
     message: str | None,
+    dependent_field: str | None = None,
+    dependent_value: Any | None = None,
     **_: Any,
 ) -> tuple[str, list[str]]:
     return _validate_document_rule(
@@ -2048,6 +2177,8 @@ def _dependency_document_validator(
         column_name=column_name,
         rule_config=rule_config,
         message=message,
+        dependent_field=dependent_field,
+        dependent_value=dependent_value,
     )
 
 
@@ -2056,6 +2187,8 @@ def _dependency_list_validator(
     column_name: str,
     rule_config: Mapping[str, Any],
     message: str | None,
+    dependent_field: str | None = None,
+    dependent_value: Any | None = None,
     **_: Any,
 ) -> tuple[str, list[str]]:
     return _validate_list_rule(
@@ -2063,6 +2196,8 @@ def _dependency_list_validator(
         column_name=column_name,
         rule_config=rule_config,
         message=message,
+        dependent_field=dependent_field,
+        dependent_value=dependent_value,
     )
 
 
@@ -2075,6 +2210,8 @@ def _dependency_full_list_validator(
     row_context: Mapping[str, Any] | None = None,
     column_lookup: Mapping[str, str] | None = None,
     column_tokens: Mapping[str, tuple[str, ...]] | None = None,
+    dependent_field: str | None = None,
+    dependent_value: Any | None = None,
     **_: Any,
 ) -> tuple[str, list[str]]:
     return _validate_full_list_rule(
@@ -2085,6 +2222,8 @@ def _dependency_full_list_validator(
         row_context=row_context,
         column_lookup=column_lookup,
         column_tokens=column_tokens,
+        dependent_field=dependent_field,
+        dependent_value=dependent_value,
     )
 
 
@@ -2093,6 +2232,8 @@ def _dependency_phone_validator(
     column_name: str,
     rule_config: Mapping[str, Any],
     message: str | None,
+    dependent_field: str | None = None,
+    dependent_value: Any | None = None,
     **_: Any,
 ) -> tuple[str, list[str]]:
     return _validate_phone_rule(
@@ -2100,6 +2241,8 @@ def _dependency_phone_validator(
         column_name=column_name,
         rule_config=rule_config,
         message=message,
+        dependent_field=dependent_field,
+        dependent_value=dependent_value,
     )
 
 
@@ -2108,6 +2251,8 @@ def _dependency_email_validator(
     column_name: str,
     rule_config: Mapping[str, Any],
     message: str | None,
+    dependent_field: str | None = None,
+    dependent_value: Any | None = None,
     **_: Any,
 ) -> tuple[str, list[str]]:
     return _validate_email_rule(
@@ -2115,6 +2260,8 @@ def _dependency_email_validator(
         column_name=column_name,
         rule_config=rule_config,
         message=message,
+        dependent_field=dependent_field,
+        dependent_value=dependent_value,
     )
 
 
@@ -2123,6 +2270,8 @@ def _dependency_date_validator(
     column_name: str,
     rule_config: Mapping[str, Any],
     message: str | None,
+    dependent_field: str | None = None,
+    dependent_value: Any | None = None,
     **_: Any,
 ) -> tuple[date, list[str]]:
     return _validate_date_rule(
@@ -2130,6 +2279,8 @@ def _dependency_date_validator(
         column_name=column_name,
         rule_config=rule_config,
         message=message,
+        dependent_field=dependent_field,
+        dependent_value=dependent_value,
     )
 
 
