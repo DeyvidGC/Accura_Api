@@ -246,7 +246,7 @@ class AssistantMessageResponse(BaseModel):
                     )
 
                 dependent_labels: list[str] = []
-                type_headers_seen = False
+                type_label_seen: str | None = None
 
                 for clave, contenido in entrada.items():
                     if not isinstance(clave, str) or not clave.strip():
@@ -256,7 +256,11 @@ class AssistantMessageResponse(BaseModel):
                     normalized_clave = _normalize_label(clave)
 
                     if normalized_clave in allowed_types:
-                        type_headers_seen = True
+                        if type_label_seen is not None:
+                            raise ValueError(
+                                "Cada elemento de 'reglas especifica' debe definir un único tipo de dato."
+                            )
+                        type_label_seen = normalized_clave
                         if not isinstance(contenido, dict):
                             raise ValueError(
                                 f"La configuración asociada a '{clave}' debe ser un objeto."
@@ -389,7 +393,7 @@ class AssistantMessageResponse(BaseModel):
                         )
                     dependent_labels.append(clave)
 
-                if not type_headers_seen:
+                if type_label_seen is None:
                     raise ValueError(
                         "Cada regla dependiente debe incluir al menos una configuración de tipo soportado."
                     )

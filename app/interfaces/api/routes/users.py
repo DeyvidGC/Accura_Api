@@ -1,7 +1,7 @@
 """Rutas para administrar usuarios y sus credenciales."""
 
 import logging
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.application.use_cases.users import (
@@ -70,23 +70,26 @@ def read_current_user(current_user: User = Depends(get_current_active_user)):
 def list_users(
     skip: int = 0,
     limit: int = 100,
+    created_by_me: bool = Query(
+        False,
+        description=(
+            "Si es verdadero, devuelve únicamente los usuarios creados por el administrador "
+            "autenticado."
+        ),
+    ),
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    current_user: User = Depends(require_admin),
 ):
-    """Devuelve una lista paginada de usuarios registrados."""
+    """Devuelve una lista de usuarios registrados."""
 
-    users = list_users_uc(db, skip=skip, limit=limit)
-    return [_to_read_model(user) for user in users]
-
-
-@router.get("/created-by/me", response_model=list[UserRead])
-def list_users_created_by_admin(
-    db: Session = Depends(get_db),
-    current_admin: User = Depends(require_admin),
-):
-    """Devuelve todos los usuarios creados por el administrador autenticado."""
-
-    users = list_users_by_creator_uc(db, creator_id=current_admin.id)
+    if created_by_me:
+        users = list(list_users_by_creator_uc(db, creator_id=current_user.id))
+        if skip:
+            users = users[skip:]
+        if limit is not None:
+            users = users[:limit]
+    else:
+        users = list_users_uc(db, skip=skip, limit=limit)
     return [_to_read_model(user) for user in users]
 
 
