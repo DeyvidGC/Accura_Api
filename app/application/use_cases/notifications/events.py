@@ -17,10 +17,7 @@ from app.domain.entities import (
     User,
 )
 from app.infrastructure.notifications import dispatch_notification
-from app.infrastructure.repositories import NotificationRepository, UserRepository
-
-_ADMIN_ROLE_ALIAS = "admin"
-
+from app.infrastructure.repositories import NotificationRepository
 
 def _persist_notification(
     session: Session,
@@ -47,42 +44,40 @@ def _persist_notification(
     return saved
 
 
-def _admin_user_ids(session: Session) -> list[int]:
-    return UserRepository(session).list_ids_by_role_alias(_ADMIN_ROLE_ALIAS)
-
-
 def notify_template_created(session: Session, *, template: Template) -> None:
-    """Notify administrators that a new template has been created."""
+    """Notify the template creator that the resource is available."""
 
-    user_ids = _admin_user_ids(session)
-    message = f"Se creó la plantilla '{template.name}'."
-    for user_id in user_ids:
-        _persist_notification(
-            session,
-            user_id=user_id,
-            event_type="template.created",
-            title="Nueva plantilla",
-            message=message,
-            payload={"template_id": template.id, "status": template.status},
-        )
+    target_user_id = template.created_by or template.user_id
+    if not target_user_id:
+        return
+
+    message = f"Creaste la plantilla '{template.name}'."
+    _persist_notification(
+        session,
+        user_id=target_user_id,
+        event_type="template.created",
+        title="Plantilla creada",
+        message=message,
+        payload={"template_id": template.id, "status": template.status},
+    )
 
 
 def notify_template_published(session: Session, *, template: Template) -> None:
-    """Notify administrators that a template has been published."""
+    """Inform the user who published the template."""
 
-    user_ids = _admin_user_ids(session)
-    if not user_ids:
+    target_user_id = template.updated_by or template.created_by or template.user_id
+    if not target_user_id:
         return
-    message = f"La plantilla '{template.name}' fue publicada."
-    for user_id in user_ids:
-        _persist_notification(
-            session,
-            user_id=user_id,
-            event_type="template.published",
-            title="Plantilla publicada",
-            message=message,
-            payload={"template_id": template.id, "status": template.status},
-        )
+
+    message = f"Publicaste la plantilla '{template.name}'."
+    _persist_notification(
+        session,
+        user_id=target_user_id,
+        event_type="template.published",
+        title="Plantilla publicada",
+        message=message,
+        payload={"template_id": template.id, "status": template.status},
+    )
 
 
 def _persist_or_update_load_notification(
@@ -188,16 +183,15 @@ def notify_load_validated_success(
     load: Load,
     template: Template,
 ) -> None:
-    """Inform administrators that a load finished validation and report its status."""
+    """Inform the load owner about the final validation summary."""
 
-    user_ids = _admin_user_ids(session)
-    if not user_ids:
+    if not load.user_id:
         return
 
     status = load.status
     if status == LOAD_STATUS_VALIDATED_SUCCESS:
         event_type = "load.validated.success"
-        title = "Validación exitosa"
+        title = "Validación completada"
         message_detail = (
             "finalizó con validación exitosa"
             f" (estado: {LOAD_STATUS_VALIDATED_SUCCESS})"
@@ -213,7 +207,7 @@ def notify_load_validated_success(
         return
 
     message = (
-        f"La carga '{load.file_name}' de la plantilla '{template.name}' "
+        f"Tu carga '{load.file_name}' para la plantilla '{template.name}' "
         f"{message_detail}."
     )
     payload = {
@@ -221,15 +215,14 @@ def notify_load_validated_success(
         "load_id": load.id,
         "status": status,
     }
-    for user_id in user_ids:
-        _persist_notification(
-            session,
-            user_id=user_id,
-            event_type=event_type,
-            title=title,
-            message=message,
-            payload=payload,
-        )
+    _persist_notification(
+        session,
+        user_id=load.user_id,
+        event_type=event_type,
+        title=title,
+        message=message,
+        payload=payload,
+    )
 
 
 def notify_load_status_changed(

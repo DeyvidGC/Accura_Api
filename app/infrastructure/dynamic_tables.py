@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections.abc import Sequence
 
 from sqlalchemy import (
@@ -67,6 +68,27 @@ def ensure_identifier(name: str, *, kind: str) -> str:
     return candidate.lower()
 
 
+def normalize_identifier(name: str, *, kind: str) -> str:
+    """Return a safe SQL identifier derived from ``name``.
+
+    ``name`` may contain spaces or other separators. This helper removes
+    diacritics, normalizes whitespace and punctuation into underscores and
+    finally delegates to :func:`ensure_identifier` to validate the result.
+    """
+
+    decomposed = unicodedata.normalize("NFD", name or "")
+    stripped = "".join(char for char in decomposed if not unicodedata.combining(char))
+    collapsed = re.sub(r"[^A-Za-z0-9]+", "_", stripped)
+    candidate = collapsed.strip("_")
+    if not candidate:
+        msg = (
+            f"{kind.capitalize()} '{name}' must contain at least one "
+            "alphanumeric character"
+        )
+        raise IdentifierError(msg)
+    return ensure_identifier(candidate, kind=kind)
+
+
 def _column_type_from_string(data_type: str):
     try:
         return _DATA_TYPE_MAP[data_type.lower()]
@@ -94,7 +116,7 @@ def create_template_table(table_name: str, columns: Sequence[TemplateColumn]) ->
     table_columns = [Column("id", Integer, primary_key=True, autoincrement=True)]
 
     for column in columns:
-        safe_column_name = ensure_identifier(column.name, kind="column")
+        safe_column_name = normalize_identifier(column.name, kind="column")
         column_type = _column_type_from_string(column.data_type)
         table_columns.append(Column(safe_column_name, column_type))
 
@@ -138,4 +160,5 @@ __all__ = [
     "create_template_table",
     "drop_template_table",
     "ensure_identifier",
+    "normalize_identifier",
 ]

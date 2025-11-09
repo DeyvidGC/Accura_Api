@@ -7,17 +7,14 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from app.domain.entities import TemplateColumn
-from app.infrastructure.dynamic_tables import (
-    IdentifierError,
-    ensure_data_type,
-    ensure_identifier,
-)
+from app.infrastructure.dynamic_tables import IdentifierError, ensure_data_type
 from app.infrastructure.repositories import (
     RuleRepository,
     TemplateColumnRepository,
     TemplateRepository,
 )
 
+from .naming import derive_column_identifier, normalize_column_display_name
 from .validators import ensure_rule_header_dependencies, normalize_rule_header
 
 
@@ -58,18 +55,23 @@ def update_template_column(
 
     new_name = current.name
     if name is not None and name != current.name:
+        normalized_name = normalize_column_display_name(name)
         try:
-            safe_name = ensure_identifier(name, kind="column")
+            identifier = derive_column_identifier(normalized_name)
         except IdentifierError as exc:
             raise ValueError(str(exc)) from exc
 
         existing_columns = column_repository.list_by_template(template_id)
         if any(
-            col.id != current.id and col.name.lower() == safe_name.lower()
+            col.id != current.id
+            and (
+                col.name.lower() == normalized_name.lower()
+                or derive_column_identifier(col.name) == identifier
+            )
             for col in existing_columns
         ):
             raise ValueError("Ya existe una columna con ese nombre en la plantilla")
-        new_name = safe_name
+        new_name = normalized_name
 
     new_data_type = current.data_type
     if data_type is not None:
