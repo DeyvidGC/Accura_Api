@@ -12,7 +12,13 @@ from app.domain.entities import (
     LOAD_STATUS_VALIDATED_SUCCESS,
     LOAD_STATUS_VALIDATED_WITH_ERRORS,
 )
-from app.infrastructure.models import LoadModel, TemplateModel, UserModel
+from app.infrastructure.models import (
+    LoadModel,
+    RuleModel,
+    TemplateColumnModel,
+    TemplateModel,
+    UserModel,
+)
 
 
 @dataclass
@@ -27,8 +33,28 @@ class MonthlyComparison:
 class TemplatePublicationSummary:
     """Summary of published vs unpublished templates."""
 
+    total: int
     published: int
     unpublished: int
+    active: int
+
+
+@dataclass
+class RuleSummary:
+    """Aggregated metrics describing validation rules."""
+
+    total: int
+    active: int
+    assigned: int
+
+
+@dataclass
+class HistorySnapshot:
+    """Historical aggregated metrics used in dashboards."""
+
+    total_loads: int
+    active_users: int
+    processed_rows: int
 
 
 @dataclass
@@ -48,6 +74,8 @@ class KPIReport:
     templates: TemplatePublicationSummary
     loads: MonthlyComparison
     validations: ValidationEffectiveness
+    rules: RuleSummary
+    history: HistorySnapshot
 
 
 def _month_boundaries(reference: datetime) -> tuple[datetime, datetime]:
@@ -88,6 +116,7 @@ def get_kpis(
             UserModel.last_login.isnot(None),
             UserModel.last_login >= start,
             UserModel.last_login < end,
+            UserModel.deleted.is_(False),
         ]
         if admin_user_id is not None:
             filters.append(UserModel.created_by == admin_user_id)
@@ -102,35 +131,57 @@ def get_kpis(
     active_users_current = _active_users_count(current_start, next_month_start)
     active_users_previous = _active_users_count(previous_start, previous_end)
 
-    published_templates = (
+    template_filters = [TemplateModel.deleted.is_(False)]
+    if admin_user_id is not None:
+        template_filters.append(TemplateModel.created_by == admin_user_id)
+
+    total_templates = (
         session.query(func.count(TemplateModel.id))
-        .filter(TemplateModel.status == "published")
+        .filter(and_(*template_filters))
         .scalar()
     ) or 0
 
-    unpublished_templates = (
+    published_templates = (
         session.query(func.count(TemplateModel.id))
         .filter(
-            (TemplateModel.status != "published")
-            | (TemplateModel.status.is_(None))
+            and_(
+                TemplateModel.status == "published",
+                *template_filters,
+            )
         )
         .scalar()
     ) or 0
 
+    active_templates = (
+        session.query(func.count(TemplateModel.id))
+        .filter(and_(TemplateModel.is_active.is_(True), *template_filters))
+        .scalar()
+    ) or 0
+
+    unpublished_templates = max(int(total_templates) - int(published_templates), 0)
+
+    monthly_load_filters = [TemplateModel.deleted.is_(False)]
+    if admin_user_id is not None:
+        monthly_load_filters.append(TemplateModel.created_by == admin_user_id)
+
     loads_current = (
         session.query(func.count(LoadModel.id))
+        .join(TemplateModel, LoadModel.template_id == TemplateModel.id)
         .filter(
             LoadModel.created_at >= current_start,
             LoadModel.created_at < next_month_start,
+            and_(*monthly_load_filters),
         )
         .scalar()
     ) or 0
 
     loads_previous = (
         session.query(func.count(LoadModel.id))
+        .join(TemplateModel, LoadModel.template_id == TemplateModel.id)
         .filter(
             LoadModel.created_at >= previous_start,
             LoadModel.created_at < previous_end,
+            and_(*monthly_load_filters),
         )
         .scalar()
     ) or 0
@@ -142,25 +193,86 @@ def get_kpis(
 
     successful_validations = (
         session.query(func.count(LoadModel.id))
+        .join(TemplateModel, LoadModel.template_id == TemplateModel.id)
         .filter(
             LoadModel.status == LOAD_STATUS_VALIDATED_SUCCESS,
             LoadModel.finished_at.isnot(None),
             LoadModel.finished_at >= current_start,
             LoadModel.finished_at < next_month_start,
+            and_(*monthly_load_filters),
         )
         .scalar()
     ) or 0
 
     total_validations = (
         session.query(func.count(LoadModel.id))
+        .join(TemplateModel, LoadModel.template_id == TemplateModel.id)
         .filter(
             LoadModel.status.in_(completed_statuses),
             LoadModel.finished_at.isnot(None),
             LoadModel.finished_at >= current_start,
             LoadModel.finished_at < next_month_start,
+            and_(*monthly_load_filters),
         )
         .scalar()
     ) or 0
+
+    rule_filters = [RuleModel.deleted.is_(False)]
+    if admin_user_id is not None:
+        rule_filters.append(RuleModel.created_by == admin_user_id)
+
+    total_rules = (
+        session.query(func.count(RuleModel.id)).filter(and_(*rule_filters)).scalar()
+    ) or 0
+
+    active_rules = (
+        session.query(func.count(RuleModel.id))
+        .filter(and_(RuleModel.is_active.is_(True), *rule_filters))
+        .scalar()
+    ) or 0
+
+    assigned_rules_query = (
+        session.query(func.count(func.distinct(TemplateColumnModel.rule_id)))
+        .join(RuleModel, TemplateColumnModel.rule_id == RuleModel.id)
+        .join(TemplateModel, TemplateColumnModel.template_id == TemplateModel.id)
+        .filter(
+            TemplateColumnModel.rule_id.isnot(None),
+            TemplateColumnModel.deleted.is_(False),
+            TemplateModel.deleted.is_(False),
+            RuleModel.deleted.is_(False),
+        )
+    )
+    if admin_user_id is not None:
+        assigned_rules_query = assigned_rules_query.filter(
+            RuleModel.created_by == admin_user_id
+        )
+
+    assigned_rules = assigned_rules_query.scalar() or 0
+
+    loads_filters = [TemplateModel.deleted.is_(False)]
+    if admin_user_id is not None:
+        loads_filters.append(TemplateModel.created_by == admin_user_id)
+
+    total_loads = (
+        session.query(func.count(LoadModel.id))
+        .join(TemplateModel, LoadModel.template_id == TemplateModel.id)
+        .filter(and_(*loads_filters))
+        .scalar()
+    ) or 0
+
+    processed_rows = (
+        session.query(func.coalesce(func.sum(LoadModel.total_rows), 0))
+        .join(TemplateModel, LoadModel.template_id == TemplateModel.id)
+        .filter(and_(*loads_filters))
+        .scalar()
+    ) or 0
+
+    history_active_users_query = (
+        session.query(func.count(func.distinct(LoadModel.user_id)))
+        .join(TemplateModel, LoadModel.template_id == TemplateModel.id)
+        .filter(and_(*loads_filters))
+    )
+    history_active_users = history_active_users_query.scalar() or 0
 
     effectiveness = (
         (successful_validations / total_validations) * 100 if total_validations else 0.0
@@ -172,8 +284,10 @@ def get_kpis(
             previous_month=int(active_users_previous),
         ),
         templates=TemplatePublicationSummary(
+            total=int(total_templates),
             published=int(published_templates),
             unpublished=int(unpublished_templates),
+            active=int(active_templates),
         ),
         loads=MonthlyComparison(
             current_month=int(loads_current),
@@ -184,6 +298,16 @@ def get_kpis(
             total=int(total_validations),
             effectiveness_percentage=float(round(effectiveness, 2)),
         ),
+        rules=RuleSummary(
+            total=int(total_rules),
+            active=int(active_rules),
+            assigned=int(assigned_rules),
+        ),
+        history=HistorySnapshot(
+            total_loads=int(total_loads),
+            active_users=int(history_active_users),
+            processed_rows=int(processed_rows),
+        ),
     )
 
 
@@ -192,5 +316,7 @@ __all__ = [
     "MonthlyComparison",
     "TemplatePublicationSummary",
     "ValidationEffectiveness",
+    "RuleSummary",
+    "HistorySnapshot",
     "get_kpis",
 ]

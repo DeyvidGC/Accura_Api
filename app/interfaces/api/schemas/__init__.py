@@ -18,7 +18,9 @@ from .activity import RecentActivityRead
 from .rule import RuleCreate, RuleRead, RuleUpdate
 from .kpi import (
     KPIReportRead,
+    HistorySnapshotRead,
     MonthlyComparisonRead,
+    RuleSummaryRead,
     TemplatePublicationSummaryRead,
     ValidationEffectivenessRead,
 )
@@ -65,7 +67,9 @@ __all__ = [
     "RuleRead",
     "RuleUpdate",
     "KPIReportRead",
+    "HistorySnapshotRead",
     "MonthlyComparisonRead",
+    "RuleSummaryRead",
     "TemplatePublicationSummaryRead",
     "ValidationEffectivenessRead",
     "TemplateAssignmentUserRead",
