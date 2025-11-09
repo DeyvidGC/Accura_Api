@@ -5,7 +5,6 @@ from .create_user import create_user
 from .delete_user import delete_user
 from .get_user import get_user
 from .list_users import list_users
-from .list_users_by_creator import list_users_by_creator
 from .record_login import record_login
 from .reset_password_by_email import reset_password_by_email
 from .update_user import update_user
@@ -17,7 +16,6 @@ __all__ = [
     "delete_user",
     "get_user",
     "list_users",
-    "list_users_by_creator",
     "record_login",
     "reset_password_by_email",
     "update_user",

@@ -17,24 +17,25 @@ class UserRepository:
     def __init__(self, session: Session) -> None:
         self.session = session
 
-    def list(self, skip: int = 0, limit: int = 100) -> Sequence[User]:
+    def list(
+        self,
+        skip: int = 0,
+        limit: int = 100,
+        *,
+        creator_id: int | None = None,
+    ) -> Sequence[User]:
         query = (
             self.session.query(UserModel)
             .options(joinedload(UserModel.role))
             .filter(UserModel.deleted.is_(False))
-            .offset(skip)
-            .limit(limit)
         )
-        return [self._to_entity(model) for model in query.all()]
-
-    def list_by_creator(self, creator_id: int) -> Sequence[User]:
-        query = (
-            self.session.query(UserModel)
-            .options(joinedload(UserModel.role))
-            .filter(UserModel.deleted.is_(False))
-            .filter(UserModel.created_by == creator_id)
-            .order_by(UserModel.created_at.desc())
-        )
+        if creator_id is not None:
+            query = query.filter(UserModel.created_by == creator_id)
+        query = query.order_by(UserModel.created_at.desc(), UserModel.id.desc())
+        if skip:
+            query = query.offset(skip)
+        if limit is not None:
+            query = query.limit(limit)
         return [self._to_entity(model) for model in query.all()]
 
     def get(self, user_id: int) -> User | None:
