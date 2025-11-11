@@ -12,11 +12,10 @@ from typing import Any
 from app.domain.entities import TemplateColumn
 from app.infrastructure.repositories import RuleRepository
 
-_RULE_TYPES_REQUIRING_HEADER_FIELD = {"lista compleja", "lista completa"}
-_RULE_TYPES_REQUIRING_COLUMN_HEADER = {"lista compleja", "lista completa"}
+_RULE_TYPES_REQUIRING_HEADER_FIELD = {"lista compleja"}
+_RULE_TYPES_REQUIRING_COLUMN_HEADER = {"lista compleja"}
 _RULE_TYPES_WITH_REQUIRED_HEADERS = {
     "lista compleja",
-    "lista completa",
     "dependencia",
     "validacion conjunta",
     "duplicados",
