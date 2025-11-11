@@ -382,7 +382,7 @@ def get_load_original_file(
 
     if load.id is None:
         raise ValueError("Identificador de carga inválido")
-    filename = _original_filename(load.id, extension)
+    filename = _original_storage_filename(load.id, load.file_name, extension)
     blob_path = _build_report_blob_path(
         template.table_name,
         template.id,
