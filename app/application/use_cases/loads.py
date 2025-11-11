@@ -2230,13 +2230,6 @@ def _validate_dependency_rule(
                 Mapping[str, Any],
             ]
         ] = []
-        dependent_validators: list[
-            tuple[
-                str,
-                Callable[[Any, str, Mapping[str, Any], str | None], tuple[Any, list[str]]],
-                Mapping[str, Any],
-            ]
-        ] = []
 
         for raw_key, config in entry.items():
             if not isinstance(raw_key, str) or not raw_key.strip():
@@ -2263,26 +2256,9 @@ def _validate_dependency_rule(
                 dependent_name,
             ):
                 if isinstance(config, Mapping):
-                    handler = _DEPENDENCY_RULE_HANDLERS.get(normalized_key)
-                    if handler is None:
-                        if normalized_key in _DEPENDENCY_METADATA_KEYS:
-                            continue
-                        accumulated_errors.append(
-                            _compose_error(
-                                message,
-                                f"tipo dependiente '{raw_key}' no soportado",
-                                column_name=column_name,
-                                cell_value=value,
-                                dependent_field=dependent_name,
-                                dependent_value=dependent_current,
-                            )
-                        )
-                        validators = []
-                        dependent_validators = []
-                        trigger_value = None
-                        break
-
-                    dependent_validators.append((raw_key, handler, config))
+                    # Las reglas específicas solo deben evaluar la columna principal.
+                    # Permite que la configuración del dependiente exista, pero no
+                    # ejecutamos validaciones adicionales sobre el propio dependiente.
                     continue
 
                 trigger_value = config
@@ -2341,24 +2317,6 @@ def _validate_dependency_rule(
         matched = True
         candidate_value = value
         candidate_errors: list[str] = []
-
-        dependent_errors: list[str] = []
-        for raw_key, handler, config in dependent_validators:
-            _, dependency_errors = handler(
-                dependent_current,
-                dependent_name,
-                config,
-                message,
-                row_context=row_context,
-                column_lookup=column_lookup,
-                column_tokens=column_tokens,
-            )
-            if dependency_errors:
-                dependent_errors.extend(dependency_errors)
-
-        if dependent_errors:
-            accumulated_errors.extend(dependent_errors)
-            continue
 
         for raw_key, handler, config in validators:
             candidate_value, dependency_errors = handler(
