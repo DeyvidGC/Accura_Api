@@ -66,6 +66,17 @@ _DEPENDENCY_TYPE_ALIASES: set[str] = {
     "fecha",
 }
 
+_DEPENDENCY_SPECIFICS_KEYS: set[str] = {
+    "reglas especifica",
+    "reglas especificas",
+    "reglas especificacion",
+    "configuracion",
+    "configuraciones",
+    "detalles",
+    "detalle",
+    "opciones",
+}
+
 _LARGE_MESSAGE_THRESHOLD = 1800
 
 
@@ -181,8 +192,34 @@ def _extract_dependency_header_fields(rule_config: Any) -> list[str]:
     if not isinstance(rule_config, Mapping):
         return []
 
-    specifics = rule_config.get("reglas especifica")
-    if not isinstance(specifics, Sequence) or isinstance(specifics, (str, bytes)):
+    specifics: Sequence[Any] | None = None
+
+    direct_specifics = rule_config.get("reglas especifica")
+    if isinstance(direct_specifics, Sequence) and not isinstance(
+        direct_specifics, (str, bytes)
+    ):
+        specifics = direct_specifics
+
+    if specifics is None:
+        for key, value in rule_config.items():
+            if not isinstance(key, str):
+                continue
+            normalized_key = _normalize_for_matching(key)
+            if normalized_key not in _DEPENDENCY_SPECIFICS_KEYS:
+                continue
+            if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+                specifics = value
+                break
+
+    if specifics is None:
+        for value in rule_config.values():
+            if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
+                continue
+            if any(isinstance(item, Mapping) for item in value):
+                specifics = value
+                break
+
+    if specifics is None:
         return []
 
     dependent_label: str | None = None
