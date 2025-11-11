@@ -17,7 +17,7 @@ from difflib import SequenceMatcher
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any, Callable
 from uuid import uuid4
-from sqlalchemy import MetaData, Table, insert
+from sqlalchemy import MetaData, Table, insert, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -348,6 +348,13 @@ def get_load_report(
     """Return the filesystem path and display name for the report generated for ``load_id``."""
 
     load = get_load(session, load_id=load_id, current_user=current_user)
+    template = _get_template(session, load.template_id)
+
+    table_report = _build_temporary_table_report(load, template)
+    if table_report is not None:
+        path, filename = table_report
+        return load, path, filename
+
     loaded_file = LoadedFileRepository(session).get_latest_by_load(load.id)
     if loaded_file is None:
         raise FileNotFoundError("Reporte no disponible para esta carga")
@@ -362,7 +369,7 @@ def get_load_report(
         path = _download_to_tempfile(blob_path, ".xlsx")
     except FileNotFoundError as exc:
         raise FileNotFoundError("Reporte no encontrado en el sistema de archivos") from exc
-    download_name = loaded_file.name or _report_display_filename(load.file_name)
+    download_name = loaded_file.name or _report_display_filename(template.name)
     return load, path, download_name
 
 
@@ -625,6 +632,41 @@ def _normalize_cell_value(value: Any) -> Any:
     return value
 
 
+def _coerce_int(value: Any) -> int | None:
+    """Return ``value`` converted to ``int`` when safe, otherwise ``None``."""
+
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, Decimal):
+        try:
+            integral = value.to_integral_value()
+        except InvalidOperation:
+            return None
+        if value == integral:
+            return int(integral)
+        return None
+    if isinstance(value, float):
+        if value.is_integer():
+            return int(value)
+        return None
+    if isinstance(value, str):
+        candidate = value.strip()
+        if not candidate:
+            return None
+        try:
+            return int(candidate)
+        except ValueError:
+            return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _summarize_observations(messages: Sequence[str]) -> str:
     if not messages:
         return ""
@@ -742,6 +784,96 @@ def _prepare_report_dataframe(dataframe: DataFrame) -> DataFrame:
     ]
     ordered_columns.extend(["status", "observaciones"])
     return df.loc[:, ordered_columns]
+
+
+def _fetch_temporary_table_dataframe(
+    template: Template, *, operation_number: int
+) -> DataFrame | None:
+    pd = _get_pandas_module()
+    metadata = MetaData()
+    try:
+        table = Table(template.table_name, metadata, autoload_with=engine)
+    except SQLAlchemyError:  # pragma: no cover - passthrough for db layer
+        return None
+
+    if "numero_operacion" not in table.c:
+        return None
+
+    active_columns = _ordered_active_columns(template)
+    identifier_map = {
+        derive_column_identifier(column.name): column.name for column in active_columns
+    }
+
+    select_columns: list[Any] = []
+    for identifier in identifier_map:
+        if identifier in table.c:
+            select_columns.append(table.c[identifier])
+
+    for extra in ("status", "observaciones"):
+        if extra in table.c and table.c[extra] not in select_columns:
+            select_columns.append(table.c[extra])
+
+    if not select_columns:
+        return None
+
+    statement = (
+        select(*select_columns)
+        .where(table.c.numero_operacion == operation_number)
+        .order_by(table.c.id)
+    )
+    with engine.connect() as connection:
+        rows = connection.execute(statement).mappings().all()
+
+    if rows:
+        df = pd.DataFrame(rows)
+    else:
+        df = pd.DataFrame(columns=[column.key for column in select_columns])
+
+    rename_map = {
+        identifier: display
+        for identifier, display in identifier_map.items()
+        if identifier in df.columns
+    }
+    df = df.rename(columns=rename_map)
+
+    for extra in ("status", "observaciones"):
+        if extra not in df.columns:
+            df[extra] = ""
+
+    desired_order = [
+        column.name for column in active_columns if column.name in df.columns
+    ]
+    for extra in ("status", "observaciones"):
+        if extra in df.columns and extra not in desired_order:
+            desired_order.append(extra)
+    if desired_order:
+        df = df.loc[:, desired_order]
+
+    return df
+
+
+def _build_temporary_table_report(
+    load: Load, template: Template
+) -> tuple[Path, str] | None:
+    if load.id is None:
+        return None
+
+    dataframe = _fetch_temporary_table_dataframe(
+        template, operation_number=load.id
+    )
+    if dataframe is None or not len(dataframe.columns):
+        return None
+
+    _DOWNLOAD_DIRECTORY.mkdir(parents=True, exist_ok=True)
+    buffer = BytesIO()
+    dataframe.to_excel(buffer, index=False)
+    buffer.seek(0)
+    destination = _DOWNLOAD_DIRECTORY / f"{uuid4().hex}.xlsx"
+    with destination.open("wb") as handle:
+        handle.write(buffer.getvalue())
+
+    filename = _report_display_filename(template.name)
+    return destination, filename
 
 
 def _prepare_original_dataframe(dataframe: DataFrame) -> DataFrame:
@@ -1318,30 +1450,44 @@ def _validate_text_rule(
 ) -> tuple[str, list[str]]:
     text_value = str(value)
     errors: list[str] = []
-    min_length = rule_config.get("Longitud minima")
-    max_length = rule_config.get("Longitud maxima")
-    if isinstance(min_length, int) and len(text_value) < min_length:
-        errors.append(
-            _compose_error(
-                message,
-                f"longitud mínima {min_length} caracteres",
-                column_name=column_name,
-                cell_value=value,
-                dependent_field=dependent_field,
-                dependent_value=dependent_value,
+    min_length = _coerce_int(rule_config.get("Longitud minima"))
+    max_length = _coerce_int(rule_config.get("Longitud maxima"))
+    length = len(text_value)
+    if min_length is not None and max_length is not None:
+        if length < min_length or length > max_length:
+            errors.append(
+                _compose_error(
+                    message,
+                    f"longitud entre {min_length} y {max_length} caracteres",
+                    column_name=column_name,
+                    cell_value=value,
+                    dependent_field=dependent_field,
+                    dependent_value=dependent_value,
+                )
             )
-        )
-    if isinstance(max_length, int) and len(text_value) > max_length:
-        errors.append(
-            _compose_error(
-                message,
-                f"longitud máxima {max_length} caracteres",
-                column_name=column_name,
-                cell_value=value,
-                dependent_field=dependent_field,
-                dependent_value=dependent_value,
+    else:
+        if min_length is not None and length < min_length:
+            errors.append(
+                _compose_error(
+                    message,
+                    f"longitud mínima {min_length} caracteres",
+                    column_name=column_name,
+                    cell_value=value,
+                    dependent_field=dependent_field,
+                    dependent_value=dependent_value,
+                )
             )
-        )
+        if max_length is not None and length > max_length:
+            errors.append(
+                _compose_error(
+                    message,
+                    f"longitud máxima {max_length} caracteres",
+                    column_name=column_name,
+                    cell_value=value,
+                    dependent_field=dependent_field,
+                    dependent_value=dependent_value,
+                )
+            )
     return text_value, errors
 
 
@@ -1357,30 +1503,44 @@ def _validate_document_rule(
 ) -> tuple[str, list[str]]:
     text_value = str(value)
     errors: list[str] = []
-    min_length = rule_config.get("Longitud minima")
-    max_length = rule_config.get("Longitud maxima")
-    if isinstance(min_length, int) and len(text_value) < min_length:
-        errors.append(
-            _compose_error(
-                message,
-                f"longitud mínima {min_length} caracteres",
-                column_name=column_name,
-                cell_value=value,
-                dependent_field=dependent_field,
-                dependent_value=dependent_value,
+    min_length = _coerce_int(rule_config.get("Longitud minima"))
+    max_length = _coerce_int(rule_config.get("Longitud maxima"))
+    length = len(text_value)
+    if min_length is not None and max_length is not None:
+        if length < min_length or length > max_length:
+            errors.append(
+                _compose_error(
+                    message,
+                    f"longitud entre {min_length} y {max_length} caracteres",
+                    column_name=column_name,
+                    cell_value=value,
+                    dependent_field=dependent_field,
+                    dependent_value=dependent_value,
+                )
             )
-        )
-    if isinstance(max_length, int) and len(text_value) > max_length:
-        errors.append(
-            _compose_error(
-                message,
-                f"longitud máxima {max_length} caracteres",
-                column_name=column_name,
-                cell_value=value,
-                dependent_field=dependent_field,
-                dependent_value=dependent_value,
+    else:
+        if min_length is not None and length < min_length:
+            errors.append(
+                _compose_error(
+                    message,
+                    f"longitud mínima {min_length} caracteres",
+                    column_name=column_name,
+                    cell_value=value,
+                    dependent_field=dependent_field,
+                    dependent_value=dependent_value,
+                )
             )
-        )
+        if max_length is not None and length > max_length:
+            errors.append(
+                _compose_error(
+                    message,
+                    f"longitud máxima {max_length} caracteres",
+                    column_name=column_name,
+                    cell_value=value,
+                    dependent_field=dependent_field,
+                    dependent_value=dependent_value,
+                )
+            )
     return text_value, errors
 
 
@@ -1499,19 +1659,34 @@ def _validate_list_rule(
     allowed_values = _extract_allowed_values(rule_config)
     if not allowed_values:
         return text_value, []
-    normalized_choices = {str(choice) for choice in allowed_values}
-    if text_value not in normalized_choices:
+    normalized_choices: dict[str | None, str] = {}
+    for choice in allowed_values:
+        normalized_choice = _normalize_choice_value(choice)
+        display_value = "" if choice is None else str(choice)
+        if normalized_choice not in normalized_choices:
+            normalized_choices[normalized_choice] = display_value
+
+    if not normalized_choices:
+        return text_value, []
+
+    normalized_value = _normalize_choice_value(text_value)
+    if normalized_value not in normalized_choices:
+        allowed_display = sorted(
+            {display for display in normalized_choices.values()},
+            key=lambda item: unicodedata.normalize("NFKC", item).casefold(),
+        )
         return text_value, [
             _compose_error(
                 message,
-                f"valor no permitido ({', '.join(sorted(normalized_choices))})",
+                f"valor no permitido ({', '.join(allowed_display)})",
                 column_name=column_name,
                 cell_value=value,
                 dependent_field=dependent_field,
                 dependent_value=dependent_value,
             )
         ]
-    return text_value, []
+    canonical_value = normalized_choices.get(normalized_value, text_value)
+    return canonical_value, []
 
 
 def _resolve_row_field_reference(
@@ -1604,6 +1779,14 @@ def _validate_full_list_rule(
     if not resolved_combinations:
         return text_value, []
 
+    normalized_combinations: list[dict[str, str | None]] = [
+        {
+            field: _normalize_choice_value(expected)
+            for field, expected in combination.items()
+        }
+        for combination in resolved_combinations
+    ]
+
     def _stringify(raw: Any) -> str | None:
         normalized = _normalize_cell_value(raw)
         if normalized is None:
@@ -1611,10 +1794,12 @@ def _validate_full_list_rule(
         return str(normalized)
 
     current_values: dict[str, str | None] = {}
+    normalized_current_values: dict[str, str | None] = {}
     for field in sorted(related_fields):
         raw_value = value if field == column_name else row_snapshot.get(field)
         text_related = _stringify(raw_value)
         current_values[field] = text_related
+        normalized_current_values[field] = _normalize_choice_value(text_related)
 
     def _compose_invalid_pairs(fields: Sequence[str]) -> list[str]:
         pairs: list[str] = []
@@ -1627,17 +1812,22 @@ def _validate_full_list_rule(
             pairs.append(f"{field} = {display_value}")
         return pairs
     missing_for_viable: set[str] = set()
-    for combination in resolved_combinations:
+    for combination, normalized_combination in zip(
+        resolved_combinations, normalized_combinations
+    ):
         missing_fields = [field for field in combination if current_values.get(field) is None]
         if missing_fields:
             if all(
-                current_values.get(field) == expected
-                for field, expected in combination.items()
+                normalized_current_values.get(field) == normalized_combination.get(field)
+                for field in combination
                 if field not in missing_fields
             ):
                 missing_for_viable.update(missing_fields)
             continue
-        if all(current_values.get(field) == expected for field, expected in combination.items()):
+        if all(
+            normalized_current_values.get(field) == normalized_combination.get(field)
+            for field in combination
+        ):
             return text_value, []
 
     if missing_for_viable:
@@ -1731,18 +1921,44 @@ def _validate_phone_rule(
             ]
         local_digits = digits[len(code_digits) :]
 
-    min_length = rule_config.get("Longitud minima")
-    if isinstance(min_length, int) and len(local_digits) < min_length:
-        return text_value, [
-            _compose_error(
-                message,
-                f"longitud mínima de {min_length} dígitos",
-                column_name=column_name,
-                cell_value=value,
-                dependent_field=dependent_field,
-                dependent_value=dependent_value,
-            )
-        ]
+    min_length = _coerce_int(rule_config.get("Longitud minima"))
+    max_length = _coerce_int(rule_config.get("Longitud maxima"))
+    length = len(local_digits)
+    if min_length is not None and max_length is not None:
+        if length < min_length or length > max_length:
+            return text_value, [
+                _compose_error(
+                    message,
+                    f"longitud entre {min_length} y {max_length} dígitos",
+                    column_name=column_name,
+                    cell_value=value,
+                    dependent_field=dependent_field,
+                    dependent_value=dependent_value,
+                )
+            ]
+    else:
+        if min_length is not None and length < min_length:
+            return text_value, [
+                _compose_error(
+                    message,
+                    f"longitud mínima de {min_length} dígitos",
+                    column_name=column_name,
+                    cell_value=value,
+                    dependent_field=dependent_field,
+                    dependent_value=dependent_value,
+                )
+            ]
+        if max_length is not None and length > max_length:
+            return text_value, [
+                _compose_error(
+                    message,
+                    f"longitud máxima de {max_length} dígitos",
+                    column_name=column_name,
+                    cell_value=value,
+                    dependent_field=dependent_field,
+                    dependent_value=dependent_value,
+                )
+            ]
 
     formatted = f"+{code_digits}{local_digits}" if code_digits else local_digits
     return formatted, []
@@ -1773,8 +1989,8 @@ def _validate_email_rule(
                 ),
             ]
 
-    max_length = rule_config.get("Longitud máxima")
-    if isinstance(max_length, int) and len(text_value) > max_length:
+    max_length = _coerce_int(rule_config.get("Longitud máxima"))
+    if max_length is not None and len(text_value) > max_length:
         return text_value, [
             _compose_error(
                 message,
@@ -2326,6 +2542,18 @@ def _dependency_values_equal(actual: Any, expected: Any) -> bool:
     return _normalize_type_label(str(normalized_actual)) == _normalize_type_label(
         str(normalized_expected)
     )
+
+
+def _normalize_choice_value(value: Any) -> str | None:
+    """Normalize ``value`` for case-insensitive text comparisons."""
+
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    normalized = unicodedata.normalize("NFKC", text)
+    return normalized.casefold()
 
 
 def _extract_allowed_values(rule_config: Mapping[str, Any]) -> list[Any]:
