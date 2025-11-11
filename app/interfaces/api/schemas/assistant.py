@@ -297,8 +297,8 @@ class AssistantMessageResponse(BaseModel):
                         "Cada elemento de 'reglas especifica' debe ser un objeto con al menos dos claves."
                     )
 
-                dependent_labels: list[str] = []
                 type_label_seen: str | None = None
+                non_type_entries: list[tuple[str, Any]] = []
 
                 for clave, contenido in entrada.items():
                     if not isinstance(clave, str) or not clave.strip():
@@ -445,25 +445,28 @@ class AssistantMessageResponse(BaseModel):
                         raise ValueError(
                             "El valor asociado al campo dependiente no puede ser un objeto."
                         )
-                    dependent_labels.append(clave)
+                    non_type_entries.append((clave.strip(), contenido))
 
                 if type_label_seen is None:
                     raise ValueError(
                         "Cada regla dependiente debe incluir al menos una configuración de tipo soportado."
                     )
 
-                if not dependent_labels:
+                if not non_type_entries:
                     raise ValueError(
-                        "Cada regla dependiente debe indicar el encabezado dependiente y su valor."
+                        "Cada regla dependiente debe indicar el campo dependiente y su valor."
                     )
 
-                if len(dependent_labels) > 1:
-                    raise ValueError(
-                        "Cada regla dependiente debe especificar un único campo dependiente."
-                    )
-
-                dependent_label = dependent_labels[0]
+                dependent_label, dependent_value = non_type_entries[0]
+                dependent_label = dependent_label.strip()
                 normalized_dependent = _normalize_label(dependent_label)
+
+                if not isinstance(dependent_value, (str, int, float, bool)) or (
+                    isinstance(dependent_value, str) and not dependent_value.strip()
+                ):
+                    raise ValueError(
+                        "El valor definido para el campo dependiente debe ser un dato simple no vacío."
+                    )
 
                 if dependent_label_reference is None:
                     dependent_label_reference = dependent_label
@@ -472,6 +475,15 @@ class AssistantMessageResponse(BaseModel):
                     raise ValueError(
                         "Todas las reglas dependientes deben usar el mismo encabezado dependiente."
                     )
+
+                for context_label, context_value in non_type_entries[1:]:
+                    if not isinstance(context_value, (str, int, float, bool)) or (
+                        isinstance(context_value, str) and not context_value.strip()
+                    ):
+                        raise ValueError(
+                            "Cada condición adicional debe ser un dato simple no vacío (texto, número o booleano)."
+                        )
+                    expected_headers.add(context_label.strip())
 
             if dependent_label_reference is None:
                 raise ValueError(
