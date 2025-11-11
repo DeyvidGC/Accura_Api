@@ -20,7 +20,7 @@ def create_rule(
     """Create a new validation rule."""
 
     repository = RuleRepository(session)
-    ensure_unique_rule_names(rule, repository)
+    ensure_unique_rule_names(rule, repository, created_by=created_by)
 
     now = datetime.utcnow()
     entity = Rule(

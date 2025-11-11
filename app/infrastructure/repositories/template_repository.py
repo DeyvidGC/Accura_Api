@@ -60,12 +60,16 @@ class TemplateRepository:
         model = self._get_model(table_name=table_name)
         return self._to_entity(model) if model else None
 
-    def get_by_name(self, name: str) -> Template | None:
+    def get_by_name(self, name: str, *, created_by: int | None = None) -> Template | None:
         query = (
             self.session.query(TemplateModel)
             .options(joinedload(TemplateModel.columns))
             .filter(TemplateModel.deleted.is_(False))
         )
+        if created_by is None:
+            query = query.filter(TemplateModel.created_by.is_(None))
+        else:
+            query = query.filter(TemplateModel.created_by == created_by)
         normalized_name = name.strip().lower()
         model = (
             query.filter(func.lower(TemplateModel.name) == normalized_name)

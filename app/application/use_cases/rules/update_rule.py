@@ -34,7 +34,12 @@ def update_rule(
 
     new_rule = rule if rule is not None else current.rule
     if rule is not None:
-        ensure_unique_rule_names(rule, repository, exclude_rule_id=rule_id)
+        ensure_unique_rule_names(
+            rule,
+            repository,
+            created_by=current.created_by,
+            exclude_rule_id=rule_id,
+        )
 
     updated_rule = replace(
         current,

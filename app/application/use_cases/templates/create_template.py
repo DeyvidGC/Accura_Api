@@ -38,7 +38,9 @@ def create_template(
     if existing is not None:
         raise ValueError("El nombre de la tabla ya está en uso")
 
-    existing_by_name = repository.get_by_name(normalized_name)
+    existing_by_name = repository.get_by_name(
+        normalized_name, created_by=created_by
+    )
     if existing_by_name is not None:
         raise ValueError("El nombre de la plantilla ya está en uso")
 

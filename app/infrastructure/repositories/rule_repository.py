@@ -120,6 +120,7 @@ class RuleRepository:
         self,
         candidate_names: Sequence[str],
         *,
+        created_by: int | None = None,
         exclude_rule_id: int | None = None,
     ) -> str | None:
         normalized_candidates = {
@@ -133,6 +134,10 @@ class RuleRepository:
         query = self.session.query(RuleModel.id, RuleModel.rule).filter(
             RuleModel.deleted.is_(False)
         )
+        if created_by is None:
+            query = query.filter(RuleModel.created_by.is_(None))
+        else:
+            query = query.filter(RuleModel.created_by == created_by)
         if exclude_rule_id is not None:
             query = query.filter(RuleModel.id != exclude_rule_id)
 
