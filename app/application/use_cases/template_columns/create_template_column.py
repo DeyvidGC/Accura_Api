@@ -1,12 +1,17 @@
 """Use case for creating template columns."""
 
-from collections.abc import Sequence
+from __future__ import annotations
+
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
+import re
+import unicodedata
+from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.domain.entities import TemplateColumn
+from app.domain.entities import TemplateColumn, TemplateColumnRule
 from app.infrastructure.dynamic_tables import ensure_data_type
 from app.infrastructure.repositories import (
     RuleRepository,
@@ -15,11 +20,15 @@ from app.infrastructure.repositories import (
 )
 
 from .naming import derive_column_identifier, normalize_column_display_name
-from .validators import (
-    ensure_rule_header_dependencies,
-    normalize_rule_header,
-    normalize_rule_ids,
-)
+from .validators import ensure_rule_header_dependencies
+
+
+@dataclass(frozen=True)
+class NewTemplateColumnRuleData:
+    """Information linking a column to a rule during creation."""
+
+    id: int
+    header_rule: Sequence[str] | str | None = None
 
 
 @dataclass(frozen=True)
@@ -27,10 +36,8 @@ class NewTemplateColumnData:
     """Data required to create a template column."""
 
     name: str
-    data_type: str
     description: str | None = None
-    rule_ids: Sequence[int] | None = None
-    rule_header: Sequence[str] | None = None
+    rules: Sequence[NewTemplateColumnRuleData] | None = None
 
 
 def _ensure_template_is_editable(template_repository: TemplateRepository, template_id: int):
@@ -51,6 +58,7 @@ def _build_column(
     created_by: int | None,
     forbidden_names: set[str],
     forbidden_identifiers: set[str],
+    rule_repository: RuleRepository,
 ) -> TemplateColumn:
     normalized_name = normalize_column_display_name(payload.name)
     identifier = derive_column_identifier(normalized_name)
@@ -62,20 +70,15 @@ def _build_column(
     forbidden_names.add(normalized_key)
     forbidden_identifiers.add(identifier)
 
-    try:
-        normalized_type = ensure_data_type(payload.data_type)
-    except ValueError as exc:
-        raise ValueError(str(exc)) from exc
-
     now = datetime.utcnow()
-    normalized_header = normalize_rule_header(payload.rule_header)
-    normalized_rule_ids = normalize_rule_ids(payload.rule_ids)
+    assignments, normalized_type = _prepare_rule_assignments(
+        rule_repository, payload.rules
+    )
 
     return TemplateColumn(
         id=None,
         template_id=template_id,
-        rule_ids=normalized_rule_ids,
-        rule_header=normalized_header,
+        rules=assignments,
         name=normalized_name,
         description=payload.description,
         data_type=normalized_type,
@@ -95,10 +98,8 @@ def create_template_column(
     *,
     template_id: int,
     name: str,
-    data_type: str,
     description: str | None = None,
-    rule_ids: Sequence[int] | None = None,
-    header: Sequence[str] | None = None,
+    rules: Sequence[NewTemplateColumnRuleData] | None = None,
     created_by: int | None = None,
 ) -> TemplateColumn:
     """Create a new column inside a template.
@@ -122,14 +123,13 @@ def create_template_column(
         template_id=template_id,
         payload=NewTemplateColumnData(
             name=name,
-            data_type=data_type,
             description=description,
-            rule_ids=rule_ids,
-            rule_header=header,
+            rules=rules,
         ),
         created_by=created_by,
         forbidden_names=forbidden_names,
         forbidden_identifiers=forbidden_identifiers,
+        rule_repository=rule_repository,
     )
 
     ensure_rule_header_dependencies(
@@ -174,6 +174,7 @@ def create_template_columns(
             created_by=created_by,
             forbidden_names=forbidden_names,
             forbidden_identifiers=forbidden_identifiers,
+            rule_repository=rule_repository,
         )
         new_columns.append(column)
 
@@ -183,3 +184,144 @@ def create_template_columns(
     )
 
     return column_repository.create_many(new_columns)
+
+
+def _prepare_rule_assignments(
+    rule_repository: RuleRepository,
+    rules: Sequence[NewTemplateColumnRuleData] | None,
+) -> tuple[tuple[TemplateColumnRule, ...], str]:
+    if not rules:
+        raise ValueError("Debe asociar al menos una regla a la columna.")
+
+    normalized_rules: list[TemplateColumnRule] = []
+    normalized_type: str | None = None
+    fallback_type: str | None = None
+    seen_ids: set[int] = set()
+
+    for assignment in rules:
+        rule_id = _normalize_rule_id(assignment.id)
+        if rule_id in seen_ids:
+            continue
+        seen_ids.add(rule_id)
+
+        headers = _normalize_header_values(assignment.header_rule)
+
+        rule = rule_repository.get(rule_id)
+        if rule is None or not rule.is_active:
+            raise ValueError(
+                f"La regla asociada (ID {rule_id}) a la columna no está disponible."
+            )
+
+        rule_type = _extract_rule_type(rule.rule)
+        if not rule_type:
+            raise ValueError(
+                f"La regla asociada (ID {rule_id}) no define un tipo de dato."
+            )
+
+        try:
+            canonical_type = ensure_data_type(rule_type)
+        except ValueError as exc:
+            raise ValueError(str(exc)) from exc
+
+        normalized_label = _normalize_type_label(canonical_type)
+        if normalized_label in {"lista compleja", "lista completa", "dependencia"}:
+            if not headers:
+                raise ValueError(
+                    "Las reglas de lista compleja o dependencia requieren definir 'header rule'."
+                )
+
+        if fallback_type is None:
+            fallback_type = canonical_type
+
+        if normalized_label not in _AUXILIARY_RULE_TYPES:
+            if normalized_type is None:
+                normalized_type = canonical_type
+            elif canonical_type != normalized_type:
+                raise ValueError(
+                    "Todas las reglas asociadas a la columna deben compartir el mismo tipo de dato."
+                )
+
+        normalized_rules.append(TemplateColumnRule(id=rule_id, headers=headers))
+
+    if normalized_type is None:
+        normalized_type = fallback_type
+
+    if normalized_type is None:
+        raise ValueError("Debe asociar al menos una regla válida a la columna.")
+
+    return tuple(normalized_rules), normalized_type
+
+
+def _normalize_rule_id(value: Any) -> int:
+    try:
+        numeric = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Los identificadores de regla deben ser enteros positivos") from exc
+    if numeric < 1:
+        raise ValueError("Los identificadores de regla deben ser enteros positivos")
+    return numeric
+
+
+def _normalize_header_values(
+    header_rule: Sequence[str] | str | None,
+) -> tuple[str, ...] | None:
+    if header_rule is None:
+        return None
+
+    values: list[str] = []
+    if isinstance(header_rule, str):
+        candidate = header_rule.strip()
+        if candidate:
+            values.append(candidate)
+    elif isinstance(header_rule, Sequence) and not isinstance(header_rule, (str, bytes)):
+        for entry in header_rule:
+            if not isinstance(entry, str):
+                raise ValueError("Los headers de las reglas deben ser texto.")
+            candidate = entry.strip()
+            if candidate:
+                values.append(candidate)
+    else:
+        raise ValueError("Los headers de las reglas deben ser texto.")
+
+    if not values:
+        return None
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        lowered = value.lower()
+        if lowered in seen:
+            continue
+        seen.add(lowered)
+        normalized.append(value)
+
+    return tuple(normalized)
+
+
+def _extract_rule_type(rule_payload: Any) -> str | None:
+    for definition in _iter_rule_definitions(rule_payload):
+        candidate = definition.get("Tipo de dato")
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
+    return None
+
+
+def _iter_rule_definitions(rule_payload: Any) -> list[Mapping[str, Any]]:
+    if isinstance(rule_payload, Mapping):
+        return [rule_payload]
+    if isinstance(rule_payload, list):
+        definitions: list[Mapping[str, Any]] = []
+        for entry in rule_payload:
+            definitions.extend(_iter_rule_definitions(entry))
+        return definitions
+    return []
+
+
+def _normalize_type_label(label: str) -> str:
+    normalized = unicodedata.normalize("NFKD", str(label))
+    ascii_label = "".join(char for char in normalized if not unicodedata.combining(char))
+    collapsed = re.sub(r"[\s\-_/]+", " ", ascii_label)
+    return collapsed.lower().strip()
+
+
+_AUXILIARY_RULE_TYPES: set[str] = {"duplicados", "validacion conjunta"}

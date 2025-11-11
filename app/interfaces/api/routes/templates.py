@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.application.use_cases.template_columns import (
     NewTemplateColumnData,
+    NewTemplateColumnRuleData,
     create_template_column as create_template_column_uc,
     create_template_columns as create_template_columns_uc,
     delete_template_column as delete_template_column_uc,
@@ -48,6 +49,7 @@ from app.interfaces.api.schemas import (
     TemplateColumnBulkCreate,
     TemplateColumnCreate,
     TemplateColumnRead,
+    TemplateColumnRule as TemplateColumnRuleSchema,
     TemplateColumnUpdate,
     TemplateCreate,
     TemplateDuplicate,
@@ -81,14 +83,20 @@ def _schedule_cleanup(background_tasks: BackgroundTasks, path: Path) -> None:
 
 
 def _column_to_read_model(column: TemplateColumn) -> TemplateColumnRead:
+    rules_payload: list[dict[str, object]] = []
+    for rule in column.rules:
+        entry: dict[str, object] = {"id": rule.id}
+        if rule.headers:
+            entry["header rule"] = list(rule.headers)
+        rules_payload.append(entry)
+
     payload = {
         "id": column.id,
         "template_id": column.template_id,
         "name": column.name,
         "data_type": column.data_type,
         "description": column.description,
-        "rule_ids": list(column.rule_ids),
-        "header": list(column.rule_header) if column.rule_header else None,
+        "rules": rules_payload,
         "created_at": column.created_at,
         "updated_at": column.updated_at,
         "is_active": column.is_active,
@@ -100,6 +108,23 @@ def _column_to_read_model(column: TemplateColumn) -> TemplateColumnRead:
     if hasattr(TemplateColumnRead, "model_validate"):
         return TemplateColumnRead.model_validate(payload)
     return TemplateColumnRead(**payload)
+
+
+def _map_rule_payload(
+    rules: list[TemplateColumnRuleSchema] | None,
+) -> list[NewTemplateColumnRuleData] | None:
+    if not rules:
+        return None
+
+    mapped: list[NewTemplateColumnRuleData] = []
+    for rule in rules:
+        mapped.append(
+            NewTemplateColumnRuleData(
+                id=rule.id,
+                header_rule=rule.header_rule,
+            )
+        )
+    return mapped
 
 
 def _access_to_read_model(access: TemplateUserAccess) -> TemplateUserAccessRead:
@@ -304,10 +329,8 @@ def register_template_column(
                 db,
                 template_id=template_id,
                 name=column_in.name,
-                data_type=column_in.data_type,
                 description=column_in.description,
-                rule_ids=column_in.rule_ids,
-                header=column_in.header,
+                rules=_map_rule_payload(column_in.rules),
                 created_by=current_user.id,
             )
             result = _column_to_read_model(column)
@@ -319,10 +342,8 @@ def register_template_column(
             payload = [
                 NewTemplateColumnData(
                     name=col.name,
-                    data_type=col.data_type,
                     description=col.description,
-                    rule_ids=col.rule_ids,
-                    rule_header=col.header,
+                    rules=_map_rule_payload(col.rules),
                 )
                 for col in incoming_columns
             ]
@@ -399,13 +420,10 @@ def update_template_column(
             template_id=template_id,
             column_id=column_id,
             name=update_data.get("name"),
-            data_type=update_data.get("data_type"),
             description=update_data.get("description"),
-            rule_ids=update_data.get("rule_ids"),
-            header=update_data.get("header"),
-            header_provided="header" in update_data,
+            rules=_map_rule_payload(column_in.rules) if "rules" in update_data else None,
+            rules_provided="rules" in update_data,
             is_active=update_data.get("is_active"),
-            rule_ids_provided="rule_ids" in update_data,
             updated_by=current_user.id,
         )
     except ValueError as exc:

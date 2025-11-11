@@ -2,10 +2,11 @@
 
 from collections.abc import Sequence
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy.orm import Session, joinedload
 
-from app.domain.entities import TemplateColumn
+from app.domain.entities import TemplateColumn, TemplateColumnRule
 from app.infrastructure.models import (
     RuleModel,
     TemplateColumnModel,
@@ -92,11 +93,20 @@ class TemplateColumnRepository:
 
     @staticmethod
     def _to_entity(model: TemplateColumnModel) -> TemplateColumn:
+        headers_map, fallback_headers = TemplateColumnRepository._deserialize_rule_headers(
+            model.rule_header
+        )
+        rules = []
+        for rule_model in model.rules:
+            headers = headers_map.get(rule_model.id)
+            if headers is None and fallback_headers is not None:
+                headers = fallback_headers
+            rules.append(TemplateColumnRule(id=rule_model.id, headers=headers))
+
         return TemplateColumn(
             id=model.id,
             template_id=model.template_id,
-            rule_ids=tuple(sorted(rule.id for rule in model.rules)),
-            rule_header=tuple(model.rule_header) if model.rule_header else None,
+            rules=tuple(rules),
             name=model.name,
             description=model.description,
             data_type=model.data_type,
@@ -132,7 +142,7 @@ class TemplateColumnRepository:
             model.updated_at = None
         model.template_id = column.template_id
         model.rules = self._load_rules(column.rule_ids)
-        model.rule_header = list(column.rule_header) if column.rule_header else None
+        model.rule_header = self._serialize_rule_headers(column.rules)
         model.name = column.name
         model.description = column.description
         model.data_type = column.data_type
@@ -167,6 +177,83 @@ class TemplateColumnRepository:
             raise ValueError(f"Las reglas {missing_str} no existen")
 
         return [found[rule_id] for rule_id in unique_ids]
+
+    @staticmethod
+    def _serialize_rule_headers(
+        rules: Sequence[TemplateColumnRule],
+    ) -> list[dict[str, Any]] | None:
+        serialized: list[dict[str, Any]] = []
+        for assignment in rules:
+            if not assignment.headers:
+                continue
+            serialized.append(
+                {
+                    "rule_id": assignment.id,
+                    "headers": list(assignment.headers),
+                }
+            )
+        return serialized or None
+
+    @staticmethod
+    def _deserialize_rule_headers(
+        raw_headers: Any,
+    ) -> tuple[dict[int, tuple[str, ...]], tuple[str, ...] | None]:
+        if not raw_headers:
+            return {}, None
+
+        fallback: tuple[str, ...] | None = None
+        headers_map: dict[int, tuple[str, ...]] = {}
+
+        if isinstance(raw_headers, list):
+            # Handle legacy storage of a flat list of headers
+            if all(isinstance(entry, str) for entry in raw_headers):
+                values = [entry.strip() for entry in raw_headers if isinstance(entry, str)]
+                fallback = tuple(value for value in values if value)
+                return headers_map, fallback or None
+
+            for entry in raw_headers:
+                if not isinstance(entry, dict):
+                    continue
+                raw_id = entry.get("rule_id") or entry.get("id")
+                try:
+                    rule_id = int(raw_id)
+                except (TypeError, ValueError):
+                    continue
+                headers = entry.get("headers") or entry.get("header")
+                if isinstance(headers, str):
+                    candidates = [headers]
+                elif isinstance(headers, list):
+                    candidates = [value for value in headers if isinstance(value, str)]
+                else:
+                    continue
+                normalized = [value.strip() for value in candidates if value and value.strip()]
+                if normalized:
+                    headers_map[rule_id] = tuple(normalized)
+            return headers_map, None
+
+        if isinstance(raw_headers, dict):
+            for key, value in raw_headers.items():
+                try:
+                    rule_id = int(key)
+                except (TypeError, ValueError):
+                    continue
+                if isinstance(value, str):
+                    normalized = value.strip()
+                    if normalized:
+                        headers_map[rule_id] = (normalized,)
+                elif isinstance(value, list):
+                    normalized_values = [
+                        item.strip() for item in value if isinstance(item, str) and item.strip()
+                    ]
+                    if normalized_values:
+                        headers_map[rule_id] = tuple(normalized_values)
+            return headers_map, None
+
+        if isinstance(raw_headers, str):
+            normalized = raw_headers.strip()
+            fallback = (normalized,) if normalized else None
+
+        return headers_map, fallback
 
     def is_rule_in_use(self, rule_id: int) -> bool:
         """Return ``True`` when a rule is linked to any template column."""
