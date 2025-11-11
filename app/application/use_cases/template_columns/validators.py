@@ -12,8 +12,8 @@ from typing import Any
 from app.domain.entities import TemplateColumn
 from app.infrastructure.repositories import RuleRepository
 
-_RULE_TYPES_REQUIRING_HEADER_FIELD = {"lista compleja"}
-_RULE_TYPES_REQUIRING_COLUMN_HEADER = {"lista compleja"}
+_RULE_TYPES_REQUIRING_HEADER_FIELD = {"lista compleja", "lista completa"}
+_RULE_TYPES_REQUIRING_COLUMN_HEADER = {"lista compleja", "lista completa"}
 _DUPLICATE_FIELD_KEYS: tuple[str, ...] = ("Campos", "Columnas", "Fields", "fields")
 _NORMALIZATION_STOPWORDS: set[str] = {
     "de",
@@ -37,6 +37,19 @@ class _ColumnLabel:
     normalized: str
     tokens: tuple[str, ...]
     token_set: frozenset[str]
+
+
+_DEPENDENCY_TYPE_ALIASES: set[str] = {
+    "texto",
+    "numero",
+    "documento",
+    "lista",
+    "lista compleja",
+    "lista completa",
+    "telefono",
+    "correo",
+    "fecha",
+}
 
 
 def _normalize_type_label(label: str) -> str:
@@ -68,6 +81,130 @@ def _iter_rule_definitions(rule_data: Any) -> list[Mapping[str, Any]]:
         for entry in rule_data:
             definitions.extend(_iter_rule_definitions(entry))
         return definitions
+    return []
+
+
+def _deduplicate_preserving_order(values: Sequence[str]) -> list[str]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for value in values:
+        normalized = value.lower()
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        ordered.append(value)
+    return ordered
+
+
+def _extract_rule_headers(definition: Mapping[str, Any], key: str) -> list[str]:
+    raw_value = definition.get(key)
+    headers: list[str] = []
+    if isinstance(raw_value, str):
+        candidate = raw_value.strip()
+        if candidate:
+            headers.append(candidate)
+    elif isinstance(raw_value, Sequence) and not isinstance(raw_value, (str, bytes)):
+        for entry in raw_value:
+            if not isinstance(entry, str):
+                continue
+            candidate = entry.strip()
+            if candidate:
+                headers.append(candidate)
+    return _deduplicate_preserving_order(headers)
+
+
+def _extract_dependency_specifics(rule_block: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    def _iter_specifics(candidate: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+        for key, value in candidate.items():
+            if isinstance(key, str) and _normalize_type_label(key) == "reglas especifica":
+                if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+                    return [entry for entry in value if isinstance(entry, Mapping)]
+            if isinstance(value, Mapping):
+                nested = _iter_specifics(value)
+                if nested:
+                    return nested
+        fallback = candidate.get("reglas especifica")
+        if isinstance(fallback, Sequence) and not isinstance(fallback, (str, bytes)):
+            return [entry for entry in fallback if isinstance(entry, Mapping)]
+        return []
+
+    return _iter_specifics(rule_block)
+
+
+def _infer_header_rule(definition: Mapping[str, Any]) -> list[str]:
+    rule_type = _normalize_type_label(definition.get("Tipo de dato", ""))
+    rule_block = definition.get("Regla")
+    if not isinstance(rule_block, Mapping):
+        return []
+
+    if rule_type in {"lista compleja", "lista completa"}:
+        combinations: list[Mapping[str, Any]] = []
+        for key, value in rule_block.items():
+            if isinstance(key, str) and _normalize_type_label(key) in {"lista compleja", "lista completa"}:
+                if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+                    combinations.extend(
+                        entry for entry in value if isinstance(entry, Mapping)
+                    )
+        candidates: list[str] = []
+        for combination in combinations:
+            for header_key in combination.keys():
+                if isinstance(header_key, str):
+                    stripped = header_key.strip()
+                    if stripped:
+                        candidates.append(stripped)
+        return _deduplicate_preserving_order(candidates)
+
+    if rule_type == "dependencia":
+        specifics = _extract_dependency_specifics(rule_block)
+        if not specifics:
+            return []
+
+        dependent_label: str | None = None
+        candidates: list[str] = []
+        normalized_seen: set[str] = set()
+
+        for entry in specifics:
+            for key, value in entry.items():
+                if not isinstance(key, str):
+                    continue
+                normalized_key = _normalize_type_label(key)
+                stripped = key.strip()
+                if not stripped:
+                    continue
+                if normalized_key in _DEPENDENCY_TYPE_ALIASES:
+                    if normalized_key not in normalized_seen:
+                        candidates.append(stripped)
+                        normalized_seen.add(normalized_key)
+                    continue
+                if dependent_label is None:
+                    dependent_label = stripped
+                elif _normalize_type_label(dependent_label) == normalized_key:
+                    continue
+
+        if dependent_label:
+            normalized_required = {
+                _normalize_type_label(value) for value in candidates
+            }
+            dependent_normalized = _normalize_type_label(dependent_label)
+            if dependent_normalized not in normalized_required:
+                candidates.insert(0, dependent_label)
+            elif candidates and _normalize_type_label(candidates[0]) != dependent_normalized:
+                candidates.insert(0, dependent_label)
+
+        return _deduplicate_preserving_order(candidates)
+
+    if rule_type == "validacion conjunta":
+        return _deduplicate_preserving_order(
+            _extract_rule_headers(rule_block, "Nombre de campos")
+        )
+
+    if rule_type == "duplicados":
+        for candidate_key in _DUPLICATE_FIELD_KEYS:
+            headers = _extract_rule_headers(rule_block, candidate_key)
+            if headers:
+                return _deduplicate_preserving_order(headers)
+        return []
+
     return []
 
 
@@ -233,6 +370,9 @@ def ensure_rule_header_dependencies(
     for column in active_columns:
         column_headers = normalize_rule_header(column.rule_header)
         header_values = list(column_headers) if column_headers else []
+        normalized_header_values = {
+            _normalize_type_label(value): value for value in header_values
+        }
 
         if column.rule_id is None:
             if header_values:
@@ -257,15 +397,44 @@ def ensure_rule_header_dependencies(
         allows_column_header = False
         requires_column_header = False
         skip_header_enforcement = False
+        dependency_rule_present = False
+        column_type = _normalize_type_label(column.data_type)
+        header_rules_by_type: dict[str, list[str]] = {}
+        rule_names_by_type: dict[str, str] = {}
 
         for definition in definitions:
             rule_type = _normalize_type_label(definition.get("Tipo de dato", ""))
+            header_rule_values = _extract_rule_headers(definition, "Header rule")
+            if not header_rule_values:
+                header_rule_values = _infer_header_rule(definition)
+            if header_rule_values:
+                allows_column_header = True
+                requires_column_header = True
+                existing = header_rules_by_type.setdefault(rule_type, [])
+                existing_normalized = {
+                    _normalize_type_label(value) for value in existing
+                }
+                for entry in header_rule_values:
+                    normalized_entry = _normalize_type_label(entry)
+                    if not normalized_entry or normalized_entry in existing_normalized:
+                        continue
+                    existing.append(entry)
+                    existing_normalized.add(normalized_entry)
+                rule_names_by_type.setdefault(
+                    rule_type, _resolve_rule_name(definition, column)
+                )
+
             if rule_type == "duplicados":
                 _validate_duplicate_fields(definition, column, labels)
                 continue
             if rule_type == "dependencia":
                 allows_column_header = True
-                skip_header_enforcement = True
+                requires_column_header = True
+                dependency_rule_present = True
+                continue
+            if rule_type == "validacion conjunta":
+                allows_column_header = True
+                requires_column_header = True
                 continue
             if rule_type not in _RULE_TYPES_REQUIRING_HEADER_FIELD:
                 continue
@@ -310,6 +479,61 @@ def ensure_rule_header_dependencies(
             raise ValueError(
                 f"La columna '{column.name}' debe definir headers para la regla asignada."
             )
+
+        required_headers = header_rules_by_type.get(column_type)
+        if required_headers:
+            normalized_required = [
+                _normalize_type_label(value) for value in required_headers
+            ]
+            if len(header_values) != len(normalized_required):
+                rule_name = rule_names_by_type.get(column_type, column.name)
+                raise ValueError(
+                    "La columna '"
+                    + column.name
+                    + "' debe asignar "
+                    + str(len(required_headers))
+                    + " headers según la regla '"
+                    + rule_name
+                    + "'."
+                )
+
+            missing_assignments = [
+                header
+                for header, normalized in zip(required_headers, normalized_required)
+                if normalized not in normalized_header_values
+            ]
+            if missing_assignments:
+                rule_name = rule_names_by_type.get(column_type, column.name)
+                missing_str = ", ".join(sorted(set(missing_assignments)))
+                raise ValueError(
+                    "Los headers configurados para la columna '"
+                    + column.name
+                    + "' deben incluir los valores requeridos por la regla '"
+                    + rule_name
+                    + "': "
+                    + missing_str
+                )
+
+            missing_columns = [
+                header
+                for header in required_headers
+                if not _header_matches(header, labels)
+            ]
+            if missing_columns:
+                rule_name = rule_names_by_type.get(column_type, column.name)
+                missing_str = ", ".join(sorted(set(missing_columns)))
+                raise ValueError(
+                    "La regla '"
+                    + rule_name
+                    + "' requiere que la plantilla incluya las columnas "
+                    + missing_str
+                    + "."
+                )
+        elif dependency_rule_present:
+            if len(header_values) != 2:
+                raise ValueError(
+                    f"La columna '{column.name}' debe definir exactamente dos headers para la regla dependiente."
+                )
 
         if header_values and not skip_header_enforcement:
             missing_headers = [

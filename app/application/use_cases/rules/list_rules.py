@@ -13,7 +13,7 @@ def list_rules(
     *,
     current_user: User,
     skip: int = 0,
-    limit: int = 100,
+    limit: int | None = 100,
 ) -> Sequence[Rule]:
     """Return a paginated list of validation rules."""
 
