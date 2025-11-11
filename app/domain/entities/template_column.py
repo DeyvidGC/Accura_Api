@@ -10,7 +10,7 @@ class TemplateColumn:
 
     id: int | None
     template_id: int
-    rule_id: int | None
+    rule_ids: tuple[int, ...]
     rule_header: tuple[str, ...] | None
     name: str
     description: str | None

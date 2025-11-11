@@ -482,7 +482,9 @@ def _validate_headers(dataframe: DataFrame, columns: Sequence[TemplateColumn]) -
 def _load_rules(
     session: Session, columns: Sequence[TemplateColumn]
 ) -> dict[int, dict[str, Any] | list[Any]]:
-    rule_ids = {column.rule_id for column in columns if column.rule_id is not None}
+    rule_ids: set[int] = set()
+    for column in columns:
+        rule_ids.update(column.rule_ids)
     if not rule_ids:
         return {}
     repository = RuleRepository(session)
@@ -518,7 +520,12 @@ def _validate_dataframe(
     for column in columns:
         normalized_type = _normalize_type_label(column.data_type)
         parser = _TYPE_PARSERS.get(normalized_type)
-        if parser is None and (column.rule_id is None or column.rule_id not in rules):
+        column_rule_definitions = [
+            rules[rule_id]
+            for rule_id in column.rule_ids
+            if rule_id in rules
+        ]
+        if parser is None and not column_rule_definitions:
             raise ValueError(
                 f"Tipo de dato desconocido para la columna '{column.name}'"
             )
@@ -526,25 +533,24 @@ def _validate_dataframe(
         if column.name not in df.columns:
             df[column.name] = pd.Series([None] * len(df.index), dtype=object)
         series = df[column.name]
-        rule_definition = rules.get(column.rule_id or -1)
-
-        if rule_definition is not None:
-            duplicate_configs = _gather_duplicate_rule_configs(
-                rule_definition,
-                column.name,
-                column_lookup=normalized_column_lookup,
-                column_tokens=column_token_lookup,
-            )
-            for config in duplicate_configs:
-                key = (
-                    tuple(config["fields"]),
-                    config.get("name"),
-                    config.get("message"),
-                    config.get("ignore_empty", False),
+        if column_rule_definitions:
+            for rule_definition in column_rule_definitions:
+                duplicate_configs = _gather_duplicate_rule_configs(
+                    rule_definition,
+                    column.name,
+                    column_lookup=normalized_column_lookup,
+                    column_tokens=column_token_lookup,
                 )
-                if key not in seen_duplicate_configs:
-                    seen_duplicate_configs.add(key)
-                    duplicate_rules.append(config)
+                for config in duplicate_configs:
+                    key = (
+                        tuple(config["fields"]),
+                        config.get("name"),
+                        config.get("message"),
+                        config.get("ignore_empty", False),
+                    )
+                    if key not in seen_duplicate_configs:
+                        seen_duplicate_configs.add(key)
+                        duplicate_rules.append(config)
 
         for idx, raw_value in enumerate(series.tolist()):
             normalized_value = _normalize_cell_value(raw_value)
@@ -555,19 +561,27 @@ def _validate_dataframe(
             column_errors: list[str] = []
             converted_value = normalized_value
 
-            if rule_definition is not None:
-                candidate_value, rule_errors = _validate_value_with_rule(
-                    column.name,
-                    normalized_value,
-                    rule_definition,
-                    row_snapshot,
-                    parser,
-                    normalized_column_lookup,
-                    column_token_lookup,
-                )
-                column_errors.extend(rule_errors)
-                if not rule_errors:
-                    converted_value = candidate_value
+            if column_rule_definitions:
+                current_value = normalized_value
+                for rule_definition in column_rule_definitions:
+                    candidate_value, rule_errors = _validate_value_with_rule(
+                        column.name,
+                        current_value,
+                        rule_definition,
+                        row_snapshot,
+                        parser,
+                        normalized_column_lookup,
+                        column_token_lookup,
+                    )
+                    if rule_errors:
+                        column_errors.extend(rule_errors)
+                        continue
+
+                    current_value = candidate_value
+                    row_snapshot[column.name] = current_value
+
+                if not column_errors:
+                    converted_value = current_value
             elif parser is not None:
                 parsed_value, parse_error = parser(normalized_value)
                 if parse_error:

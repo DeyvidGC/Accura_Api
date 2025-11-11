@@ -1,14 +1,42 @@
 """SQLAlchemy model for template columns."""
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Table,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.types import JSON
 from sqlalchemy.sql import expression
 
 from app.infrastructure.database import Base
+from app.infrastructure.models.rule import RuleModel
 
 _header_json_type = JSONB().with_variant(JSON(), "sqlite")
+
+
+template_column_rule_table = Table(
+    "template_column_rule",
+    Base.metadata,
+    Column(
+        "template_column_id",
+        Integer,
+        ForeignKey("template_column.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column(
+        "rule_id",
+        Integer,
+        ForeignKey("rule.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+)
 
 
 class TemplateColumnModel(Base):
@@ -23,7 +51,6 @@ class TemplateColumnModel(Base):
         nullable=False,
         index=True,
     )
-    rule_id = Column(Integer, ForeignKey("rule.id"), nullable=True, index=True)
     name = Column(String(50), nullable=False)
     description = Column(String(255), nullable=True)
     data_type = Column(String(50), nullable=False)
@@ -43,7 +70,12 @@ class TemplateColumnModel(Base):
     deleted_at = Column(DateTime, nullable=True)
 
     template = relationship("TemplateModel", back_populates="columns")
-    rule = relationship("RuleModel", lazy="joined")
+    rules = relationship(
+        RuleModel,
+        secondary=template_column_rule_table,
+        lazy="joined",
+        order_by=RuleModel.id,
+    )
 
 
-__all__ = ["TemplateColumnModel"]
+__all__ = ["TemplateColumnModel", "template_column_rule_table"]

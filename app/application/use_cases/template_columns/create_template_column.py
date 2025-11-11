@@ -15,7 +15,11 @@ from app.infrastructure.repositories import (
 )
 
 from .naming import derive_column_identifier, normalize_column_display_name
-from .validators import ensure_rule_header_dependencies, normalize_rule_header
+from .validators import (
+    ensure_rule_header_dependencies,
+    normalize_rule_header,
+    normalize_rule_ids,
+)
 
 
 @dataclass(frozen=True)
@@ -25,7 +29,7 @@ class NewTemplateColumnData:
     name: str
     data_type: str
     description: str | None = None
-    rule_id: int | None = None
+    rule_ids: Sequence[int] | None = None
     rule_header: Sequence[str] | None = None
 
 
@@ -65,11 +69,12 @@ def _build_column(
 
     now = datetime.utcnow()
     normalized_header = normalize_rule_header(payload.rule_header)
+    normalized_rule_ids = normalize_rule_ids(payload.rule_ids)
 
     return TemplateColumn(
         id=None,
         template_id=template_id,
-        rule_id=payload.rule_id,
+        rule_ids=normalized_rule_ids,
         rule_header=normalized_header,
         name=normalized_name,
         description=payload.description,
@@ -92,7 +97,7 @@ def create_template_column(
     name: str,
     data_type: str,
     description: str | None = None,
-    rule_id: int | None = None,
+    rule_ids: Sequence[int] | None = None,
     header: Sequence[str] | None = None,
     created_by: int | None = None,
 ) -> TemplateColumn:
@@ -119,7 +124,7 @@ def create_template_column(
             name=name,
             data_type=data_type,
             description=description,
-            rule_id=rule_id,
+            rule_ids=rule_ids,
             rule_header=header,
         ),
         created_by=created_by,

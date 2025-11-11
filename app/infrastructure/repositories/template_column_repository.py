@@ -6,7 +6,12 @@ from datetime import datetime
 from sqlalchemy.orm import Session, joinedload
 
 from app.domain.entities import TemplateColumn
-from app.infrastructure.models import TemplateColumnModel, TemplateModel
+from app.infrastructure.models import (
+    RuleModel,
+    TemplateColumnModel,
+    TemplateModel,
+    template_column_rule_table,
+)
 
 
 class TemplateColumnRepository:
@@ -18,7 +23,7 @@ class TemplateColumnRepository:
     def list_by_template(self, template_id: int) -> Sequence[TemplateColumn]:
         query = (
             self.session.query(TemplateColumnModel)
-            .options(joinedload(TemplateColumnModel.rule))
+            .options(joinedload(TemplateColumnModel.rules))
             .filter(TemplateColumnModel.template_id == template_id)
             .filter(TemplateColumnModel.deleted.is_(False))
         )
@@ -34,8 +39,8 @@ class TemplateColumnRepository:
         self.session.add(model)
         self.session.commit()
         self.session.refresh(model)
-        if model.rule is None and column.rule_id is not None:
-            self.session.refresh(model, attribute_names=["rule"])
+        if model.rules:
+            self.session.refresh(model, attribute_names=["rules"])
         return self._to_entity(model)
 
     def create_many(self, columns: Sequence[TemplateColumn]) -> list[TemplateColumn]:
@@ -48,10 +53,10 @@ class TemplateColumnRepository:
 
         self.session.commit()
 
-        for model, column in zip(models, columns, strict=False):
+        for model in models:
             self.session.refresh(model)
-            if model.rule is None and column.rule_id is not None:
-                self.session.refresh(model, attribute_names=["rule"])
+            if model.rules:
+                self.session.refresh(model, attribute_names=["rules"])
 
         return [self._to_entity(model) for model in models]
 
@@ -64,8 +69,8 @@ class TemplateColumnRepository:
         self.session.add(model)
         self.session.commit()
         self.session.refresh(model)
-        if model.rule is None and column.rule_id is not None:
-            self.session.refresh(model, attribute_names=["rule"])
+        if model.rules:
+            self.session.refresh(model, attribute_names=["rules"])
         return self._to_entity(model)
 
     def delete(self, column_id: int, *, deleted_by: int | None = None) -> None:
@@ -90,7 +95,7 @@ class TemplateColumnRepository:
         return TemplateColumn(
             id=model.id,
             template_id=model.template_id,
-            rule_id=model.rule_id,
+            rule_ids=tuple(sorted(rule.id for rule in model.rules)),
             rule_header=tuple(model.rule_header) if model.rule_header else None,
             name=model.name,
             description=model.description,
@@ -107,14 +112,14 @@ class TemplateColumnRepository:
 
     def _get_model(self, include_deleted: bool = False, **filters) -> TemplateColumnModel | None:
         query = self.session.query(TemplateColumnModel).options(
-            joinedload(TemplateColumnModel.rule)
+            joinedload(TemplateColumnModel.rules)
         )
         if not include_deleted:
             query = query.filter(TemplateColumnModel.deleted.is_(False))
         return query.filter_by(**filters).first()
 
-    @staticmethod
     def _apply_entity_to_model(
+        self,
         model: TemplateColumnModel,
         column: TemplateColumn,
         *,
@@ -126,7 +131,7 @@ class TemplateColumnRepository:
             model.updated_by = None
             model.updated_at = None
         model.template_id = column.template_id
-        model.rule_id = column.rule_id
+        model.rules = self._load_rules(column.rule_ids)
         model.rule_header = list(column.rule_header) if column.rule_header else None
         model.name = column.name
         model.description = column.description
@@ -139,12 +144,44 @@ class TemplateColumnRepository:
         model.deleted_by = column.deleted_by
         model.deleted_at = column.deleted_at
 
+    def _load_rules(self, rule_ids: tuple[int, ...]) -> list[RuleModel]:
+        if not rule_ids:
+            return []
+
+        unique_ids: list[int] = []
+        seen: set[int] = set()
+        for rule_id in rule_ids:
+            if rule_id in seen:
+                continue
+            seen.add(rule_id)
+            unique_ids.append(rule_id)
+        rule_models = (
+            self.session.query(RuleModel)
+            .filter(RuleModel.id.in_(unique_ids))
+            .all()
+        )
+        found = {rule.id: rule for rule in rule_models}
+        missing = [rule_id for rule_id in unique_ids if rule_id not in found]
+        if missing:
+            missing_str = ", ".join(str(rule_id) for rule_id in missing)
+            raise ValueError(f"Las reglas {missing_str} no existen")
+
+        return [found[rule_id] for rule_id in unique_ids]
+
     def is_rule_in_use(self, rule_id: int) -> bool:
         """Return ``True`` when a rule is linked to any template column."""
 
-        query = self.session.query(TemplateColumnModel.id).filter(
-            TemplateColumnModel.rule_id == rule_id,
-            TemplateColumnModel.deleted.is_(False),
+        query = (
+            self.session.query(template_column_rule_table.c.template_column_id)
+            .join(
+                TemplateColumnModel,
+                TemplateColumnModel.id
+                == template_column_rule_table.c.template_column_id,
+            )
+            .filter(
+                template_column_rule_table.c.rule_id == rule_id,
+                TemplateColumnModel.deleted.is_(False),
+            )
         )
         return query.first() is not None
 
@@ -154,8 +191,13 @@ class TemplateColumnRepository:
         query = (
             self.session.query(TemplateColumnModel.id)
             .join(TemplateModel, TemplateModel.id == TemplateColumnModel.template_id)
+            .join(
+                template_column_rule_table,
+                template_column_rule_table.c.template_column_id
+                == TemplateColumnModel.id,
+            )
             .filter(
-                TemplateColumnModel.rule_id == rule_id,
+                template_column_rule_table.c.rule_id == rule_id,
                 TemplateColumnModel.deleted.is_(False),
                 TemplateModel.status == "published",
             )

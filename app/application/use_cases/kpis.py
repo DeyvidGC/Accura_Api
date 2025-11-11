@@ -19,6 +19,7 @@ from app.infrastructure.models import (
     TemplateModel,
     UserModel,
 )
+from app.infrastructure.models.template_column import template_column_rule_table
 
 
 @dataclass
@@ -232,11 +233,16 @@ def get_kpis(
     ) or 0
 
     assigned_rules_query = (
-        session.query(func.count(func.distinct(TemplateColumnModel.rule_id)))
-        .join(RuleModel, TemplateColumnModel.rule_id == RuleModel.id)
+        session.query(func.count(func.distinct(template_column_rule_table.c.rule_id)))
+        .select_from(template_column_rule_table)
+        .join(
+            TemplateColumnModel,
+            TemplateColumnModel.id
+            == template_column_rule_table.c.template_column_id,
+        )
+        .join(RuleModel, template_column_rule_table.c.rule_id == RuleModel.id)
         .join(TemplateModel, TemplateColumnModel.template_id == TemplateModel.id)
         .filter(
-            TemplateColumnModel.rule_id.isnot(None),
             TemplateColumnModel.deleted.is_(False),
             TemplateModel.deleted.is_(False),
             RuleModel.deleted.is_(False),

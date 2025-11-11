@@ -17,7 +17,7 @@ class TemplateColumnBase(BaseModel):
     name: str = Field(..., max_length=50)
     data_type: str = Field(..., max_length=50)
     description: str | None = Field(default=None, max_length=255)
-    rule_id: int | None = Field(default=None, ge=1)
+    rule_ids: list[int] | None = Field(default=None)
     header: list[str] | None = Field(default=None)
 
 
@@ -35,7 +35,7 @@ class TemplateColumnUpdate(BaseModel):
     name: str | None = Field(default=None, max_length=50)
     data_type: str | None = Field(default=None, max_length=50)
     description: str | None = Field(default=None, max_length=255)
-    rule_id: int | None = Field(default=None, ge=1)
+    rule_ids: list[int] | None = Field(default=None)
     header: list[str] | None = None
     is_active: bool | None = None
 
