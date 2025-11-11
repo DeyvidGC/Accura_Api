@@ -15,7 +15,13 @@ from .auth import (
 )
 from .notification import NotificationRead
 from .activity import RecentActivityRead
-from .rule import RuleCreate, RuleRead, RuleUpdate
+from .rule import (
+    RuleByType,
+    RuleCreate,
+    RuleHeaderResponse,
+    RuleRead,
+    RuleUpdate,
+)
 from .kpi import (
     KPIReportRead,
     HistorySnapshotRead,
@@ -64,6 +70,8 @@ __all__ = [
     "Token",
     "TokenValidationResponse",
     "RuleCreate",
+    "RuleByType",
+    "RuleHeaderResponse",
     "RuleRead",
     "RuleUpdate",
     "KPIReportRead",

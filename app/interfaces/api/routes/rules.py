@@ -1,6 +1,13 @@
 """Rutas para administrar reglas de validación."""
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from __future__ import annotations
+
+import re
+import unicodedata
+from collections.abc import Mapping, Sequence
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.application.use_cases.rules import (
@@ -14,9 +21,204 @@ from app.application.use_cases.rules import (
 from app.domain.entities import Rule, User
 from app.infrastructure.database import get_db
 from app.interfaces.api.dependencies import require_admin
-from app.interfaces.api.schemas import RuleCreate, RuleRead, RuleUpdate
+from app.interfaces.api.schemas import (
+    RuleByType,
+    RuleCreate,
+    RuleHeaderResponse,
+    RuleRead,
+    RuleUpdate,
+)
 
 router = APIRouter(prefix="/rules", tags=["rules"])
+
+_ALLOWED_TYPE_LABELS: dict[str, str] = {
+    "texto": "Texto",
+    "numero": "Número",
+    "documento": "Documento",
+    "lista": "Lista",
+    "lista compleja": "Lista compleja",
+    "lista completa": "Lista compleja",
+    "telefono": "Telefono",
+    "correo": "Correo",
+    "fecha": "Fecha",
+    "dependencia": "Dependencia",
+    "validacion conjunta": "Validación conjunta",
+    "duplicados": "Duplicados",
+}
+
+_DEPENDENCY_TYPE_ALIASES: set[str] = {
+    "texto",
+    "numero",
+    "documento",
+    "lista",
+    "lista compleja",
+    "lista completa",
+    "telefono",
+    "correo",
+    "fecha",
+}
+
+
+def _normalize_label(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", str(value))
+    ascii_text = "".join(char for char in normalized if not unicodedata.combining(char))
+    collapsed = re.sub(r"[\s\-_/]+", " ", ascii_text)
+    return collapsed.lower().strip()
+
+
+def _iter_rule_definitions(rule_payload: Any) -> list[Mapping[str, Any]]:
+    if isinstance(rule_payload, Mapping):
+        return [rule_payload]
+    if isinstance(rule_payload, Sequence) and not isinstance(rule_payload, (str, bytes)):
+        definitions: list[Mapping[str, Any]] = []
+        for entry in rule_payload:
+            definitions.extend(_iter_rule_definitions(entry))
+        return definitions
+    return []
+
+
+def _ensure_supported_type(type_label: str) -> tuple[str, str]:
+    normalized = _normalize_label(type_label)
+    canonical = _ALLOWED_TYPE_LABELS.get(normalized)
+    if canonical is None:
+        msg = "Tipo de dato no soportado."
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
+    return normalized, canonical
+
+
+def _sanitize_text(value: Any) -> str:
+    if isinstance(value, str):
+        return value.strip()
+    if value is None:
+        return ""
+    return str(value)
+
+
+def _deduplicate_headers(headers: Sequence[str]) -> list[str]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for header in headers:
+        normalized = header.lower()
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        ordered.append(header)
+    return ordered
+
+
+def _extract_header_entries(raw_headers: Any) -> list[str]:
+    if isinstance(raw_headers, str):
+        candidate = raw_headers.strip()
+        return [candidate] if candidate else []
+    if isinstance(raw_headers, Sequence) and not isinstance(raw_headers, (str, bytes)):
+        candidates: list[str] = []
+        for entry in raw_headers:
+            if not isinstance(entry, str):
+                continue
+            candidate = entry.strip()
+            if candidate:
+                candidates.append(candidate)
+        return candidates
+    return []
+
+
+def _extract_dependency_specifics(rule_block: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    def _iter_specifics(candidate: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+        for key, value in candidate.items():
+            if isinstance(key, str) and _normalize_label(key) == "reglas especifica":
+                if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+                    return [entry for entry in value if isinstance(entry, Mapping)]
+            if isinstance(value, Mapping):
+                nested = _iter_specifics(value)
+                if nested:
+                    return nested
+        fallback = candidate.get("reglas especifica")
+        if isinstance(fallback, Sequence) and not isinstance(fallback, (str, bytes)):
+            return [entry for entry in fallback if isinstance(entry, Mapping)]
+        return []
+
+    return _iter_specifics(rule_block)
+
+
+def _infer_header_rule(definition: Mapping[str, Any]) -> list[str]:
+    rule_type = _normalize_label(definition.get("Tipo de dato", ""))
+    rule_block = definition.get("Regla")
+    if not isinstance(rule_block, Mapping):
+        return []
+
+    if rule_type in {"lista compleja", "lista completa"}:
+        combinations: list[Mapping[str, Any]] = []
+        for key, value in rule_block.items():
+            if isinstance(key, str) and _normalize_label(key) in {"lista compleja", "lista completa"}:
+                if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+                    combinations.extend(
+                        entry for entry in value if isinstance(entry, Mapping)
+                    )
+        header_candidates: list[str] = []
+        for combination in combinations:
+            for header_key in combination.keys():
+                if isinstance(header_key, str):
+                    candidate = header_key.strip()
+                    if candidate:
+                        header_candidates.append(candidate)
+        return _deduplicate_headers(header_candidates)
+
+    if rule_type == "dependencia":
+        specifics = _extract_dependency_specifics(rule_block)
+        if not specifics:
+            return []
+
+        dependent_label: str | None = None
+        header_candidates: list[str] = []
+        seen_normalized: set[str] = set()
+
+        for entry in specifics:
+            for key, value in entry.items():
+                if not isinstance(key, str):
+                    continue
+                normalized_key = _normalize_label(key)
+                stripped_key = key.strip()
+                if not stripped_key:
+                    continue
+                if normalized_key in _DEPENDENCY_TYPE_ALIASES:
+                    if normalized_key not in seen_normalized:
+                        header_candidates.append(stripped_key)
+                        seen_normalized.add(normalized_key)
+                    continue
+                if dependent_label is None:
+                    dependent_label = stripped_key
+                    seen_normalized.add(normalized_key)
+                elif _normalize_label(dependent_label) == normalized_key:
+                    continue
+
+        if dependent_label:
+            normalized_required = {_normalize_label(item) for item in header_candidates}
+            if _normalize_label(dependent_label) not in normalized_required:
+                header_candidates.insert(0, dependent_label)
+            elif header_candidates and _normalize_label(header_candidates[0]) != _normalize_label(
+                dependent_label
+            ):
+                header_candidates.insert(0, dependent_label)
+
+        return _deduplicate_headers(header_candidates)
+
+    if rule_type == "validacion conjunta":
+        return _deduplicate_headers(
+            _extract_header_entries(rule_block.get("Nombre de campos"))
+        )
+
+    if rule_type == "duplicados":
+        for candidate_key in ("Campos", "Columnas", "Fields", "fields"):
+            headers = _extract_header_entries(rule_block.get(candidate_key))
+            if headers:
+                return _deduplicate_headers(headers)
+        return []
+
+    return []
+
+
+def _extract_bool(value: Any) -> bool:
+    return value if isinstance(value, bool) else False
 
 
 def _to_read_model(rule: Rule) -> RuleRead:
@@ -60,6 +262,66 @@ def list_rules(
     return [_to_read_model(rule) for rule in rules]
 
 
+@router.get("/by-type/{type_label}", response_model=list[RuleByType])
+def list_rules_by_type_endpoint(
+    type_label: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+) -> list[RuleByType]:
+    """Devuelve las reglas disponibles para el tipo de dato solicitado."""
+
+    normalized_type, canonical_type = _ensure_supported_type(type_label)
+    normalized_aliases = {normalized_type}
+    if normalized_type in {"lista compleja", "lista completa"}:
+        normalized_aliases.update({"lista compleja", "lista completa"})
+    rules = list_rules_uc(db, current_user=current_user, skip=0, limit=None)
+
+    results: list[RuleByType] = []
+    for rule in rules:
+        for definition in _iter_rule_definitions(rule.rule):
+            definition_type = _normalize_label(definition.get("Tipo de dato", ""))
+            if definition_type not in normalized_aliases:
+                continue
+
+            header_entries = _deduplicate_headers(
+                _extract_header_entries(definition.get("Header"))
+            )
+            explicit_header_rule = _deduplicate_headers(
+                _extract_header_entries(definition.get("Header rule"))
+            )
+            header_rule_entries = (
+                explicit_header_rule if explicit_header_rule else _infer_header_rule(definition)
+            )
+
+            payload = {
+                "id": rule.id,
+                "Nombre de la regla": _sanitize_text(
+                    definition.get("Nombre de la regla")
+                ),
+                "Tipo de dato": canonical_type,
+                "Campo obligatorio": _extract_bool(
+                    definition.get("Campo obligatorio")
+                ),
+                "Mensaje de error": _sanitize_text(
+                    definition.get("Mensaje de error")
+                ),
+                "Descripción": _sanitize_text(definition.get("Descripción")),
+                "Ejemplo": definition.get("Ejemplo"),
+                "Header": header_entries,
+                "Header rule": header_rule_entries,
+                "Regla": definition.get("Regla")
+                if isinstance(definition.get("Regla"), (dict, list))
+                else {},
+            }
+
+            if hasattr(RuleByType, "model_validate"):
+                results.append(RuleByType.model_validate(payload))
+            else:  # pragma: no cover - compatibility path for pydantic v1
+                results.append(RuleByType.parse_obj(payload))
+
+    return results
+
+
 @router.get("/created-by/me", response_model=list[RuleRead])
 def list_rules_created_by_admin(
     db: Session = Depends(get_db),
@@ -84,6 +346,64 @@ def read_rule(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return _to_read_model(rule)
+
+
+@router.get("/{rule_id}/headers", response_model=RuleHeaderResponse)
+def read_rule_headers(
+    rule_id: int,
+    tipo: str = Query(..., description="Tipo de dato de la regla"),
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+) -> RuleHeaderResponse:
+    """Obtiene los headers disponibles para reglas complejas."""
+
+    normalized_type, canonical_type = _ensure_supported_type(tipo)
+    normalized_aliases = {normalized_type}
+    if normalized_type in {"lista compleja", "lista completa"}:
+        normalized_aliases.update({"lista compleja", "lista completa"})
+    if normalized_type not in {"lista compleja", "lista completa", "dependencia"}:
+        msg = "Solo se permiten headers para reglas de lista compleja o dependencia."
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
+
+    try:
+        rule = get_rule_uc(db, rule_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    matching_definitions = [
+        definition
+        for definition in _iter_rule_definitions(rule.rule)
+        if _normalize_label(definition.get("Tipo de dato", "")) in normalized_aliases
+    ]
+
+    if not matching_definitions:
+        msg = "La regla no contiene definiciones para el tipo solicitado."
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=msg)
+
+    headers: list[str] = []
+    header_rules: list[str] = []
+    for definition in matching_definitions:
+        headers.extend(_extract_header_entries(definition.get("Header")))
+        explicit = _deduplicate_headers(
+            _extract_header_entries(definition.get("Header rule"))
+        )
+        if explicit:
+            header_rules.extend(explicit)
+        else:
+            header_rules.extend(_infer_header_rule(definition))
+
+    deduplicated = _deduplicate_headers(headers)
+    deduplicated_rules = _deduplicate_headers(header_rules)
+    payload = {
+        "id": rule.id,
+        "Tipo de dato": canonical_type,
+        "Header": deduplicated,
+        "Header rule": deduplicated_rules,
+    }
+
+    if hasattr(RuleHeaderResponse, "model_validate"):
+        return RuleHeaderResponse.model_validate(payload)
+    return RuleHeaderResponse.parse_obj(payload)  # type: ignore[attr-defined]
 
 
 @router.put("/{rule_id}", response_model=RuleRead)

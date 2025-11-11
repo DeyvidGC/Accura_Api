@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 try:  # Pydantic v2
     from pydantic import ConfigDict
@@ -50,3 +50,35 @@ class RuleRead(RuleBase):
     else:  # pragma: no cover - compatibility path for pydantic v1
         class Config:
             orm_mode = True
+
+
+class RuleByType(BaseModel):
+    id: int
+    nombre_de_la_regla: str = Field(..., alias="Nombre de la regla")
+    tipo_de_dato: str = Field(..., alias="Tipo de dato")
+    campo_obligatorio: bool = Field(..., alias="Campo obligatorio")
+    mensaje_de_error: str = Field(..., alias="Mensaje de error")
+    descripcion: str = Field(..., alias="Descripción")
+    ejemplo: Any = Field(..., alias="Ejemplo")
+    header: list[str] = Field(default_factory=list, alias="Header")
+    header_rule: list[str] = Field(default_factory=list, alias="Header rule")
+    regla: JSONType = Field(..., alias="Regla")
+
+    if ConfigDict is not None:  # pragma: no branch - runtime configuration
+        model_config = ConfigDict(populate_by_name=True)
+    else:  # pragma: no cover - compatibility path for pydantic v1
+        class Config:
+            allow_population_by_field_name = True
+
+
+class RuleHeaderResponse(BaseModel):
+    id: int
+    tipo_de_dato: str = Field(..., alias="Tipo de dato")
+    headers: list[str] = Field(default_factory=list, alias="Header")
+    header_rule: list[str] = Field(default_factory=list, alias="Header rule")
+
+    if ConfigDict is not None:  # pragma: no branch - runtime configuration
+        model_config = ConfigDict(populate_by_name=True)
+    else:  # pragma: no cover - compatibility path for pydantic v1
+        class Config:
+            allow_population_by_field_name = True

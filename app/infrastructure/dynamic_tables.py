@@ -6,18 +6,7 @@ import re
 import unicodedata
 from collections.abc import Sequence
 
-from sqlalchemy import (
-    Boolean,
-    Column,
-    Date,
-    DateTime,
-    Float,
-    Integer,
-    MetaData,
-    String,
-    Table,
-    Text,
-)
+from sqlalchemy import Column, Date, Float, Integer, MetaData, String, Table, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import NoSuchTableError, SQLAlchemyError
 from sqlalchemy.types import JSON
@@ -29,15 +18,42 @@ _json_type = JSONB().with_variant(JSON(), "sqlite")
 _identifier_regex = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _MAX_IDENTIFIER_LENGTH = 63
 
+
+def _normalize_type_label(label: str) -> str:
+    normalized = unicodedata.normalize("NFKD", str(label))
+    ascii_label = "".join(char for char in normalized if not unicodedata.combining(char))
+    collapsed = re.sub(r"[\s\-_/]+", " ", ascii_label)
+    return collapsed.lower().strip()
+
+
 _DATA_TYPE_MAP: dict[str, object] = {
-    "string": String(255),
-    "text": Text(),
-    "integer": Integer(),
-    "float": Float(),
-    "boolean": Boolean(),
-    "date": Date(),
-    "datetime": DateTime(),
-    "json": _json_type,
+    "texto": Text(),
+    "numero": Float(),
+    "documento": String(255),
+    "lista": Text(),
+    "lista compleja": _json_type,
+    "lista completa": _json_type,
+    "telefono": String(50),
+    "correo": String(255),
+    "fecha": Date(),
+    "dependencia": Text(),
+    "validacion conjunta": Text(),
+    "duplicados": Text(),
+}
+
+_CANONICAL_TYPE_LABELS: dict[str, str] = {
+    "texto": "Texto",
+    "numero": "Número",
+    "documento": "Documento",
+    "lista": "Lista",
+    "lista compleja": "Lista compleja",
+    "lista completa": "Lista compleja",
+    "telefono": "Telefono",
+    "correo": "Correo",
+    "fecha": "Fecha",
+    "dependencia": "Dependencia",
+    "validacion conjunta": "Validación conjunta",
+    "duplicados": "Duplicados",
 }
 
 
@@ -90,12 +106,17 @@ def normalize_identifier(name: str, *, kind: str) -> str:
 
 
 def _column_type_from_string(data_type: str):
+    normalized = _normalize_type_label(data_type)
     try:
-        return _DATA_TYPE_MAP[data_type.lower()]
+        return _DATA_TYPE_MAP[normalized]
     except KeyError as exc:
+        allowed_labels = {
+            _CANONICAL_TYPE_LABELS.get(key, key)
+            for key in _DATA_TYPE_MAP.keys()
+        }
         msg = (
             "Tipo de dato no soportado. Usa uno de: "
-            + ", ".join(sorted(_DATA_TYPE_MAP))
+            + ", ".join(sorted(allowed_labels))
         )
         raise DataTypeError(msg) from exc
 
@@ -103,8 +124,9 @@ def _column_type_from_string(data_type: str):
 def ensure_data_type(data_type: str) -> str:
     """Validate that ``data_type`` is supported and return its normalized value."""
 
+    normalized = _normalize_type_label(data_type)
     _column_type_from_string(data_type)
-    return data_type.lower()
+    return _CANONICAL_TYPE_LABELS.get(normalized, normalized)
 
 
 def create_template_table(table_name: str, columns: Sequence[TemplateColumn]) -> None:
