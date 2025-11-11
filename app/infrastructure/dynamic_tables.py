@@ -136,19 +136,40 @@ def create_template_table(table_name: str, columns: Sequence[TemplateColumn]) ->
 
     metadata = MetaData()
     table_columns = [Column("id", Integer, primary_key=True, autoincrement=True)]
+    reserved_names = {column.name for column in table_columns}
 
     for column in columns:
         safe_column_name = normalize_identifier(column.name, kind="column")
+        if safe_column_name in reserved_names:
+            msg = (
+                "No se pudo crear la tabla temporal "
+                f"'{safe_table_name}': el nombre de columna "
+                f"'{column.name}' genera un identificador duplicado "
+                f"'{safe_column_name}'. Usa nombres de columnas únicos."
+            )
+            raise RuntimeError(msg)
         column_type = _column_type_from_string(column.data_type)
         table_columns.append(Column(safe_column_name, column_type))
+        reserved_names.add(safe_column_name)
 
-    table_columns.extend(
-        [
-            Column("status", String(20), nullable=False, default="Procesado"),
-            Column("observaciones", Text(), nullable=True),
-            Column("numero_operacion", Integer, nullable=False),
-        ]
-    )
+    extra_columns = [
+        Column("status", String(20), nullable=False, default="Procesado"),
+        Column("observaciones", Text(), nullable=True),
+        Column("numero_operacion", Integer, nullable=False),
+    ]
+
+    for column in extra_columns:
+        if column.name in reserved_names:
+            msg = (
+                "No se pudo crear la tabla temporal "
+                f"'{safe_table_name}': el nombre de columna reservada "
+                f"'{column.name}' entra en conflicto con los nombres del "
+                "template. Usa nombres diferentes para evitar duplicados."
+            )
+            raise RuntimeError(msg)
+        reserved_names.add(column.name)
+
+    table_columns.extend(extra_columns)
 
     table = Table(safe_table_name, metadata, *table_columns)
     try:
