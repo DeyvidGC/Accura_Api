@@ -55,6 +55,28 @@ _SIMPLE_RULE_HEADERS: dict[str, tuple[str, ...]] = {
     "Fecha": ("Formato", "Fecha mínima", "Fecha máxima"),
 }
 
+_DEPENDENCY_TYPE_ALIASES: set[str] = {
+    "texto",
+    "numero",
+    "documento",
+    "lista",
+    "lista compleja",
+    "telefono",
+    "correo",
+    "fecha",
+}
+
+_DEPENDENCY_SPECIFICS_KEYS: set[str] = {
+    "reglas especifica",
+    "reglas especificas",
+    "reglas especificacion",
+    "configuracion",
+    "configuraciones",
+    "detalles",
+    "detalle",
+    "opciones",
+}
+
 _LARGE_MESSAGE_THRESHOLD = 1800
 
 
@@ -128,6 +150,154 @@ def _extract_composite_header_fields(rule_config: Any) -> list[str]:
             break
 
     return collected
+
+
+def _deduplicate_headers(headers: Sequence[str]) -> list[str]:
+    """Return the headers keeping the first occurrence of each label."""
+
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for entry in headers:
+        if not isinstance(entry, str):
+            continue
+        candidate = entry.strip()
+        if not candidate:
+            continue
+        normalized = _normalize_for_matching(candidate)
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        ordered.append(candidate)
+    return ordered
+
+
+def _extract_header_entries(raw_headers: Any) -> list[str]:
+    """Return a normalized list of header labels from arbitrary payloads."""
+
+    if isinstance(raw_headers, str):
+        candidate = raw_headers.strip()
+        return [candidate] if candidate else []
+    if isinstance(raw_headers, Sequence) and not isinstance(raw_headers, (str, bytes)):
+        return [
+            entry.strip()
+            for entry in raw_headers
+            if isinstance(entry, str) and entry.strip()
+        ]
+    return []
+
+
+def _extract_dependency_header_fields(rule_config: Any) -> list[str]:
+    """Infer header combinations for dependency rules."""
+
+    if not isinstance(rule_config, Mapping):
+        return []
+
+    specifics: Sequence[Any] | None = None
+
+    direct_specifics = rule_config.get("reglas especifica")
+    if isinstance(direct_specifics, Sequence) and not isinstance(
+        direct_specifics, (str, bytes)
+    ):
+        specifics = direct_specifics
+
+    if specifics is None:
+        for key, value in rule_config.items():
+            if not isinstance(key, str):
+                continue
+            normalized_key = _normalize_for_matching(key)
+            if normalized_key not in _DEPENDENCY_SPECIFICS_KEYS:
+                continue
+            if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+                specifics = value
+                break
+
+    if specifics is None:
+        for value in rule_config.values():
+            if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
+                continue
+            if any(isinstance(item, Mapping) for item in value):
+                specifics = value
+                break
+
+    if specifics is None:
+        return []
+
+    dependent_label: str | None = None
+    header_candidates: list[str] = []
+    seen_normalized: set[str] = set()
+
+    for entry in specifics:
+        if not isinstance(entry, Mapping):
+            continue
+        for key, value in entry.items():
+            if not isinstance(key, str):
+                continue
+            normalized_key = _normalize_for_matching(key)
+            stripped_key = key.strip()
+            if not stripped_key:
+                continue
+            if normalized_key in _DEPENDENCY_TYPE_ALIASES:
+                if normalized_key not in seen_normalized:
+                    header_candidates.append(stripped_key)
+                    seen_normalized.add(normalized_key)
+                continue
+            if dependent_label is None:
+                dependent_label = stripped_key
+                seen_normalized.add(normalized_key)
+            elif _normalize_for_matching(dependent_label) == normalized_key:
+                continue
+            elif normalized_key not in seen_normalized:
+                header_candidates.append(stripped_key)
+                seen_normalized.add(normalized_key)
+
+    if dependent_label:
+        normalized_required = {
+            _normalize_for_matching(item) for item in header_candidates
+        }
+        dependent_normalized = _normalize_for_matching(dependent_label)
+        if dependent_normalized not in normalized_required:
+            header_candidates.insert(0, dependent_label)
+        elif header_candidates and _normalize_for_matching(header_candidates[0]) != dependent_normalized:
+            header_candidates.insert(0, dependent_label)
+
+    return header_candidates
+
+
+def _infer_header_rule(payload: Mapping[str, Any]) -> list[str]:
+    """Infer the header rule labels based on the rule definition."""
+
+    rule_type = payload.get("Tipo de dato")
+    if not isinstance(rule_type, str):
+        return []
+
+    normalized_type = _normalize_for_matching(rule_type)
+    rule_block = payload.get("Regla")
+    if not isinstance(rule_block, Mapping):
+        return []
+
+    if normalized_type in {"lista compleja", "lista completa"}:
+        return _deduplicate_headers(
+            _extract_composite_header_fields(rule_block)
+        )
+
+    if normalized_type == "dependencia":
+        return _deduplicate_headers(
+            _extract_dependency_header_fields(rule_block)
+        )
+
+    if normalized_type == "validacion conjunta":
+        return _deduplicate_headers(
+            _extract_header_entries(rule_block.get("Nombre de campos"))
+        )
+
+    if normalized_type == "duplicados":
+        for candidate_key in ("Campos", "Columnas", "Fields", "fields"):
+            headers = _extract_header_entries(rule_block.get(candidate_key))
+            if headers:
+                return _deduplicate_headers(headers)
+        return []
+
+    return []
 
 
 def _is_relevant_message(message: str) -> bool:
@@ -376,6 +546,9 @@ class StructuredChatService:
             "Cuando definas reglas del tipo 'Dependencia', omite la propiedad 'Nombre dependiente'. "
             "En 'Header' incluye siempre el campo dependiente junto a cada encabezado exigido por los tipos "
             "configurados (por ejemplo: 'Tipo Documento', 'Longitud minima', 'Longitud maxima'). "
+            "En 'Header rule' enumera los encabezados que intervienen en la validación. Para reglas de dependencia, "
+            "incluye primero el campo condicionante seguido de los tipos aplicables (por ejemplo: 'Tipo Documento', "
+            "'Documento'). "
             "Dentro de 'Regla', cada elemento de 'reglas especifica' debe repetir el campo dependiente con su "
             "valor y un objeto separado para cada tipo soportado usando los nombres exactos del esquema. "
             "Si el mensaje del usuario no especifica algún valor requerido, dedúcelo o propón uno coherente "
@@ -511,6 +684,7 @@ class StructuredChatService:
             "Tipo de dato",
             "Campo obligatorio",
             "Header",
+            "Header rule",
             "Mensaje de error",
             "Descripción",
             "Ejemplo",
@@ -556,6 +730,8 @@ class StructuredChatService:
                     f"Elemento inválido en la posición {index}."
                 )
 
+        expected_header_list: list[str] | None = None
+
         if tipo == "Lista compleja":
             derived_header = _extract_composite_header_fields(payload.get("Regla"))
             if derived_header:
@@ -575,6 +751,30 @@ class StructuredChatService:
                     expected_list,
                 )
                 payload["Header"] = expected_list
+                header = expected_list
+            expected_header_list = expected_list
+
+        header_rule_entries = payload.get("Header rule")
+        if isinstance(header_rule_entries, list):
+            header_rule_entries = _deduplicate_headers(header_rule_entries)
+        else:
+            header_rule_entries = []
+
+        if not header_rule_entries:
+            header_rule_entries = _infer_header_rule(payload)
+
+        if not header_rule_entries and expected_header_list is not None:
+            header_rule_entries = list(expected_header_list)
+
+        if not header_rule_entries:
+            header_rule_entries = _deduplicate_headers(header)
+
+        if not header_rule_entries:
+            raise OpenAIServiceError(
+                "'Header rule' debe ser una lista con al menos un elemento."
+            )
+
+        payload["Header rule"] = header_rule_entries
 
         if not isinstance(payload.get("Regla"), dict):
             raise OpenAIServiceError("'Regla' debe ser un objeto JSON.")
