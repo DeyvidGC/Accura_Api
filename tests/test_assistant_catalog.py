@@ -69,6 +69,16 @@ def test_build_rule_summary_infers_header_rule_for_dependency():
     assert summary["Header rule"] == ["Tipo Documento", "Documento"]
 
 
+def test_build_rule_summary_infers_dependency_headers_when_missing():
+    definition = _build_dependency_definition()
+    del definition["Header"]
+
+    summary = _build_rule_summary(1, definition, "Dependencia")
+
+    assert summary["Header"] == ["Tipo Documento", "Longitud minima", "Longitud maxima"]
+    assert summary["Header rule"] == ["Tipo Documento", "Documento"]
+
+
 def test_build_rule_summary_uses_existing_header_rule_when_present():
     definition = _build_dependency_definition()
     definition["Header rule"] = ["Tipo Documento", "Documento"]

@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from collections.abc import Mapping, Sequence
-from typing import Any
+from typing import Any, Callable
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
@@ -138,6 +138,67 @@ def _extract_dependency_specifics(rule_block: Mapping[str, Any]) -> list[Mapping
         return []
 
     return _iter_specifics(rule_block)
+
+
+def _collect_nested_labels(value: Any, add_label: Callable[[str], None]) -> None:
+    if isinstance(value, Mapping):
+        for key, nested in value.items():
+            if isinstance(key, str):
+                add_label(key)
+            _collect_nested_labels(nested, add_label)
+    elif isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        for entry in value:
+            _collect_nested_labels(entry, add_label)
+
+
+def _infer_dependency_headers_from_block(rule_block: Mapping[str, Any]) -> list[str]:
+    specifics = _extract_dependency_specifics(rule_block)
+    if not specifics:
+        return []
+
+    seen: set[str] = set()
+    ordered: list[str] = []
+
+    def add_label(label: str) -> None:
+        if not isinstance(label, str):
+            return
+        candidate = label.strip()
+        if not candidate:
+            return
+        normalized = _normalize_label(candidate)
+        if normalized in seen:
+            return
+        seen.add(normalized)
+        ordered.append(candidate)
+
+    for entry in specifics:
+        dependent_label: str | None = None
+        nested_values: list[Any] = []
+        additional_labels: list[str] = []
+
+        for key, value in entry.items():
+            if not isinstance(key, str):
+                continue
+            stripped_key = key.strip()
+            if not stripped_key:
+                continue
+            normalized_key = _normalize_label(stripped_key)
+            if normalized_key in _DEPENDENCY_TYPE_ALIASES:
+                nested_values.append(value)
+                continue
+            if dependent_label is None:
+                dependent_label = stripped_key
+            else:
+                additional_labels.append(stripped_key)
+
+        if dependent_label:
+            add_label(dependent_label)
+        for label in additional_labels:
+            add_label(label)
+        for nested_value in nested_values:
+            _collect_nested_labels(nested_value, add_label)
+
+    return ordered
 
 
 def _infer_header_rule(definition: Mapping[str, Any]) -> list[str]:
@@ -383,7 +444,19 @@ def read_rule_headers(
     headers: list[str] = []
     header_rules: list[str] = []
     for definition in matching_definitions:
-        headers.extend(_extract_header_entries(definition.get("Header")))
+        rule_block = definition.get("Regla")
+        inferred_headers: list[str] = []
+        if isinstance(rule_block, Mapping) and normalized_type == "dependencia":
+            inferred_headers = _infer_dependency_headers_from_block(rule_block)
+
+        explicit_headers = _extract_header_entries(definition.get("Header"))
+        if inferred_headers:
+            if explicit_headers:
+                explicit_headers = _deduplicate_headers(explicit_headers + inferred_headers)
+            else:
+                explicit_headers = inferred_headers
+
+        headers.extend(explicit_headers)
         explicit = _deduplicate_headers(
             _extract_header_entries(definition.get("Header rule"))
         )
