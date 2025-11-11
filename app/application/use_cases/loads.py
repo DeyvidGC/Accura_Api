@@ -2321,17 +2321,25 @@ def _validate_dependency_rule(
                 continue
 
             if not isinstance(config, Mapping):
-                accumulated_errors.append(
-                    _compose_error(
-                        message,
-                        f"la configuración asociada a '{raw_key}' debe ser un objeto",
-                        column_name=column_name,
-                        cell_value=value,
-                        dependent_field=dependent_name,
-                        dependent_value=dependent_current,
+                wrapper_key = _DEPENDENCY_SEQUENCE_WRAPPERS.get(normalized_key)
+                if (
+                    wrapper_key
+                    and isinstance(config, Sequence)
+                    and not isinstance(config, (str, bytes))
+                ):
+                    config = {wrapper_key: list(config)}
+                else:
+                    accumulated_errors.append(
+                        _compose_error(
+                            message,
+                            f"la configuración asociada a '{raw_key}' debe ser un objeto",
+                            column_name=column_name,
+                            cell_value=value,
+                            dependent_field=dependent_name,
+                            dependent_value=dependent_current,
+                        )
                     )
-                )
-                continue
+                    continue
 
             validators.append((raw_key, handler, config))
 
@@ -2876,6 +2884,11 @@ _DEPENDENCY_RULE_HANDLERS: dict[
     "telefono": _dependency_phone_validator,
     "correo": _dependency_email_validator,
     "fecha": _dependency_date_validator,
+}
+
+_DEPENDENCY_SEQUENCE_WRAPPERS: dict[str, str] = {
+    "lista": "Lista",
+    "lista compleja": "Lista compleja",
 }
 
 
