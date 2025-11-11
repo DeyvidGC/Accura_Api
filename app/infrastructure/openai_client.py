@@ -75,6 +75,8 @@ _DEPENDENCY_SPECIFICS_KEYS: set[str] = {
     "detalles",
     "detalle",
     "opciones",
+    "dependencia",
+    "dependiendo"
 }
 
 _LARGE_MESSAGE_THRESHOLD = 1800
@@ -398,7 +400,7 @@ def _looks_like_validation_constraint(normalized_message: str) -> bool:
         "minima",
         "formato",
         "obligatorio",
-        "permitid",
+        "permitidos",
         "rango",
     )
     domain_markers = (
