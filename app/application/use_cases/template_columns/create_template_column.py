@@ -196,21 +196,26 @@ def _prepare_rule_assignments(
     normalized_rules: list[TemplateColumnRule] = []
     normalized_type: str | None = None
     fallback_type: str | None = None
-    seen_ids: set[int] = set()
+    seen_assignments: set[tuple[int, tuple[str, ...] | None]] = set()
+    rule_cache: dict[int, Any] = {}
 
     for assignment in rules:
         rule_id = _normalize_rule_id(assignment.id)
-        if rule_id in seen_ids:
-            continue
-        seen_ids.add(rule_id)
-
         headers = _normalize_header_values(assignment.header_rule)
 
-        rule = rule_repository.get(rule_id)
-        if rule is None or not rule.is_active:
-            raise ValueError(
-                f"La regla asociada (ID {rule_id}) a la columna no está disponible."
-            )
+        normalized_assignment = (rule_id, headers)
+        if normalized_assignment in seen_assignments:
+            continue
+        seen_assignments.add(normalized_assignment)
+
+        rule = rule_cache.get(rule_id)
+        if rule is None:
+            rule = rule_repository.get(rule_id)
+            if rule is None or not rule.is_active:
+                raise ValueError(
+                    f"La regla asociada (ID {rule_id}) a la columna no está disponible."
+                )
+            rule_cache[rule_id] = rule
 
         rule_type = _extract_rule_type(rule.rule)
         if not rule_type:
@@ -233,13 +238,8 @@ def _prepare_rule_assignments(
         if fallback_type is None:
             fallback_type = canonical_type
 
-        if normalized_label not in _AUXILIARY_RULE_TYPES:
-            if normalized_type is None:
-                normalized_type = canonical_type
-            elif canonical_type != normalized_type:
-                raise ValueError(
-                    "Todas las reglas asociadas a la columna deben compartir el mismo tipo de dato."
-                )
+        if normalized_label not in _AUXILIARY_RULE_TYPES and normalized_type is None:
+            normalized_type = canonical_type
 
         normalized_rules.append(TemplateColumnRule(id=rule_id, headers=headers))
 
