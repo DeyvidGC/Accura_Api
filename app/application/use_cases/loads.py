@@ -226,7 +226,9 @@ def process_template_load(
             column_identifier_map=identifier_map,
         )
 
-        report_df = _prepare_report_dataframe(validated_df)
+        report_df = _prepare_report_dataframe(
+            validated_df, operation_number=operation_number
+        )
         source_df = _prepare_original_dataframe(validated_df)
 
         report_blob_path, report_filename, report_size = _generate_report(
@@ -769,19 +771,29 @@ def _generate_report(
     return blob_path, display_filename, len(data)
 
 
-def _prepare_report_dataframe(dataframe: DataFrame) -> DataFrame:
+def _prepare_report_dataframe(
+    dataframe: DataFrame, *, operation_number: int | None = None
+) -> DataFrame:
     df = dataframe.copy()
+
+    if operation_number is not None:
+        df["numero_operacion"] = operation_number
 
     if "status" not in df.columns:
         df["status"] = ""
     if "observaciones" not in df.columns:
         df["observaciones"] = ""
 
-    ordered_columns = [
+    ordered_columns: list[str] = []
+    if "numero_operacion" in df.columns:
+        ordered_columns.append("numero_operacion")
+
+    ordered_columns.extend(
         column
         for column in df.columns
-        if column not in {"status", "observaciones"}
-    ]
+        if column
+        not in {"numero_operacion", "status", "observaciones"}
+    )
     ordered_columns.extend(["status", "observaciones"])
     return df.loc[:, ordered_columns]
 
@@ -805,8 +817,11 @@ def _fetch_temporary_table_dataframe(
     }
 
     select_columns: list[Any] = []
+    if "numero_operacion" in table.c:
+        select_columns.append(table.c.numero_operacion)
+
     for identifier in identifier_map:
-        if identifier in table.c:
+        if identifier in table.c and table.c[identifier] not in select_columns:
             select_columns.append(table.c[identifier])
 
     for extra in ("status", "observaciones"):
@@ -840,9 +855,14 @@ def _fetch_temporary_table_dataframe(
         if extra not in df.columns:
             df[extra] = ""
 
-    desired_order = [
+    desired_order: list[str] = []
+
+    if "numero_operacion" in df.columns:
+        desired_order.append("numero_operacion")
+
+    desired_order.extend(
         column.name for column in active_columns if column.name in df.columns
-    ]
+    )
     for extra in ("status", "observaciones"):
         if extra in df.columns and extra not in desired_order:
             desired_order.append(extra)
@@ -2195,7 +2215,20 @@ def _validate_dependency_rule(
             continue
 
         trigger_value: Any | None = None
-        validators: list[tuple[str, Callable[[Any, str, Mapping[str, Any], str | None], tuple[Any, list[str]]], Mapping[str, Any]]] = []
+        validators: list[
+            tuple[
+                str,
+                Callable[[Any, str, Mapping[str, Any], str | None], tuple[Any, list[str]]],
+                Mapping[str, Any],
+            ]
+        ] = []
+        dependent_validators: list[
+            tuple[
+                str,
+                Callable[[Any, str, Mapping[str, Any], str | None], tuple[Any, list[str]]],
+                Mapping[str, Any],
+            ]
+        ] = []
 
         for raw_key, config in entry.items():
             if not isinstance(raw_key, str) or not raw_key.strip():
@@ -2221,21 +2254,30 @@ def _validate_dependency_rule(
                 normalized_dependent_name,
                 dependent_name,
             ):
-                trigger_value = config
                 if isinstance(config, Mapping):
-                    accumulated_errors.append(
-                        _compose_error(
-                            message,
-                            f"el valor del campo dependiente '{raw_key}' no puede ser un objeto",
-                            column_name=column_name,
-                            cell_value=value,
-                            dependent_field=dependent_name,
-                            dependent_value=dependent_current,
+                    handler = _DEPENDENCY_RULE_HANDLERS.get(normalized_key)
+                    if handler is None:
+                        if normalized_key in _DEPENDENCY_METADATA_KEYS:
+                            continue
+                        accumulated_errors.append(
+                            _compose_error(
+                                message,
+                                f"tipo dependiente '{raw_key}' no soportado",
+                                column_name=column_name,
+                                cell_value=value,
+                                dependent_field=dependent_name,
+                                dependent_value=dependent_current,
+                            )
                         )
-                    )
-                    validators = []
-                    trigger_value = None
-                    break
+                        validators = []
+                        dependent_validators = []
+                        trigger_value = None
+                        break
+
+                    dependent_validators.append((raw_key, handler, config))
+                    continue
+
+                trigger_value = config
                 continue
 
             handler = _DEPENDENCY_RULE_HANDLERS.get(normalized_key)
@@ -2291,6 +2333,24 @@ def _validate_dependency_rule(
         matched = True
         candidate_value = value
         candidate_errors: list[str] = []
+
+        dependent_errors: list[str] = []
+        for raw_key, handler, config in dependent_validators:
+            _, dependency_errors = handler(
+                dependent_current,
+                dependent_name,
+                config,
+                message,
+                row_context=row_context,
+                column_lookup=column_lookup,
+                column_tokens=column_tokens,
+            )
+            if dependency_errors:
+                dependent_errors.extend(dependency_errors)
+
+        if dependent_errors:
+            accumulated_errors.extend(dependent_errors)
+            continue
 
         for raw_key, handler, config in validators:
             candidate_value, dependency_errors = handler(
