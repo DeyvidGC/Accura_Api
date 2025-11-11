@@ -2207,6 +2207,7 @@ def _validate_dependency_rule(
     matched = False
     accumulated_errors: list[str] = []
     resulting_value = value
+    normalized_column_label = _normalize_type_label(column_name)
 
     for entry in specific_rules:
         if not isinstance(entry, Mapping) or len(entry) < 2:
@@ -2262,6 +2263,17 @@ def _validate_dependency_rule(
                     continue
 
                 trigger_value = config
+                continue
+
+            if not _labels_equivalent(
+                normalized_key,
+                raw_key,
+                normalized_column_label,
+                column_name,
+            ):
+                # La configuración pertenece a otro campo distinto de la columna
+                # actual, por lo que no debe evaluarse dentro de esta regla
+                # dependiente.
                 continue
 
             handler = _DEPENDENCY_RULE_HANDLERS.get(normalized_key)
