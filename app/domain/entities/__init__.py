@@ -13,7 +13,7 @@ from .loaded_file import LoadedFile
 from .role import Role
 from .rule import Rule
 from .template import Template
-from .template_column import TemplateColumn
+from .template_column import TemplateColumn, TemplateColumnRule
 from .template_user_access import TemplateUserAccess
 from .user import User
 from .notification import Notification
@@ -32,6 +32,7 @@ __all__ = [
     "Rule",
     "Template",
     "TemplateColumn",
+    "TemplateColumnRule",
     "TemplateUserAccess",
     "User",
     "Notification",

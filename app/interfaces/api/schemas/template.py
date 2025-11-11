@@ -13,12 +13,26 @@ except ImportError:  # pragma: no cover - fallback for pydantic v1
 TemplateStatus = Literal["unpublished", "published"]
 
 
+class TemplateColumnRule(BaseModel):
+    id: int
+    header_rule: list[str] | str | None = Field(
+        default=None,
+        alias="header rule",
+        serialization_alias="header rule",
+    )
+
+    if ConfigDict is not None:  # pragma: no branch - runtime configuration
+        model_config = ConfigDict(populate_by_name=True)
+    else:  # pragma: no cover - compatibility path for pydantic v1
+        class Config:
+            allow_population_by_field_name = True
+            fields = {"header_rule": "header rule"}
+
+
 class TemplateColumnBase(BaseModel):
     name: str = Field(..., max_length=50)
-    data_type: str = Field(..., max_length=50)
     description: str | None = Field(default=None, max_length=255)
-    rule_ids: list[int] | None = Field(default=None)
-    header: list[str] | None = Field(default=None)
+    rules: list[TemplateColumnRule] | None = Field(default=None)
 
 
 class TemplateColumnCreate(TemplateColumnBase):
@@ -33,10 +47,8 @@ class TemplateColumnBulkCreate(BaseModel):
 
 class TemplateColumnUpdate(BaseModel):
     name: str | None = Field(default=None, max_length=50)
-    data_type: str | None = Field(default=None, max_length=50)
     description: str | None = Field(default=None, max_length=255)
-    rule_ids: list[int] | None = Field(default=None)
-    header: list[str] | None = None
+    rules: list[TemplateColumnRule] | None = Field(default=None)
     is_active: bool | None = None
 
     if ConfigDict is not None:  # pragma: no branch - runtime configuration
@@ -49,6 +61,7 @@ class TemplateColumnUpdate(BaseModel):
 class TemplateColumnRead(TemplateColumnBase):
     id: int
     template_id: int
+    data_type: str
     created_at: datetime | None
     updated_at: datetime | None
     is_active: bool

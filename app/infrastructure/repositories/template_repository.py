@@ -6,7 +6,10 @@ from datetime import datetime
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 
-from app.domain.entities import Template, TemplateColumn
+from app.domain.entities import Template, TemplateColumn, TemplateColumnRule
+from app.infrastructure.repositories.template_column_repository import (
+    TemplateColumnRepository,
+)
 from app.infrastructure.models import (
     TemplateColumnModel,
     TemplateModel,
@@ -174,11 +177,20 @@ class TemplateRepository:
 
     @staticmethod
     def _column_to_entity(model) -> TemplateColumn:
+        headers_map, fallback_headers = TemplateColumnRepository._deserialize_rule_headers(
+            model.rule_header
+        )
+        rules: list[TemplateColumnRule] = []
+        for rule_model in model.rules:
+            headers = headers_map.get(rule_model.id)
+            if headers is None and fallback_headers is not None:
+                headers = fallback_headers
+            rules.append(TemplateColumnRule(id=rule_model.id, headers=headers))
+
         return TemplateColumn(
             id=model.id,
             template_id=model.template_id,
-            rule_ids=tuple(sorted(rule.id for rule in model.rules)),
-            rule_header=tuple(model.rule_header) if model.rule_header else None,
+            rules=tuple(rules),
             name=model.name,
             description=model.description,
             data_type=model.data_type,

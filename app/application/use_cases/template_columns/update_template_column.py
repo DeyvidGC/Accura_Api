@@ -1,13 +1,13 @@
 """Use case for updating template columns."""
 
-from collections.abc import Sequence
 from dataclasses import replace
 from datetime import datetime
+from collections.abc import Sequence
 
 from sqlalchemy.orm import Session
 
 from app.domain.entities import TemplateColumn
-from app.infrastructure.dynamic_tables import IdentifierError, ensure_data_type
+from app.infrastructure.dynamic_tables import IdentifierError
 from app.infrastructure.repositories import (
     RuleRepository,
     TemplateColumnRepository,
@@ -15,10 +15,10 @@ from app.infrastructure.repositories import (
 )
 
 from .naming import derive_column_identifier, normalize_column_display_name
-from .validators import (
-    ensure_rule_header_dependencies,
-    normalize_rule_header,
-    normalize_rule_ids,
+from .validators import ensure_rule_header_dependencies
+from .create_template_column import (
+    NewTemplateColumnRuleData,
+    _prepare_rule_assignments,
 )
 
 
@@ -28,13 +28,10 @@ def update_template_column(
     template_id: int,
     column_id: int,
     name: str | None = None,
-    data_type: str | None = None,
     description: str | None = None,
-    rule_ids: Sequence[int] | None = None,
-    header: Sequence[str] | None = None,
-    header_provided: bool = False,
+    rules: Sequence[NewTemplateColumnRuleData] | None = None,
+    rules_provided: bool = False,
     is_active: bool | None = None,
-    rule_ids_provided: bool = False,
     updated_by: int | None = None,
 ) -> TemplateColumn:
     """Update an existing template column.
@@ -78,28 +75,17 @@ def update_template_column(
             raise ValueError("Ya existe una columna con ese nombre en la plantilla")
         new_name = normalized_name
 
+    new_rules = current.rules
     new_data_type = current.data_type
-    if data_type is not None:
-        try:
-            new_data_type = ensure_data_type(data_type)
-        except ValueError as exc:
-            raise ValueError(str(exc)) from exc
-
-    new_header = current.rule_header
-    if header_provided:
-        new_header = normalize_rule_header(header)
-
-    new_rule_ids = current.rule_ids
-    if rule_ids_provided:
-        new_rule_ids = normalize_rule_ids(rule_ids)
+    if rules_provided:
+        new_rules, new_data_type = _prepare_rule_assignments(rule_repository, rules)
 
     updated_column = replace(
         current,
         name=new_name,
         data_type=new_data_type,
         description=description if description is not None else current.description,
-        rule_ids=new_rule_ids,
-        rule_header=new_header,
+        rules=new_rules,
         is_active=is_active if is_active is not None else current.is_active,
         updated_by=updated_by if updated_by is not None else current.updated_by,
         updated_at=datetime.utcnow(),
