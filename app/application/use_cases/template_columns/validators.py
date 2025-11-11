@@ -14,6 +14,13 @@ from app.infrastructure.repositories import RuleRepository
 
 _RULE_TYPES_REQUIRING_HEADER_FIELD = {"lista compleja", "lista completa"}
 _RULE_TYPES_REQUIRING_COLUMN_HEADER = {"lista compleja", "lista completa"}
+_RULE_TYPES_WITH_REQUIRED_HEADERS = {
+    "lista compleja",
+    "lista completa",
+    "dependencia",
+    "validacion conjunta",
+    "duplicados",
+}
 _DUPLICATE_FIELD_KEYS: tuple[str, ...] = ("Campos", "Columnas", "Fields", "fields")
 _NORMALIZATION_STOPWORDS: set[str] = {
     "de",
@@ -386,20 +393,21 @@ def _validate_column_headers_for_rule(
             header_rule_values = _infer_header_rule(definition)
         if header_rule_values:
             allows_column_header = True
-            requires_column_header = True
-            existing = header_rules_by_type.setdefault(rule_type, [])
-            existing_normalized = {
-                _normalize_type_label(value) for value in existing
-            }
-            for entry in header_rule_values:
-                normalized_entry = _normalize_type_label(entry)
-                if not normalized_entry or normalized_entry in existing_normalized:
-                    continue
-                existing.append(entry)
-                existing_normalized.add(normalized_entry)
-            rule_names_by_type.setdefault(
-                rule_type, _resolve_rule_name(definition, column)
-            )
+            if rule_type in _RULE_TYPES_WITH_REQUIRED_HEADERS:
+                requires_column_header = True
+                existing = header_rules_by_type.setdefault(rule_type, [])
+                existing_normalized = {
+                    _normalize_type_label(value) for value in existing
+                }
+                for entry in header_rule_values:
+                    normalized_entry = _normalize_type_label(entry)
+                    if not normalized_entry or normalized_entry in existing_normalized:
+                        continue
+                    existing.append(entry)
+                    existing_normalized.add(normalized_entry)
+                rule_names_by_type.setdefault(
+                    rule_type, _resolve_rule_name(definition, column)
+                )
 
         if rule_type == "duplicados":
             _validate_duplicate_fields(definition, column, labels)
