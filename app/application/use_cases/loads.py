@@ -729,22 +729,30 @@ def _generate_report(
 
 def _prepare_report_dataframe(dataframe: DataFrame) -> DataFrame:
     df = dataframe.copy()
-    renamed = df.rename(columns={"status": "Status", "observaciones": "Observaciones"})
+
+    if "status" not in df.columns:
+        df["status"] = ""
+    if "observaciones" not in df.columns:
+        df["observaciones"] = ""
+
     ordered_columns = [
         column
-        for column in renamed.columns
-        if column not in {"Status", "Observaciones"}
+        for column in df.columns
+        if column not in {"status", "observaciones"}
     ]
-    ordered_columns.extend(["Status", "Observaciones"])
-    return renamed.loc[:, ordered_columns]
+    ordered_columns.extend(["status", "observaciones"])
+    return df.loc[:, ordered_columns]
 
 
 def _prepare_original_dataframe(dataframe: DataFrame) -> DataFrame:
-    drop_columns = [
-        column
-        for column in ("status", "observaciones", "numero_operacion")
-        if column in dataframe.columns
-    ]
+    removable = {
+        "status",
+        "observaciones",
+        "Status",
+        "Observaciones",
+        "numero_operacion",
+    }
+    drop_columns = [column for column in removable if column in dataframe.columns]
     return dataframe.drop(columns=drop_columns, errors="ignore")
 
 
