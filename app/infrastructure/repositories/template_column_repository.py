@@ -98,6 +98,8 @@ class TemplateColumnRepository:
         )
         rules = []
         for rule_model in model.rules:
+            if getattr(rule_model, "deleted", False):
+                continue
             headers = headers_map.get(rule_model.id)
             if headers is None and fallback_headers is not None:
                 headers = fallback_headers
