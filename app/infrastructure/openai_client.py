@@ -7,7 +7,7 @@ import json
 import logging
 import unicodedata
 from collections.abc import Mapping, Sequence
-from typing import Any
+from typing import Any, Callable
 
 from openai import OpenAI, OpenAIError
 try:  # pragma: no cover - compat import for older SDKs
@@ -186,8 +186,8 @@ def _extract_header_entries(raw_headers: Any) -> list[str]:
     return []
 
 
-def _extract_dependency_header_fields(rule_config: Any) -> list[str]:
-    """Infer header combinations for dependency rules."""
+def _iter_dependency_specifics(rule_config: Any) -> list[Mapping[str, Any]]:
+    """Return the specific dependency configurations defined in a rule."""
 
     if not isinstance(rule_config, Mapping):
         return []
@@ -222,13 +222,34 @@ def _extract_dependency_header_fields(rule_config: Any) -> list[str]:
     if specifics is None:
         return []
 
+    return [entry for entry in specifics if isinstance(entry, Mapping)]
+
+
+def _collect_nested_labels(value: Any, add_label: Callable[[str], None]) -> None:
+    """Collect nested header labels from arbitrary rule payloads."""
+
+    if isinstance(value, Mapping):
+        for key, nested in value.items():
+            if isinstance(key, str):
+                add_label(key)
+            _collect_nested_labels(nested, add_label)
+    elif isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        for entry in value:
+            _collect_nested_labels(entry, add_label)
+
+
+def _extract_dependency_header_fields(rule_config: Any) -> list[str]:
+    """Infer header combinations for dependency rules."""
+
+    specifics = _iter_dependency_specifics(rule_config)
+    if not specifics:
+        return []
+
     dependent_label: str | None = None
     header_candidates: list[str] = []
     seen_normalized: set[str] = set()
 
     for entry in specifics:
-        if not isinstance(entry, Mapping):
-            continue
         for key, value in entry.items():
             if not isinstance(key, str):
                 continue
@@ -246,9 +267,6 @@ def _extract_dependency_header_fields(rule_config: Any) -> list[str]:
                 seen_normalized.add(normalized_key)
             elif _normalize_for_matching(dependent_label) == normalized_key:
                 continue
-            elif normalized_key not in seen_normalized:
-                header_candidates.append(stripped_key)
-                seen_normalized.add(normalized_key)
 
     if dependent_label:
         normalized_required = {
@@ -261,6 +279,62 @@ def _extract_dependency_header_fields(rule_config: Any) -> list[str]:
             header_candidates.insert(0, dependent_label)
 
     return header_candidates
+
+
+def _infer_dependency_headers(payload: Mapping[str, Any]) -> list[str]:
+    """Infer detailed headers for dependency rules including specific constraints."""
+
+    rule_block = payload.get("Regla")
+    if not isinstance(rule_block, Mapping):
+        return []
+
+    specifics = _iter_dependency_specifics(rule_block)
+    if not specifics:
+        return []
+
+    seen: set[str] = set()
+    ordered: list[str] = []
+
+    def add_label(label: str) -> None:
+        if not isinstance(label, str):
+            return
+        candidate = label.strip()
+        if not candidate:
+            return
+        normalized = _normalize_for_matching(candidate)
+        if normalized in seen:
+            return
+        seen.add(normalized)
+        ordered.append(candidate)
+
+    for entry in specifics:
+        dependent_label: str | None = None
+        nested_values: list[Any] = []
+        additional_labels: list[str] = []
+
+        for key, value in entry.items():
+            if not isinstance(key, str):
+                continue
+            stripped_key = key.strip()
+            if not stripped_key:
+                continue
+            normalized_key = _normalize_for_matching(stripped_key)
+            if normalized_key in _DEPENDENCY_TYPE_ALIASES:
+                nested_values.append(value)
+                continue
+            if dependent_label is None:
+                dependent_label = stripped_key
+            else:
+                additional_labels.append(stripped_key)
+
+        if dependent_label:
+            add_label(dependent_label)
+        for label in additional_labels:
+            add_label(label)
+        for nested_value in nested_values:
+            _collect_nested_labels(nested_value, add_label)
+
+    return ordered
 
 
 def _infer_header_rule(payload: Mapping[str, Any]) -> list[str]:
