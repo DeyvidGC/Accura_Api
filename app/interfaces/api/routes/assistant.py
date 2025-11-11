@@ -20,6 +20,9 @@ from app.infrastructure.openai_client import (
     OffTopicMessageError,
     OpenAIServiceError,
     StructuredChatService,
+    _deduplicate_headers,
+    _extract_header_entries,
+    _infer_header_rule,
 )
 from app.interfaces.api.dependencies import (
     get_structured_chat_service,
@@ -72,12 +75,33 @@ def _build_rule_summary(rule_id: int, definition: Mapping[str, Any], type_label:
         "Mensaje de error",
         "Descripción",
         "Ejemplo",
-        "Header",
     ):
         if key in definition:
             summary[key] = deepcopy(definition[key])
     if "Regla" in definition:
         summary["Regla"] = deepcopy(definition["Regla"])
+
+    header_entries = _deduplicate_headers(
+        _extract_header_entries(definition.get("Header"))
+    )
+    if header_entries:
+        summary["Header"] = header_entries
+    elif "Header" in definition:
+        summary["Header"] = deepcopy(definition["Header"])
+
+    header_rule_entries = _deduplicate_headers(
+        _extract_header_entries(definition.get("Header rule"))
+    )
+    if not header_rule_entries:
+        header_rule_entries = _infer_header_rule(definition)
+    if not header_entries and header_rule_entries:
+        summary["Header"] = list(header_rule_entries)
+        header_entries = list(header_rule_entries)
+    if not header_rule_entries and header_entries:
+        header_rule_entries = list(header_entries)
+    if header_rule_entries:
+        summary["Header rule"] = header_rule_entries
+
     return summary
 
 
