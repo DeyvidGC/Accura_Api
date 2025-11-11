@@ -2209,6 +2209,32 @@ def _validate_dependency_rule(
     resulting_value = value
     normalized_column_label = _normalize_type_label(column_name)
 
+    def _candidate_headers(raw_key: str, normalized_key: str) -> set[str]:
+        headers: set[str] = {raw_key}
+        if column_lookup:
+            mapped = column_lookup.get(normalized_key)
+            if isinstance(mapped, str) and mapped:
+                headers.add(mapped)
+        if column_tokens:
+            tokenized_raw = _tokenize_label(raw_key)
+            if tokenized_raw:
+                for header, tokens in column_tokens.items():
+                    if header in headers or not tokens:
+                        continue
+                    if tokens == tokenized_raw or set(tokens) == set(tokenized_raw):
+                        headers.add(header)
+        return headers
+
+    def _targets_field(
+        headers: set[str],
+        normalized_expected: str,
+        expected_label: str | None,
+    ) -> bool:
+        for header in headers:
+            if _labels_match(header, normalized_expected, expected_label):
+                return True
+        return False
+
     for entry in specific_rules:
         if not isinstance(entry, Mapping) or len(entry) < 2:
             accumulated_errors.append(
@@ -2249,10 +2275,10 @@ def _validate_dependency_rule(
                 break
 
             normalized_key = _normalize_type_label(raw_key)
+            candidate_headers = _candidate_headers(raw_key, normalized_key)
 
-            if _labels_equivalent(
-                normalized_key,
-                raw_key,
+            if _targets_field(
+                candidate_headers,
                 normalized_dependent_name,
                 dependent_name,
             ):
@@ -2265,9 +2291,8 @@ def _validate_dependency_rule(
                 trigger_value = config
                 continue
 
-            if not _labels_equivalent(
-                normalized_key,
-                raw_key,
+            if not _targets_field(
+                candidate_headers,
                 normalized_column_label,
                 column_name,
             ):
