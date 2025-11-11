@@ -22,11 +22,12 @@ class TemplateColumnRule(BaseModel):
     )
 
     if ConfigDict is not None:  # pragma: no branch - runtime configuration
-        model_config = ConfigDict(populate_by_name=True)
+        model_config = ConfigDict(populate_by_name=True, from_attributes=True)
     else:  # pragma: no cover - compatibility path for pydantic v1
         class Config:
             allow_population_by_field_name = True
             fields = {"header_rule": "header rule"}
+            orm_mode = True
 
 
 class TemplateColumnBase(BaseModel):
