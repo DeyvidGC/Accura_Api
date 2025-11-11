@@ -26,6 +26,10 @@ _RELEVANT_KEYWORDS: tuple[str, ...] = (
     "validacion",
     "validación",
     "validar",
+    "depende",
+    "dependiendo",
+    "dependiente",
+    "dependientes",
     "campo",
     "columna",
     "plantilla",
@@ -76,7 +80,11 @@ _DEPENDENCY_SPECIFICS_KEYS: set[str] = {
     "detalle",
     "opciones",
     "dependencia",
-    "dependiendo"
+    "dependiendo",
+    "depende",
+    "depende de",
+    "dependiente",
+    "dependientes",
 }
 
 _LARGE_MESSAGE_THRESHOLD = 1800
@@ -403,6 +411,12 @@ def _looks_like_validation_constraint(normalized_message: str) -> bool:
         "permitidos",
         "rango",
     )
+    dependency_markers = (
+        "depende",
+        "dependiendo",
+        "dependiente",
+        "dependientes",
+    )
     domain_markers = (
         "campo",
         "columna",
@@ -419,15 +433,21 @@ def _looks_like_validation_constraint(normalized_message: str) -> bool:
         "asegur",
         "riesgo",
         "cobertura",
+        "lista",
+        "listas",
     )
 
     has_constraint = any(marker in normalized_message for marker in constraint_markers)
-    if not has_constraint:
+    has_dependency = any(marker in normalized_message for marker in dependency_markers)
+    if not has_constraint and not has_dependency:
         return False
 
     has_domain = any(marker in normalized_message for marker in domain_markers)
     has_numeric_detail = any(ch.isdigit() for ch in normalized_message)
-    return has_domain or has_numeric_detail
+    if has_constraint:
+        return has_domain or has_numeric_detail
+    # Dependency-only requests should still reference domain concepts to be considered valid
+    return has_domain
 
 
 def _build_off_topic_error(user_message: str) -> str:
