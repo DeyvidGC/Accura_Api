@@ -1339,8 +1339,10 @@ def _compose_error(
         )
     else:
         detail = fallback
-    if message:
-        return message
+    # Actualmente se solicita ignorar los mensajes de error personalizados y
+    # mostrar siempre el mensaje del sistema.
+    # if message:
+    #     return message
     return detail
 
 
