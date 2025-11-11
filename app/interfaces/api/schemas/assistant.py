@@ -217,6 +217,44 @@ class AssistantMessageResponse(BaseModel):
                 raise ValueError("'reglas especifica' debe ser una lista con al menos un elemento.")
 
             allowed_types = set(DEPENDENCY_TYPE_HEADERS.keys())
+            header_lookup = {_normalize_label(label): label for label in self.header}
+
+            def ensure_dependency_list(label: str, values: list[Any]) -> None:
+                if not values:
+                    raise ValueError(
+                        f"'{label}' debe ser una lista con al menos un elemento para la dependencia."
+                    )
+
+                def validate_leaf(value: Any) -> None:
+                    if isinstance(value, str):
+                        if not value.strip():
+                            raise ValueError(
+                                f"Cada valor dentro de '{label}' debe ser una cadena no vacía."
+                            )
+                        return
+                    if isinstance(value, bool):
+                        return
+                    if isinstance(value, (int, float)):
+                        if isinstance(value, float) and value != value:
+                            raise ValueError(
+                                f"Los valores numéricos dentro de '{label}' no pueden ser NaN."
+                            )
+                        return
+                    raise ValueError(
+                        f"Cada elemento dentro de '{label}' debe ser una cadena, número o booleano."
+                    )
+
+                for index, item in enumerate(values):
+                    if isinstance(item, list):
+                        if not item:
+                            raise ValueError(
+                                f"Los subarreglos en '{label}' deben contener al menos un elemento."
+                            )
+                        for nested in item:
+                            validate_leaf(nested)
+                        continue
+
+                    validate_leaf(item)
 
             def remap_dependency_config(
                 config: dict[str, Any], expected: tuple[str, ...], type_label: str
@@ -299,6 +337,7 @@ class AssistantMessageResponse(BaseModel):
 
                 dependent_labels: list[str] = []
                 type_label_seen: str | None = None
+                has_supported_config = False
 
                 for clave, contenido in entrada.items():
                     if not isinstance(clave, str) or not clave.strip():
@@ -313,6 +352,7 @@ class AssistantMessageResponse(BaseModel):
                                 "Cada elemento de 'reglas especifica' debe definir un único tipo de dato."
                             )
                         type_label_seen = normalized_clave
+                        has_supported_config = True
                         if not isinstance(contenido, dict):
                             raise ValueError(
                                 f"La configuración asociada a '{clave}' debe ser un objeto."
@@ -441,15 +481,22 @@ class AssistantMessageResponse(BaseModel):
                         expected_headers.update(DEPENDENCY_TYPE_HEADERS[normalized_clave])
                         continue
 
+                    if isinstance(contenido, list):
+                        ensure_dependency_list(clave, contenido)
+                        canonical_header = header_lookup.get(normalized_clave, clave)
+                        expected_headers.add(canonical_header)
+                        has_supported_config = True
+                        continue
+
                     if isinstance(contenido, dict):
                         raise ValueError(
                             "El valor asociado al campo dependiente no puede ser un objeto."
                         )
                     dependent_labels.append(clave)
 
-                if type_label_seen is None:
+                if not has_supported_config:
                     raise ValueError(
-                        "Cada regla dependiente debe incluir al menos una configuración de tipo soportado."
+                        "Cada regla dependiente debe definir al menos una configuración soportada o una lista de valores permitidos."
                     )
 
                 if not dependent_labels:
