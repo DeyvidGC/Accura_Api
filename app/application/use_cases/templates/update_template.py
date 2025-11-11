@@ -76,7 +76,9 @@ def update_template(
         normalized_name = name.strip()
         if not normalized_name:
             raise ValueError("El nombre de la plantilla no puede estar vacío")
-        existing_with_name = repository.get_by_name(normalized_name)
+        existing_with_name = repository.get_by_name(
+            normalized_name, created_by=current.created_by
+        )
         if existing_with_name is not None and existing_with_name.id != template_id:
             raise ValueError("El nombre de la plantilla ya está en uso")
         new_name = normalized_name

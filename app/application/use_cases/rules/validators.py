@@ -43,6 +43,7 @@ def ensure_unique_rule_names(
     rule_data: Any,
     repository: RuleRepository,
     *,
+    created_by: int | None = None,
     exclude_rule_id: int | None = None,
 ) -> None:
     """Validate that the provided rule names are not already registered."""
@@ -52,7 +53,9 @@ def ensure_unique_rule_names(
         raise ValueError("La regla debe incluir un 'Nombre de la regla' válido")
 
     conflict = repository.find_conflicting_rule_name(
-        rule_names, exclude_rule_id=exclude_rule_id
+        rule_names,
+        created_by=created_by,
+        exclude_rule_id=exclude_rule_id,
     )
     if conflict is not None:
         raise ValueError(f"Ya existe una regla con el nombre '{conflict}'")
