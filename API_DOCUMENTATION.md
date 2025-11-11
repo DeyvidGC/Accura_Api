@@ -447,7 +447,7 @@ Las plantillas definen la estructura de los datos que se cargarán y las reglas 
       "id": 15,
       "name": "monto",
       "data_type": "decimal",
-      "rule_id": 6
+      "rule_ids": [6]
     }
   ]
 }
@@ -577,7 +577,7 @@ Las plantillas definen la estructura de los datos que se cargarán y las reglas 
   "name": "monto",
   "data_type": "decimal",
   "description": "Monto de la transacción",
-  "rule_id": 6
+  "rule_ids": [6]
 }
 ```
 - **Datos posibles (varias columnas):**
@@ -587,12 +587,12 @@ Las plantillas definen la estructura de los datos que se cargarán y las reglas 
     {
       "name": "monto",
       "data_type": "decimal",
-      "rule_id": 6
+      "rule_ids": [6]
     },
     {
       "name": "moneda",
       "data_type": "string",
-      "rule_id": 7
+      "rule_ids": [7]
     }
   ]
 }
@@ -603,7 +603,7 @@ Las plantillas definen la estructura de los datos que se cargarán y las reglas 
   | `name` | Cadena | Sí | Máximo 50 caracteres |
   | `data_type` | Cadena | Sí | Máximo 50 caracteres |
   | `description` | Cadena | No | Máximo 255 caracteres |
-  | `rule_id` | Entero | No | Debe referenciar una regla existente (≥ 1) |
+  | `rule_ids` | Lista de enteros | No | Debe referenciar reglas existentes (≥ 1) |
 - **Respuesta 201 (éxito):**
 ```json
 {
@@ -612,7 +612,7 @@ Las plantillas definen la estructura de los datos que se cargarán y las reglas 
       "id": 15,
       "name": "monto",
       "data_type": "decimal",
-      "rule_id": 6
+      "rule_ids": [6]
     }
   ]
 }
@@ -639,7 +639,7 @@ Las plantillas definen la estructura de los datos que se cargarán y las reglas 
       "id": 15,
       "name": "monto",
       "data_type": "decimal",
-      "rule_id": 6,
+      "rule_ids": [6],
       "is_active": true
     }
   ],
@@ -662,7 +662,7 @@ Las plantillas definen la estructura de los datos que se cargarán y las reglas 
   "name": "monto",
   "data_type": "decimal",
   "description": "Monto de la transacción",
-  "rule_id": 6,
+  "rule_ids": [6],
   "is_active": true
 }
 ```
@@ -681,7 +681,7 @@ Las plantillas definen la estructura de los datos que se cargarán y las reglas 
   "name": "monto",
   "data_type": "decimal",
   "description": "Actualización de descripción",
-  "rule_id": 6,
+  "rule_ids": [6],
   "is_active": true
 }
 ```
@@ -692,7 +692,7 @@ Las plantillas definen la estructura de los datos que se cargarán y las reglas 
   "name": "monto",
   "data_type": "decimal",
   "description": "Actualización de descripción",
-  "rule_id": 6,
+  "rule_ids": [6],
   "is_active": true
 }
 ```

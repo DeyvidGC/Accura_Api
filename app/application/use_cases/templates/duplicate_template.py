@@ -53,7 +53,7 @@ def duplicate_template(
             TemplateColumn(
                 id=None,
                 template_id=duplicated_template.id,
-                rule_id=column.rule_id,
+                rule_ids=column.rule_ids,
                 rule_header=column.rule_header,
                 name=column.name,
                 description=column.description,

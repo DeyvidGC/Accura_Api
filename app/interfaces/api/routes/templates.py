@@ -87,7 +87,7 @@ def _column_to_read_model(column: TemplateColumn) -> TemplateColumnRead:
         "name": column.name,
         "data_type": column.data_type,
         "description": column.description,
-        "rule_id": column.rule_id,
+        "rule_ids": list(column.rule_ids),
         "header": list(column.rule_header) if column.rule_header else None,
         "created_at": column.created_at,
         "updated_at": column.updated_at,
@@ -306,7 +306,7 @@ def register_template_column(
                 name=column_in.name,
                 data_type=column_in.data_type,
                 description=column_in.description,
-                rule_id=column_in.rule_id,
+                rule_ids=column_in.rule_ids,
                 header=column_in.header,
                 created_by=current_user.id,
             )
@@ -321,7 +321,7 @@ def register_template_column(
                     name=col.name,
                     data_type=col.data_type,
                     description=col.description,
-                    rule_id=col.rule_id,
+                    rule_ids=col.rule_ids,
                     rule_header=col.header,
                 )
                 for col in incoming_columns
@@ -401,10 +401,11 @@ def update_template_column(
             name=update_data.get("name"),
             data_type=update_data.get("data_type"),
             description=update_data.get("description"),
-            rule_id=update_data.get("rule_id"),
+            rule_ids=update_data.get("rule_ids"),
             header=update_data.get("header"),
             header_provided="header" in update_data,
             is_active=update_data.get("is_active"),
+            rule_ids_provided="rule_ids" in update_data,
             updated_by=current_user.id,
         )
     except ValueError as exc:

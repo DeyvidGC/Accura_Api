@@ -15,7 +15,11 @@ from app.infrastructure.repositories import (
 )
 
 from .naming import derive_column_identifier, normalize_column_display_name
-from .validators import ensure_rule_header_dependencies, normalize_rule_header
+from .validators import (
+    ensure_rule_header_dependencies,
+    normalize_rule_header,
+    normalize_rule_ids,
+)
 
 
 def update_template_column(
@@ -26,10 +30,11 @@ def update_template_column(
     name: str | None = None,
     data_type: str | None = None,
     description: str | None = None,
-    rule_id: int | None = None,
+    rule_ids: Sequence[int] | None = None,
     header: Sequence[str] | None = None,
     header_provided: bool = False,
     is_active: bool | None = None,
+    rule_ids_provided: bool = False,
     updated_by: int | None = None,
 ) -> TemplateColumn:
     """Update an existing template column.
@@ -84,12 +89,16 @@ def update_template_column(
     if header_provided:
         new_header = normalize_rule_header(header)
 
+    new_rule_ids = current.rule_ids
+    if rule_ids_provided:
+        new_rule_ids = normalize_rule_ids(rule_ids)
+
     updated_column = replace(
         current,
         name=new_name,
         data_type=new_data_type,
         description=description if description is not None else current.description,
-        rule_id=rule_id if rule_id is not None else current.rule_id,
+        rule_ids=new_rule_ids,
         rule_header=new_header,
         is_active=is_active if is_active is not None else current.is_active,
         updated_by=updated_by if updated_by is not None else current.updated_by,

@@ -7,7 +7,11 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.domain.entities import Template, TemplateColumn
-from app.infrastructure.models import TemplateModel, TemplateUserAccessModel
+from app.infrastructure.models import (
+    TemplateColumnModel,
+    TemplateModel,
+    TemplateUserAccessModel,
+)
 
 
 class TemplateRepository:
@@ -26,7 +30,11 @@ class TemplateRepository:
     ) -> Sequence[Template]:
         query = (
             self.session.query(TemplateModel)
-            .options(joinedload(TemplateModel.columns))
+            .options(
+                joinedload(TemplateModel.columns).joinedload(
+                    TemplateColumnModel.rules
+                )
+            )
             .filter(TemplateModel.deleted.is_(False))
         )
         if creator_id is not None:
@@ -63,7 +71,11 @@ class TemplateRepository:
     def get_by_name(self, name: str, *, created_by: int | None = None) -> Template | None:
         query = (
             self.session.query(TemplateModel)
-            .options(joinedload(TemplateModel.columns))
+            .options(
+                joinedload(TemplateModel.columns).joinedload(
+                    TemplateColumnModel.rules
+                )
+            )
             .filter(TemplateModel.deleted.is_(False))
         )
         if created_by is None:
@@ -80,7 +92,11 @@ class TemplateRepository:
     def list_by_creator(self, creator_id: int) -> Sequence[Template]:
         query = (
             self.session.query(TemplateModel)
-            .options(joinedload(TemplateModel.columns))
+            .options(
+                joinedload(TemplateModel.columns).joinedload(
+                    TemplateColumnModel.rules
+                )
+            )
             .filter(TemplateModel.deleted.is_(False))
             .filter(TemplateModel.created_by == creator_id)
             .order_by(TemplateModel.created_at.desc())
@@ -129,7 +145,7 @@ class TemplateRepository:
 
     def _get_model(self, include_deleted: bool = False, **filters) -> TemplateModel | None:
         query = self.session.query(TemplateModel).options(
-            joinedload(TemplateModel.columns)
+            joinedload(TemplateModel.columns).joinedload(TemplateColumnModel.rules)
         )
         if not include_deleted:
             query = query.filter(TemplateModel.deleted.is_(False))
@@ -161,7 +177,7 @@ class TemplateRepository:
         return TemplateColumn(
             id=model.id,
             template_id=model.template_id,
-            rule_id=model.rule_id,
+            rule_ids=tuple(sorted(rule.id for rule in model.rules)),
             rule_header=tuple(model.rule_header) if model.rule_header else None,
             name=model.name,
             description=model.description,
