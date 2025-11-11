@@ -335,50 +335,70 @@ def list_rules_by_type_endpoint(
     normalized_aliases = {normalized_type}
     if normalized_type in {"lista compleja", "lista completa"}:
         normalized_aliases.update({"lista compleja", "lista completa"})
-    rules = list_rules_uc(db, current_user=current_user, skip=0, limit=None)
-
+    max_results = 5
+    batch_size = max_results
+    skip = 0
     results: list[RuleByType] = []
-    for rule in rules:
-        for definition in _iter_rule_definitions(rule.rule):
-            definition_type = _normalize_label(definition.get("Tipo de dato", ""))
-            if definition_type not in normalized_aliases:
-                continue
+    while len(results) < max_results:
+        rules = list_rules_uc(
+            db,
+            current_user=current_user,
+            skip=skip,
+            limit=batch_size,
+        )
+        if not rules:
+            break
+        skip += len(rules)
 
-            header_entries = _deduplicate_headers(
-                _extract_header_entries(definition.get("Header"))
-            )
-            explicit_header_rule = _deduplicate_headers(
-                _extract_header_entries(definition.get("Header rule"))
-            )
-            header_rule_entries = (
-                explicit_header_rule if explicit_header_rule else _infer_header_rule(definition)
-            )
+        for rule in rules:
+            for definition in _iter_rule_definitions(rule.rule):
+                definition_type = _normalize_label(definition.get("Tipo de dato", ""))
+                if definition_type not in normalized_aliases:
+                    continue
 
-            payload = {
-                "id": rule.id,
-                "Nombre de la regla": _sanitize_text(
-                    definition.get("Nombre de la regla")
-                ),
-                "Tipo de dato": canonical_type,
-                "Campo obligatorio": _extract_bool(
-                    definition.get("Campo obligatorio")
-                ),
-                "Mensaje de error": _sanitize_text(
-                    definition.get("Mensaje de error")
-                ),
-                "Descripción": _sanitize_text(definition.get("Descripción")),
-                "Ejemplo": definition.get("Ejemplo"),
-                "Header": header_entries,
-                "Header rule": header_rule_entries,
-                "Regla": definition.get("Regla")
-                if isinstance(definition.get("Regla"), (dict, list))
-                else {},
-            }
+                header_entries = _deduplicate_headers(
+                    _extract_header_entries(definition.get("Header"))
+                )
+                explicit_header_rule = _deduplicate_headers(
+                    _extract_header_entries(definition.get("Header rule"))
+                )
+                header_rule_entries = (
+                    explicit_header_rule
+                    if explicit_header_rule
+                    else _infer_header_rule(definition)
+                )
 
-            if hasattr(RuleByType, "model_validate"):
-                results.append(RuleByType.model_validate(payload))
-            else:  # pragma: no cover - compatibility path for pydantic v1
-                results.append(RuleByType.parse_obj(payload))
+                payload = {
+                    "id": rule.id,
+                    "Nombre de la regla": _sanitize_text(
+                        definition.get("Nombre de la regla")
+                    ),
+                    "Tipo de dato": canonical_type,
+                    "Campo obligatorio": _extract_bool(
+                        definition.get("Campo obligatorio")
+                    ),
+                    "Mensaje de error": _sanitize_text(
+                        definition.get("Mensaje de error")
+                    ),
+                    "Descripción": _sanitize_text(definition.get("Descripción")),
+                    "Ejemplo": definition.get("Ejemplo"),
+                    "Header": header_entries,
+                    "Header rule": header_rule_entries,
+                    "Regla": definition.get("Regla")
+                    if isinstance(definition.get("Regla"), (dict, list))
+                    else {},
+                }
+
+                if hasattr(RuleByType, "model_validate"):
+                    results.append(RuleByType.model_validate(payload))
+                else:  # pragma: no cover - compatibility path for pydantic v1
+                    results.append(RuleByType.parse_obj(payload))
+
+                if len(results) >= max_results:
+                    return results
+
+        if len(rules) < batch_size:
+            break
 
     return results
 
