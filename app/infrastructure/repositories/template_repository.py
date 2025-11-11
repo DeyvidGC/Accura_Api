@@ -156,7 +156,11 @@ class TemplateRepository:
 
     @staticmethod
     def _to_entity(model: TemplateModel) -> Template:
-        columns = [TemplateRepository._column_to_entity(col) for col in model.columns]
+        columns = [
+            TemplateRepository._column_to_entity(col)
+            for col in model.columns
+            if not col.deleted
+        ]
         return Template(
             id=model.id,
             user_id=model.user_id,
@@ -182,6 +186,8 @@ class TemplateRepository:
         )
         rules: list[TemplateColumnRule] = []
         for rule_model in model.rules:
+            if getattr(rule_model, "deleted", False):
+                continue
             headers = headers_map.get(rule_model.id)
             if headers is None and fallback_headers is not None:
                 headers = fallback_headers
