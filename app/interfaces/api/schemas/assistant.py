@@ -218,15 +218,51 @@ class AssistantMessageResponse(BaseModel):
 
             allowed_types = set(DEPENDENCY_TYPE_HEADERS.keys())
 
-            def ensure_config_exact_keys(config: dict[str, Any], expected: set[str], type_label: str) -> None:
-                keys = set(config.keys())
-                if keys != expected:
+            def remap_dependency_config(
+                config: dict[str, Any], expected: tuple[str, ...], type_label: str
+            ) -> dict[str, Any]:
+                """Normaliza las claves de la configuración específica de dependencias."""
+
+                normalized_expected = {_normalize_label(label): label for label in expected}
+                remapped: dict[str, Any] = {}
+
+                for raw_key, value in config.items():
+                    if not isinstance(raw_key, str) or not raw_key.strip():
+                        raise ValueError(
+                            "Las claves dentro de la configuración dependiente deben ser cadenas no vacías."
+                        )
+
+                    normalized_key = _normalize_label(raw_key)
+                    canonical_key = normalized_expected.get(normalized_key)
+                    if canonical_key is None:
+                        raise ValueError(
+                            "La configuración para '"
+                            + type_label
+                            + "' solo puede incluir las claves: "
+                            + ", ".join(sorted(expected))
+                        )
+
+                    if canonical_key in remapped:
+                        raise ValueError(
+                            "La configuración para '"
+                            + type_label
+                            + "' no puede repetir la clave '"
+                            + canonical_key
+                            + "'."
+                        )
+
+                    remapped[canonical_key] = value
+
+                missing = [label for label in expected if label not in remapped]
+                if missing:
                     raise ValueError(
                         "La configuración para '"
                         + type_label
                         + "' debe contener exactamente las claves: "
                         + ", ".join(sorted(expected))
                     )
+
+                return remapped
 
             def ensure_config_int_value(
                 config: dict[str, Any], key: str, *, minimum: int | None, type_label: str
@@ -283,8 +319,8 @@ class AssistantMessageResponse(BaseModel):
                             )
 
                         if normalized_clave == "texto":
-                            ensure_config_exact_keys(
-                                contenido, {"Longitud minima", "Longitud maxima"}, clave
+                            contenido = remap_dependency_config(
+                                contenido, ("Longitud minima", "Longitud maxima"), clave
                             )
                             ensure_config_int_value(
                                 contenido, "Longitud minima", minimum=0, type_label=clave
@@ -293,9 +329,9 @@ class AssistantMessageResponse(BaseModel):
                                 contenido, "Longitud maxima", minimum=0, type_label=clave
                             )
                         elif normalized_clave == "numero":
-                            ensure_config_exact_keys(
+                            contenido = remap_dependency_config(
                                 contenido,
-                                {"Valor mínimo", "Valor máximo", "Número de decimales"},
+                                ("Valor mínimo", "Valor máximo", "Número de decimales"),
                                 clave,
                             )
                             ensure_config_numeric(
@@ -308,8 +344,8 @@ class AssistantMessageResponse(BaseModel):
                                 contenido, "Número de decimales", minimum=0, type_label=clave
                             )
                         elif normalized_clave == "documento":
-                            ensure_config_exact_keys(
-                                contenido, {"Longitud minima", "Longitud maxima"}, clave
+                            contenido = remap_dependency_config(
+                                contenido, ("Longitud minima", "Longitud maxima"), clave
                             )
                             ensure_config_int_value(
                                 contenido, "Longitud minima", minimum=1, type_label=clave
@@ -318,7 +354,7 @@ class AssistantMessageResponse(BaseModel):
                                 contenido, "Longitud maxima", minimum=1, type_label=clave
                             )
                         elif normalized_clave == "lista":
-                            ensure_config_exact_keys(contenido, {"Lista"}, clave)
+                            contenido = remap_dependency_config(contenido, ("Lista",), clave)
                             valores = contenido.get("Lista")
                             if not isinstance(valores, list) or not valores:
                                 raise ValueError(
@@ -330,7 +366,9 @@ class AssistantMessageResponse(BaseModel):
                                         "Cada valor dentro de 'Lista' debe ser una cadena no vacía."
                                     )
                         elif normalized_clave == "lista compleja":
-                            ensure_config_exact_keys(contenido, {"Lista compleja"}, clave)
+                            contenido = remap_dependency_config(
+                                contenido, ("Lista compleja",), clave
+                            )
                             combinaciones = contenido.get("Lista compleja")
                             if not isinstance(combinaciones, list) or not combinaciones:
                                 raise ValueError(
@@ -361,8 +399,8 @@ class AssistantMessageResponse(BaseModel):
                                             "Los valores de cada combinación no pueden ser NaN."
                                         )
                         elif normalized_clave == "telefono":
-                            ensure_config_exact_keys(
-                                contenido, {"Longitud minima", "Código de país"}, clave
+                            contenido = remap_dependency_config(
+                                contenido, ("Longitud minima", "Código de país"), clave
                             )
                             ensure_config_int_value(
                                 contenido, "Longitud minima", minimum=1, type_label=clave
@@ -373,8 +411,8 @@ class AssistantMessageResponse(BaseModel):
                                     "'Código de país' debe cumplir el patrón +<código numérico> de 1 a 3 dígitos."
                                 )
                         elif normalized_clave == "correo":
-                            ensure_config_exact_keys(
-                                contenido, {"Formato", "Longitud máxima"}, clave
+                            contenido = remap_dependency_config(
+                                contenido, ("Formato", "Longitud máxima"), clave
                             )
                             formato = contenido.get("Formato")
                             if not isinstance(formato, str) or not formato.strip():
@@ -383,8 +421,8 @@ class AssistantMessageResponse(BaseModel):
                                 contenido, "Longitud máxima", minimum=1, type_label=clave
                             )
                         elif normalized_clave == "fecha":
-                            ensure_config_exact_keys(
-                                contenido, {"Formato", "Fecha mínima", "Fecha máxima"}, clave
+                            contenido = remap_dependency_config(
+                                contenido, ("Formato", "Fecha mínima", "Fecha máxima"), clave
                             )
                             formato = contenido.get("Formato")
                             formatos_validos = {"yyyy-MM-dd", "dd/MM/yyyy", "MM-dd-yyyy"}
