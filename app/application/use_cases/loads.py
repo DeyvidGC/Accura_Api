@@ -1291,16 +1291,22 @@ def _compose_column_error_detail(
 ) -> str:
     normalized_reason = str(reason or "").strip()
 
+    cell_display = _format_cell_display(cell_value)
+
     if invalid_values:
         values_text = ", ".join(invalid_values)
-        base_detail = f"El conjunto de valores {values_text} no es válido"
+        base_detail = f"La combinación de valores {values_text} no es válida"
     elif dependent_field:
-        base_detail = f'La columna "{column_name}" no es válida para "{dependent_field}"'
-        if dependent_value is not None:
-            dependent_display = _format_cell_display(dependent_value)
-            base_detail = f"{base_detail} con el valor {dependent_display}"
+        dependent_display = _format_cell_display(dependent_value)
+        base_detail = (
+            f'La columna "{column_name}" con el valor {cell_display} '
+            f"no es válida cuando \"{dependent_field}\" tiene el valor {dependent_display}"
+        )
     else:
-        base_detail = f'La columna "{column_name}" tiene un valor no válido'
+        base_detail = (
+            f'La columna "{column_name}" con el valor {cell_display} '
+            "no cumple con la validación"
+        )
 
     if normalized_reason:
         normalized_reason = normalized_reason.rstrip(".")
@@ -1333,8 +1339,10 @@ def _compose_error(
         )
     else:
         detail = fallback
-    if message:
-        return message
+    # Actualmente se solicita ignorar los mensajes de error personalizados y
+    # mostrar siempre el mensaje del sistema.
+    # if message:
+    #     return message
     return detail
 
 
