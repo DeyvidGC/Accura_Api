@@ -62,6 +62,12 @@ class AssistantMessageResponse(BaseModel):
     header: list[str] = Field(
         ..., alias="Header", min_length=1, description="Campos disponibles dentro de la regla"
     )
+    header_rule: list[str] = Field(
+        ...,
+        alias="Header rule",
+        min_length=1,
+        description="Encabezados que intervienen en la validación",
+    )
     regla: dict[str, Any] = Field(
         ..., alias="Regla", description="Configuración específica de la regla según el tipo de dato"
     )
@@ -81,6 +87,16 @@ class AssistantMessageResponse(BaseModel):
         for item in self.header:
             if not isinstance(item, str) or not item.strip():
                 raise ValueError("Cada elemento dentro de 'Header' debe ser una cadena no vacía.")
+
+        if not isinstance(self.header_rule, list) or not self.header_rule:
+            raise ValueError(
+                "El campo 'Header rule' debe ser una lista con al menos un elemento."
+            )
+        for item in self.header_rule:
+            if not isinstance(item, str) or not item.strip():
+                raise ValueError(
+                    "Cada elemento dentro de 'Header rule' debe ser una cadena no vacía."
+                )
 
         if not isinstance(regla, dict):
             raise ValueError("El campo 'Regla' debe ser un objeto JSON.")
