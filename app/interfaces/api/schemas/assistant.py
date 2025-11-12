@@ -365,18 +365,13 @@ class AssistantMessageResponse(BaseModel):
                         )
                     normalized_clave = _normalize_label(clave)
 
-                    if normalized_clave in allowed_types:
+                    if isinstance(contenido, dict) and normalized_clave in allowed_types:
                         if type_label_seen is not None:
                             raise ValueError(
                                 "Cada elemento de 'reglas especifica' debe definir un único tipo de dato."
                             )
                         type_label_seen = normalized_clave
                         has_supported_config = True
-                        if not isinstance(contenido, dict):
-                            raise ValueError(
-                                f"La configuración asociada a '{clave}' debe ser un objeto."
-                            )
-
                         if normalized_clave == "texto":
                             contenido = remap_dependency_config(
                                 contenido, ("Longitud minima", "Longitud maxima"), clave
@@ -545,6 +540,13 @@ class AssistantMessageResponse(BaseModel):
                             if canonical_header is not None:
                                 expected_headers.add(canonical_header)
                         continue
+
+                    if normalized_clave in allowed_types:
+                        raise ValueError(
+                            "La configuración asociada a '"
+                            + clave
+                            + "' debe ser un objeto."
+                        )
 
                     if isinstance(contenido, list):
                         ensure_dependency_list(clave, contenido)
