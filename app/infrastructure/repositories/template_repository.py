@@ -30,6 +30,7 @@ class TemplateRepository:
         limit: int = 100,
         creator_id: int | None = None,
         user_id: int | None = None,
+        statuses: Sequence[str] | None = None,
     ) -> Sequence[Template]:
         query = (
             self.session.query(TemplateModel)
@@ -56,6 +57,8 @@ class TemplateRepository:
                     )
                 )
             ).distinct(TemplateModel.id)
+        if statuses:
+            query = query.filter(TemplateModel.status.in_(tuple(statuses)))
         query = query.order_by(TemplateModel.created_at.desc(), TemplateModel.id.desc())
         if skip:
             query = query.offset(skip)
