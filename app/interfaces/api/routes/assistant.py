@@ -203,7 +203,8 @@ def _remap_dependency_list_specifics(
 
         entry_changed = False
         transformed_entry: dict[str, Any] = {}
-        list_payload: Sequence[Any] | None = None
+        list_container_key: str | None = None
+        transformed_list_payload: Mapping[str, Any] | None = None
 
         for key, value in entry.items():
             if not isinstance(key, str):
@@ -211,17 +212,29 @@ def _remap_dependency_list_specifics(
 
             normalized_key = _normalize_label(key)
             if normalized_key == "lista" and isinstance(value, Mapping):
-                allowed_values = value.get("Lista")
-                if isinstance(allowed_values, Sequence) and not isinstance(
-                    allowed_values, (str, bytes)
-                ):
-                    list_payload = allowed_values
+                remapped_payload: dict[str, Any] = {}
+                payload_changed = False
+                for inner_key, inner_value in value.items():
+                    if not isinstance(inner_key, str):
+                        remapped_payload[inner_key] = deepcopy(inner_value)
+                        continue
+
+                    normalized_inner = _normalize_label(inner_key)
+                    if (
+                        normalized_inner == "lista"
+                        and isinstance(inner_value, Sequence)
+                        and not isinstance(inner_value, (str, bytes))
+                    ):
+                        remapped_payload[dependent_label] = deepcopy(list(inner_value))
+                        payload_changed = True
+                    else:
+                        remapped_payload[inner_key] = deepcopy(inner_value)
+
+                if payload_changed:
                     entry_changed = True
                     changed = True
-                    break
-
-        if list_payload is not None:
-            transformed_entry[dependent_label] = deepcopy(list(list_payload))
+                    list_container_key = key
+                    transformed_list_payload = remapped_payload
 
         for key, value in entry.items():
             if not isinstance(key, str):
@@ -229,14 +242,27 @@ def _remap_dependency_list_specifics(
                 continue
 
             normalized_key = _normalize_label(key)
+
             if (
-                list_payload is not None
+                transformed_list_payload is not None
+                and list_container_key is not None
+                and key == list_container_key
+            ):
+                transformed_entry[key] = transformed_list_payload
+                continue
+
+            if (
+                transformed_list_payload is not None
                 and normalized_key == normalized_dependent
             ):
                 # Preserve the synthesized dependent label payload without overwriting it
                 # with the original structure.
                 continue
-            if list_payload is not None and normalized_key in _DEPENDENCY_TYPE_ALIASES:
+
+            if (
+                transformed_list_payload is not None
+                and normalized_key in _DEPENDENCY_TYPE_ALIASES
+            ):
                 # Skip redundant alias descriptors once the list payload is mapped to the
                 # dependent header label.
                 continue
