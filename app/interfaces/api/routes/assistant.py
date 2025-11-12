@@ -208,6 +208,10 @@ def analyze_message(
             return AssistantMessageResponse.model_validate(raw_response)
         return AssistantMessageResponse.parse_obj(raw_response)  # type: ignore[attr-defined]
     except Exception as exc:  # pragma: no cover - defensive against schema drift
+        logger.exception(
+            "Error validando la respuesta estructurada del asistente. Respuesta cruda: %s",
+            raw_response,
+        )
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="La respuesta recibida no coincide con el esquema esperado.",
