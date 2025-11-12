@@ -478,7 +478,12 @@ class AssistantMessageResponse(BaseModel):
                                         f"'{etiqueta}' en la configuración de '{clave}' debe ser una cadena no vacía."
                                     )
 
-                        expected_headers.update(DEPENDENCY_TYPE_HEADERS[normalized_clave])
+                        for dependency_header in DEPENDENCY_TYPE_HEADERS[normalized_clave]:
+                            canonical_header = header_lookup.get(
+                                _normalize_label(dependency_header)
+                            )
+                            if canonical_header is not None:
+                                expected_headers.add(canonical_header)
                         continue
 
                     if isinstance(contenido, list):
