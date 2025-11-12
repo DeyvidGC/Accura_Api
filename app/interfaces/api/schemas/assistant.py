@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 import re
 import unicodedata
 from enum import Enum
@@ -362,6 +363,7 @@ class AssistantMessageResponse(BaseModel):
                             contenido = remap_dependency_config(
                                 contenido, ("Longitud minima", "Longitud maxima"), clave
                             )
+                            entrada[clave] = contenido
                             ensure_config_int_value(
                                 contenido, "Longitud minima", minimum=0, type_label=clave
                             )
@@ -374,6 +376,7 @@ class AssistantMessageResponse(BaseModel):
                                 ("Valor mínimo", "Valor máximo", "Número de decimales"),
                                 clave,
                             )
+                            entrada[clave] = contenido
                             ensure_config_numeric(
                                 contenido.get("Valor mínimo"), "Valor mínimo", clave, allow_none=True
                             )
@@ -387,6 +390,7 @@ class AssistantMessageResponse(BaseModel):
                             contenido = remap_dependency_config(
                                 contenido, ("Longitud minima", "Longitud maxima"), clave
                             )
+                            entrada[clave] = contenido
                             ensure_config_int_value(
                                 contenido, "Longitud minima", minimum=1, type_label=clave
                             )
@@ -395,6 +399,7 @@ class AssistantMessageResponse(BaseModel):
                             )
                         elif normalized_clave == "lista":
                             contenido = remap_dependency_config(contenido, ("Lista",), clave)
+                            entrada[clave] = contenido
                             valores = contenido.get("Lista")
                             if not isinstance(valores, list) or not valores:
                                 raise ValueError(
@@ -409,6 +414,7 @@ class AssistantMessageResponse(BaseModel):
                             contenido = remap_dependency_config(
                                 contenido, ("Lista compleja",), clave
                             )
+                            entrada[clave] = contenido
                             combinaciones = contenido.get("Lista compleja")
                             if not isinstance(combinaciones, list) or not combinaciones:
                                 raise ValueError(
@@ -442,6 +448,7 @@ class AssistantMessageResponse(BaseModel):
                             contenido = remap_dependency_config(
                                 contenido, ("Longitud minima", "Código de país"), clave
                             )
+                            entrada[clave] = contenido
                             ensure_config_int_value(
                                 contenido, "Longitud minima", minimum=1, type_label=clave
                             )
@@ -454,6 +461,7 @@ class AssistantMessageResponse(BaseModel):
                             contenido = remap_dependency_config(
                                 contenido, ("Formato", "Longitud máxima"), clave
                             )
+                            entrada[clave] = contenido
                             formato = contenido.get("Formato")
                             if not isinstance(formato, str) or not formato.strip():
                                 raise ValueError("'Formato' debe ser una cadena no vacía.")
@@ -464,6 +472,7 @@ class AssistantMessageResponse(BaseModel):
                             contenido = remap_dependency_config(
                                 contenido, ("Formato", "Fecha mínima", "Fecha máxima"), clave
                             )
+                            entrada[clave] = contenido
                             formato = contenido.get("Formato")
                             formatos_validos = {"yyyy-MM-dd", "dd/MM/yyyy", "MM-dd-yyyy"}
                             if formato not in formatos_validos:
@@ -478,7 +487,12 @@ class AssistantMessageResponse(BaseModel):
                                         f"'{etiqueta}' en la configuración de '{clave}' debe ser una cadena no vacía."
                                     )
 
-                        expected_headers.update(DEPENDENCY_TYPE_HEADERS[normalized_clave])
+                        for dependency_header in DEPENDENCY_TYPE_HEADERS[normalized_clave]:
+                            canonical_header = header_lookup.get(
+                                _normalize_label(dependency_header)
+                            )
+                            if canonical_header is not None:
+                                expected_headers.add(canonical_header)
                         continue
 
                     if isinstance(contenido, list):
@@ -526,6 +540,49 @@ class AssistantMessageResponse(BaseModel):
                 )
 
             expected_headers.add(dependent_label_reference)
+            remapped_specifics: list[Any] = []
+            normalized_dependent_label = _normalize_label(dependent_label_reference)
+
+            for entrada in reglas_especifica:
+                if not isinstance(entrada, dict):
+                    remapped_specifics.append(entrada)
+                    continue
+
+                transformed_entry = dict(entrada)
+                for key, value in entrada.items():
+                    if not isinstance(key, str):
+                        continue
+
+                    normalized_key = _normalize_label(key)
+                    if normalized_key != "lista" or not isinstance(value, dict):
+                        continue
+
+                    normalized_nested_keys = {
+                        _normalize_label(nested_key): nested_key
+                        for nested_key in value.keys()
+                        if isinstance(nested_key, str)
+                    }
+                    if normalized_dependent_label in normalized_nested_keys:
+                        break
+
+                    canonical_list_key = normalized_nested_keys.get("lista")
+                    allowed_values = (
+                        value.get(canonical_list_key)
+                        if canonical_list_key is not None
+                        else value.get("Lista")
+                    )
+                    if not isinstance(allowed_values, list):
+                        continue
+
+                    transformed_entry[key] = {
+                        dependent_label_reference: [deepcopy(item) for item in allowed_values]
+                    }
+                    break
+
+                remapped_specifics.append(transformed_entry)
+
+            self.regla = dict(self.regla)
+            self.regla["reglas especifica"] = remapped_specifics
             normalized_header_values = {_normalize_label(item) for item in self.header}
             missing_headers = [
                 label
