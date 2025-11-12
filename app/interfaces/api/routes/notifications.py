@@ -4,7 +4,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Response,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
 from sqlalchemy.orm import Session
 
 from app.domain.entities import Notification, User
@@ -12,7 +20,7 @@ from app.infrastructure.database import SessionLocal, get_db
 from app.infrastructure.notifications import notification_manager, serialize_notification
 from app.infrastructure.repositories import NotificationRepository
 from app.interfaces.api.dependencies import get_current_active_user, get_current_user
-from app.interfaces.api.schemas import NotificationRead
+from app.interfaces.api.schemas import NotificationMarkReadRequest, NotificationRead
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
@@ -46,6 +54,25 @@ def list_notifications(
         include_created_users=current_user.is_admin(),
     )
     return [_notification_to_schema(notification) for notification in notifications]
+
+
+@router.post("/mark-read", status_code=status.HTTP_204_NO_CONTENT)
+def mark_notifications_as_read(
+    payload: NotificationMarkReadRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+) -> Response:
+    """Mark the provided notifications as read for the authenticated user."""
+
+    ids = [notification_id for notification_id in payload.unique_ids() if notification_id > 0]
+    if not ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Debe proporcionar identificadores de notificaciones válidos.",
+        )
+
+    NotificationRepository(db).mark_as_read(ids, user_id=current_user.id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.websocket("/ws")
