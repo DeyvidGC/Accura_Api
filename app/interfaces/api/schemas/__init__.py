@@ -13,7 +13,7 @@ from .auth import (
     Token,
     TokenValidationResponse,
 )
-from .notification import NotificationRead
+from .notification import NotificationMarkReadRequest, NotificationRead
 from .activity import RecentActivityRead
 from .rule import (
     RuleByType,
@@ -62,6 +62,7 @@ __all__ = [
     "DigitalFileRead",
     "LoadRead",
     "LoadUploadResponse",
+    "NotificationMarkReadRequest",
     "NotificationRead",
     "RecentActivityRead",
     "ForgotPasswordRequest",

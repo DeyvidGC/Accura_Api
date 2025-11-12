@@ -188,10 +188,12 @@ class TemplateColumnRepository:
         for assignment in rules:
             if not assignment.headers:
                 continue
+            entries = list(assignment.headers)
             serialized.append(
                 {
                     "rule_id": assignment.id,
-                    "headers": list(assignment.headers),
+                    "header_rule": entries,
+                    "Header rule": entries,
                 }
             )
         return serialized or None
@@ -221,7 +223,12 @@ class TemplateColumnRepository:
                     rule_id = int(raw_id)
                 except (TypeError, ValueError):
                     continue
-                headers = entry.get("headers") or entry.get("header")
+                headers = (
+                    entry.get("header_rule")
+                    or entry.get("Header rule")
+                    or entry.get("headers")
+                    or entry.get("header")
+                )
                 if isinstance(headers, str):
                     candidates = [headers]
                 elif isinstance(headers, list):
