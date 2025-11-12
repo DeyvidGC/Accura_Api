@@ -303,6 +303,24 @@ class AssistantMessageResponse(BaseModel):
 
                 return remapped
 
+            def ensure_config_list_values(
+                values: Any, *, type_label: str, value_label: str
+            ) -> None:
+                if not isinstance(values, list) or not values:
+                    raise ValueError(
+                        value_label
+                        + " en la configuración de '"
+                        + type_label
+                        + "' debe ser una lista con al menos un elemento."
+                    )
+                for elemento in values:
+                    if not isinstance(elemento, str) or not elemento.strip():
+                        raise ValueError(
+                            "Cada valor dentro de "
+                            + value_label
+                            + " debe ser una cadena no vacía."
+                        )
+
             def ensure_config_int_value(
                 config: dict[str, Any], key: str, *, minimum: int | None, type_label: str
             ) -> None:
@@ -398,18 +416,51 @@ class AssistantMessageResponse(BaseModel):
                                 contenido, "Longitud maxima", minimum=1, type_label=clave
                             )
                         elif normalized_clave == "lista":
-                            contenido = remap_dependency_config(contenido, ("Lista",), clave)
-                            entrada[clave] = contenido
-                            valores = contenido.get("Lista")
-                            if not isinstance(valores, list) or not valores:
+                            if not isinstance(contenido, dict):
                                 raise ValueError(
-                                    f"'Lista' en la configuración de '{clave}' debe ser una lista con al menos un elemento."
+                                    f"La configuración asociada a '{clave}' debe ser un objeto."
                                 )
-                            for elemento in valores:
-                                if not isinstance(elemento, str) or not elemento.strip():
+
+                            normalized_nested_keys = {
+                                _normalize_label(nested_key): nested_key
+                                for nested_key in contenido.keys()
+                                if isinstance(nested_key, str)
+                            }
+                            canonical_list_key = normalized_nested_keys.get("lista")
+
+                            if canonical_list_key is not None:
+                                contenido = remap_dependency_config(
+                                    contenido, ("Lista",), clave
+                                )
+                                entrada[clave] = contenido
+                                valores = contenido.get("Lista")
+                                ensure_config_list_values(
+                                    valores, type_label=clave, value_label="'Lista'"
+                                )
+                            else:
+                                if len(contenido) != 1:
                                     raise ValueError(
-                                        "Cada valor dentro de 'Lista' debe ser una cadena no vacía."
+                                        "La configuración para '"
+                                        + clave
+                                        + "' debe definir exactamente un encabezado dependiente."
                                     )
+
+                                nested_key, valores = next(iter(contenido.items()))
+                                if not isinstance(nested_key, str) or not nested_key.strip():
+                                    raise ValueError(
+                                        "El encabezado definido dentro de '"
+                                        + clave
+                                        + "' debe ser una cadena no vacía."
+                                    )
+                                sanitized_label = nested_key.strip()
+                                if sanitized_label != nested_key:
+                                    contenido = {sanitized_label: valores}
+                                    entrada[clave] = contenido
+                                ensure_config_list_values(
+                                    valores,
+                                    type_label=clave,
+                                    value_label="'" + sanitized_label + "'",
+                                )
                         elif normalized_clave == "lista compleja":
                             contenido = remap_dependency_config(
                                 contenido, ("Lista compleja",), clave
