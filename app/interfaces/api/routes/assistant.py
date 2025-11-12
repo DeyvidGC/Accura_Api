@@ -203,21 +203,44 @@ def _remap_dependency_list_specifics(
 
         entry_changed = False
         transformed_entry: dict[str, Any] = {}
+        list_payload: Sequence[Any] | None = None
 
         for key, value in entry.items():
-            if (
-                isinstance(key, str)
-                and _normalize_label(key) == "lista"
-                and isinstance(value, Mapping)
-            ):
+            if not isinstance(key, str):
+                continue
+
+            normalized_key = _normalize_label(key)
+            if normalized_key == "lista" and isinstance(value, Mapping):
                 allowed_values = value.get("Lista")
                 if isinstance(allowed_values, Sequence) and not isinstance(
                     allowed_values, (str, bytes)
                 ):
-                    transformed_entry[dependent_label] = deepcopy(list(allowed_values))
+                    list_payload = allowed_values
                     entry_changed = True
                     changed = True
-                    continue
+                    break
+
+        if list_payload is not None:
+            transformed_entry[dependent_label] = deepcopy(list(list_payload))
+
+        for key, value in entry.items():
+            if not isinstance(key, str):
+                transformed_entry[key] = deepcopy(value)
+                continue
+
+            normalized_key = _normalize_label(key)
+            if (
+                list_payload is not None
+                and normalized_key == normalized_dependent
+            ):
+                # Preserve the synthesized dependent label payload without overwriting it
+                # with the original structure.
+                continue
+            if list_payload is not None and normalized_key in _DEPENDENCY_TYPE_ALIASES:
+                # Skip redundant alias descriptors once the list payload is mapped to the
+                # dependent header label.
+                continue
+
             transformed_entry[key] = deepcopy(value)
 
         if entry_changed:
