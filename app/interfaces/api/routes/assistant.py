@@ -70,6 +70,8 @@ def _iter_rule_definitions(rule_payload: Any) -> list[Mapping[str, Any]]:
 
 def _build_rule_summary(rule_id: int, definition: Mapping[str, Any], type_label: str) -> dict[str, Any]:
     summary: dict[str, Any] = {"id": rule_id, "Tipo de dato": type_label}
+    normalized_type = _normalize_label(type_label)
+    rule_block: Mapping[str, Any] | None = None
     for key in (
         "Nombre de la regla",
         "Campo obligatorio",
@@ -80,12 +82,12 @@ def _build_rule_summary(rule_id: int, definition: Mapping[str, Any], type_label:
         if key in definition:
             summary[key] = deepcopy(definition[key])
     if "Regla" in definition:
-        summary["Regla"] = deepcopy(definition["Regla"])
+        rule_block = deepcopy(definition["Regla"])
 
     header_entries = _deduplicate_headers(
         _extract_header_entries(definition.get("Header"))
     )
-    if _normalize_label(type_label) == "dependencia":
+    if normalized_type == "dependencia":
         inferred_headers = _infer_dependency_headers(definition)
         if inferred_headers:
             if header_entries:
@@ -109,6 +111,14 @@ def _build_rule_summary(rule_id: int, definition: Mapping[str, Any], type_label:
         header_rule_entries = list(header_entries)
     if header_rule_entries:
         summary["Header rule"] = header_rule_entries
+
+    if rule_block is not None:
+        if normalized_type == "dependencia":
+            header_candidates = header_rule_entries or header_entries
+            dependent_label = _select_dependency_dependent_label(header_candidates, header_entries)
+            if dependent_label:
+                rule_block = _remap_dependency_list_specifics(rule_block, dependent_label)
+        summary["Regla"] = rule_block
 
     return summary
 
@@ -141,6 +151,86 @@ def _extract_dependency_variants(definition: Mapping[str, Any]) -> list[tuple[st
                 payload["Dependencia"] = dependency_context
             variants.append((canonical_type, payload))
     return variants
+
+
+def _select_dependency_dependent_label(
+    primary_candidates: Sequence[str] | None, fallback_candidates: Sequence[str] | None
+) -> str | None:
+    """Return the most likely dependent header label for dependency rules."""
+
+    def iter_candidates(candidates: Sequence[str] | None) -> Sequence[str]:
+        if not candidates:
+            return []
+        return [
+            candidate
+            for candidate in candidates
+            if isinstance(candidate, str) and candidate.strip()
+        ]
+
+    for candidates in (primary_candidates, fallback_candidates):
+        ordered = iter_candidates(candidates)
+        for label in reversed(ordered):
+            normalized = _normalize_label(label)
+            if normalized and normalized not in _DEPENDENCY_TYPE_ALIASES:
+                return label.strip()
+    return None
+
+
+def _remap_dependency_list_specifics(
+    rule_block: Mapping[str, Any], dependent_label: str
+) -> Mapping[str, Any]:
+    """Replace list-based dependency descriptors with the referenced header label."""
+
+    specifics = rule_block.get("reglas especifica")
+    if not isinstance(specifics, Sequence):
+        return rule_block
+
+    normalized_dependent = _normalize_label(dependent_label)
+    remapped_specifics: list[Any] = []
+    changed = False
+
+    for entry in specifics:
+        if not isinstance(entry, Mapping):
+            remapped_specifics.append(deepcopy(entry))
+            continue
+
+        normalized_keys = {
+            _normalize_label(key): key for key in entry.keys() if isinstance(key, str)
+        }
+        if normalized_dependent in normalized_keys:
+            remapped_specifics.append(deepcopy(entry))
+            continue
+
+        entry_changed = False
+        transformed_entry: dict[str, Any] = {}
+
+        for key, value in entry.items():
+            if (
+                isinstance(key, str)
+                and _normalize_label(key) == "lista"
+                and isinstance(value, Mapping)
+            ):
+                allowed_values = value.get("Lista")
+                if isinstance(allowed_values, Sequence) and not isinstance(
+                    allowed_values, (str, bytes)
+                ):
+                    transformed_entry[dependent_label] = deepcopy(list(allowed_values))
+                    entry_changed = True
+                    changed = True
+                    continue
+            transformed_entry[key] = deepcopy(value)
+
+        if entry_changed:
+            remapped_specifics.append(transformed_entry)
+        else:
+            remapped_specifics.append(deepcopy(entry))
+
+    if not changed:
+        return rule_block
+
+    updated_block = dict(rule_block)
+    updated_block["reglas especifica"] = remapped_specifics
+    return updated_block
 
 
 def _build_rules_catalog(rules: Sequence[Rule]) -> list[dict[str, Any]]:
