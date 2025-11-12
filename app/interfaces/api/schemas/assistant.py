@@ -593,8 +593,32 @@ class AssistantMessageResponse(BaseModel):
                 )
 
             expected_headers.add(dependent_label_reference)
+            dependent_target_label: str | None = None
+
+            for candidate in self.header_rule:
+                normalized_candidate = _normalize_label(candidate)
+                if normalized_candidate == normalized_dependent_reference:
+                    continue
+                dependent_target_label = header_lookup.get(
+                    normalized_candidate, candidate
+                )
+                break
+
+            if dependent_target_label is None:
+                for candidate in self.header:
+                    normalized_candidate = _normalize_label(candidate)
+                    if normalized_candidate == normalized_dependent_reference:
+                        continue
+                    dependent_target_label = candidate
+                    break
+
+            if dependent_target_label is None:
+                dependent_target_label = dependent_label_reference
+
+            expected_headers.add(dependent_target_label)
+
             remapped_specifics: list[Any] = []
-            normalized_dependent_label = _normalize_label(dependent_label_reference)
+            normalized_target_label = _normalize_label(dependent_target_label)
 
             for entrada in reglas_especifica:
                 if not isinstance(entrada, dict):
@@ -615,7 +639,7 @@ class AssistantMessageResponse(BaseModel):
                         for nested_key in value.keys()
                         if isinstance(nested_key, str)
                     }
-                    if normalized_dependent_label in normalized_nested_keys:
+                    if normalized_target_label in normalized_nested_keys:
                         break
 
                     canonical_list_key = normalized_nested_keys.get("lista")
@@ -628,7 +652,7 @@ class AssistantMessageResponse(BaseModel):
                         continue
 
                     transformed_entry[key] = {
-                        dependent_label_reference: [deepcopy(item) for item in allowed_values]
+                        dependent_target_label: [deepcopy(item) for item in allowed_values]
                     }
                     break
 
