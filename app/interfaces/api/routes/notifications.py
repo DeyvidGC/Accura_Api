@@ -49,10 +49,7 @@ def list_notifications(
 ) -> list[NotificationRead]:
     """Return the most recent notifications for the authenticated user."""
 
-    notifications = NotificationRepository(db).list_for_user(
-        current_user.id,
-        include_created_users=current_user.is_admin(),
-    )
+    notifications = NotificationRepository(db).list_for_user(current_user.id)
     return [_notification_to_schema(notification) for notification in notifications]
 
 
