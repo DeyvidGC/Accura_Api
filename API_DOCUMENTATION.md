@@ -801,6 +801,39 @@ Las plantillas definen la estructura de los datos que se cargarán y las reglas 
     {"detail": "Acceso no encontrado."}
     ```
 
+#### C.8.4 Listar plantillas publicadas por usuario
+- **Método y URL:** `GET /templates/users/{user_id}`
+- **Roles permitidos:** administradores o el propio usuario.
+- **Respuesta 200 (éxito):**
+```json
+[
+  {
+    "id": 3,
+    "user_id": 5,
+    "name": "Ventas Retail",
+    "status": "published",
+    "description": "Plantilla de cargas de ventas.",
+    "table_name": "ventas_retail_2024",
+    "created_at": "2024-01-10T10:00:00Z",
+    "updated_at": "2024-04-02T18:30:00Z",
+    "is_active": true,
+    "deleted": false,
+    "deleted_by": null,
+    "deleted_at": null,
+    "columns": []
+  }
+]
+```
+- **Errores frecuentes:**
+  - `403 Forbidden`
+    ```json
+    {"detail": "No autorizado"}
+    ```
+  - `404 Not Found`
+    ```json
+    {"detail": "Usuario no encontrado"}
+    ```
+
 ### C.9 Descargar el archivo base en Excel
 - **Método y URL:** `GET /templates/{template_id}/excel`
 - **Roles permitidos:** usuarios con acceso vigente a la plantilla.
