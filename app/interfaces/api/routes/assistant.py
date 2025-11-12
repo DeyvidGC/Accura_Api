@@ -203,10 +203,10 @@ def _remap_dependency_list_specifics(
 
         entry_changed = False
         transformed_entry: dict[str, Any] = {}
-        list_payload: Sequence[Any] | None = None
 
         for key, value in entry.items():
             if not isinstance(key, str):
+                transformed_entry[key] = deepcopy(value)
                 continue
 
             normalized_key = _normalize_label(key)
@@ -215,31 +215,18 @@ def _remap_dependency_list_specifics(
                 if isinstance(allowed_values, Sequence) and not isinstance(
                     allowed_values, (str, bytes)
                 ):
-                    list_payload = allowed_values
+                    remapped_list: dict[str, Any] = {}
+                    remapped_list[dependent_label] = deepcopy(list(allowed_values))
+
+                    for inner_key, inner_value in value.items():
+                        if _normalize_label(inner_key) == "lista":
+                            continue
+                        remapped_list[inner_key] = deepcopy(inner_value)
+
+                    transformed_entry[key] = remapped_list
                     entry_changed = True
                     changed = True
-                    break
-
-        if list_payload is not None:
-            transformed_entry[dependent_label] = deepcopy(list(list_payload))
-
-        for key, value in entry.items():
-            if not isinstance(key, str):
-                transformed_entry[key] = deepcopy(value)
-                continue
-
-            normalized_key = _normalize_label(key)
-            if (
-                list_payload is not None
-                and normalized_key == normalized_dependent
-            ):
-                # Preserve the synthesized dependent label payload without overwriting it
-                # with the original structure.
-                continue
-            if list_payload is not None and normalized_key in _DEPENDENCY_TYPE_ALIASES:
-                # Skip redundant alias descriptors once the list payload is mapped to the
-                # dependent header label.
-                continue
+                    continue
 
             transformed_entry[key] = deepcopy(value)
 
