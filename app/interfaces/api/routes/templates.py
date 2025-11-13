@@ -23,7 +23,7 @@ from app.application.use_cases.template_columns import (
     delete_template_column as delete_template_column_uc,
     get_template_column as get_template_column_uc,
     list_template_columns as list_template_columns_uc,
-    update_template_column as update_template_column_uc,
+    replace_template_columns as replace_template_columns_uc,
 )
 from app.application.use_cases.templates import (
     bulk_grant_template_access as bulk_grant_template_access_uc,
@@ -54,7 +54,7 @@ from app.interfaces.api.schemas import (
     TemplateColumnCreate,
     TemplateColumnRead,
     TemplateColumnRule as TemplateColumnRuleSchema,
-    TemplateColumnUpdateWithId,
+    TemplateColumnUpdate,
     TemplateCreate,
     TemplateDuplicate,
     TemplateRead,
@@ -484,15 +484,15 @@ def read_template_column(
 )
 def update_template_columns(
     template_id: int,
-    column_in: TemplateColumnUpdateWithId
-    | list[TemplateColumnUpdateWithId]
+    column_in: TemplateColumnUpdate
+    | list[TemplateColumnUpdate]
     | TemplateColumnBulkUpdate = Body(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ) -> TemplateColumnRead | list[TemplateColumnRead]:
-    """Actualiza la definición de una o varias columnas de plantilla."""
+    """Reemplaza las columnas existentes por las enviadas en la solicitud."""
 
-    if isinstance(column_in, TemplateColumnUpdateWithId):
+    if isinstance(column_in, TemplateColumnUpdate):
         payloads = [column_in]
         single_result = True
     else:
@@ -504,29 +504,31 @@ def update_template_columns(
         single_result = False
 
     try:
-        updated_columns: list[TemplateColumn] = []
+        replacements: list[NewTemplateColumnData] = []
         for payload in payloads:
-            if hasattr(payload, "model_dump"):
-                update_data = payload.model_dump(exclude_unset=True)
-            else:  # pragma: no cover - compatibility path for pydantic v1
-                update_data = payload.dict(exclude_unset=True)
+            name = payload.name
+            if name is None:
+                raise ValueError("El nombre de la columna es obligatorio")
 
-            column = update_template_column_uc(
-                db,
-                template_id=template_id,
-                column_id=update_data["id"],
-                name=update_data.get("name"),
-                description=update_data.get("description"),
-                rules=_map_rule_payload(payload.rules) if "rules" in update_data else None,
-                rules_provided="rules" in update_data,
-                is_active=update_data.get("is_active"),
-                updated_by=current_user.id,
+            replacements.append(
+                NewTemplateColumnData(
+                    name=name,
+                    description=payload.description,
+                    rules=_map_rule_payload(payload.rules),
+                    is_active=payload.is_active if payload.is_active is not None else True,
+                )
             )
-            updated_columns.append(column)
+
+        updated_columns = replace_template_columns_uc(
+            db,
+            template_id=template_id,
+            columns=replacements,
+            actor_id=current_user.id,
+        )
     except ValueError as exc:
         detail = str(exc)
         status_code = status.HTTP_400_BAD_REQUEST
-        if detail in {"Plantilla no encontrada", "Columna no encontrada"}:
+        if detail in {"Plantilla no encontrada"}:
             status_code = status.HTTP_404_NOT_FOUND
         raise HTTPException(status_code=status_code, detail=detail) from exc
 
