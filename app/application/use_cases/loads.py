@@ -319,6 +319,32 @@ def list_loads(
     )
 
 
+def list_loads_with_templates(
+    session: Session,
+    *,
+    current_user: User,
+    template_id: int | None = None,
+    skip: int = 0,
+    limit: int | None = 100,
+) -> Sequence[tuple[Load, Template, User]]:
+    """Return loads and their templates visible to ``current_user``."""
+
+    repository = LoadRepository(session)
+    if current_user.is_admin():
+        return repository.list_with_templates(
+            template_id=template_id,
+            creator_id=current_user.id,
+            skip=skip,
+            limit=limit,
+        )
+    return repository.list_with_templates(
+        template_id=template_id,
+        user_id=current_user.id,
+        skip=skip,
+        limit=limit,
+    )
+
+
 def get_load(
     session: Session,
     *,
