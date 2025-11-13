@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 from datetime import datetime
 
-from sqlalchemy import func, or_
+from sqlalchemy import exists, func, or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.domain.entities import Template, TemplateColumn, TemplateColumnRule
@@ -45,8 +45,9 @@ class TemplateRepository:
             query = query.filter(TemplateModel.created_by == creator_id)
         if user_id is not None:
             now = datetime.utcnow()
-            query = (
-                query.join(TemplateModel.access_records)
+            access_exists = (
+                self.session.query(TemplateUserAccessModel.id)
+                .filter(TemplateUserAccessModel.template_id == TemplateModel.id)
                 .filter(TemplateUserAccessModel.user_id == user_id)
                 .filter(TemplateUserAccessModel.revoked_at.is_(None))
                 .filter(TemplateUserAccessModel.start_date <= now)
@@ -56,7 +57,9 @@ class TemplateRepository:
                         TemplateUserAccessModel.end_date >= now,
                     )
                 )
-            ).distinct(TemplateModel.id)
+                .exists()
+            )
+            query = query.filter(access_exists)
         if statuses:
             query = query.filter(TemplateModel.status.in_(tuple(statuses)))
         query = query.order_by(TemplateModel.created_at.desc(), TemplateModel.id.desc())
