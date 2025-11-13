@@ -42,6 +42,31 @@ class TemplateUserAccessRepository:
         query = query.order_by(TemplateUserAccessModel.start_date.desc())
         return [self._to_entity(model) for model in query.all()]
 
+    def list_by_user(
+        self,
+        user_id: int,
+        *,
+        include_inactive: bool = False,
+        include_scheduled: bool = False,
+    ) -> Sequence[TemplateUserAccess]:
+        query = self.session.query(TemplateUserAccessModel).filter(
+            TemplateUserAccessModel.user_id == user_id
+        )
+        if not include_inactive:
+            now = datetime.utcnow()
+            filters = [
+                TemplateUserAccessModel.revoked_at.is_(None),
+                (
+                    TemplateUserAccessModel.end_date.is_(None)
+                    | (TemplateUserAccessModel.end_date >= now)
+                ),
+            ]
+            if not include_scheduled:
+                filters.append(TemplateUserAccessModel.start_date <= now)
+            query = query.filter(*filters)
+        query = query.order_by(TemplateUserAccessModel.start_date.desc())
+        return [self._to_entity(model) for model in query.all()]
+
     def get(self, access_id: int) -> TemplateUserAccess | None:
         model = self.session.get(TemplateUserAccessModel, access_id)
         return self._to_entity(model) if model else None
