@@ -21,7 +21,10 @@ class NotificationPublisher:
     def dispatch(self, notification: Notification) -> None:
         """Schedule ``notification`` to be delivered to its user."""
 
-        message = {"type": "notification", "data": self._serialize(notification)}
+        message = {
+            "type": "notification",
+            "data": [self._serialize(notification)],
+        }
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:

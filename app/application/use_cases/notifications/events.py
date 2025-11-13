@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from sqlalchemy.orm import Session
 
 from app.domain.entities import (
@@ -17,7 +18,21 @@ from app.domain.entities import (
     User,
 )
 from app.infrastructure.notifications import dispatch_notification
-from app.infrastructure.repositories import NotificationRepository
+from app.infrastructure.repositories import NotificationRepository, UserRepository
+
+try:
+    _NOTIFICATION_TIMEZONE = ZoneInfo("America/Lima")
+except ZoneInfoNotFoundError:  # pragma: no cover - fallback for missing tzdata
+    try:
+        _NOTIFICATION_TIMEZONE = ZoneInfo("America/Bogota")
+    except ZoneInfoNotFoundError:  # pragma: no cover - fallback for missing tzdata
+        _NOTIFICATION_TIMEZONE = timezone(timedelta(hours=-5))
+
+
+def _now_in_notification_timezone() -> datetime:
+    """Return the current time localized to the notifications timezone."""
+
+    return datetime.now(_NOTIFICATION_TIMEZONE)
 
 def _persist_notification(
     session: Session,
@@ -35,7 +50,7 @@ def _persist_notification(
         title=title,
         message=message,
         payload=payload or {},
-        created_at=datetime.utcnow(),
+        created_at=_now_in_notification_timezone(),
         read_at=None,
     )
     repository = NotificationRepository(session)
@@ -100,7 +115,7 @@ def _persist_or_update_load_notification(
     }
     repository = NotificationRepository(session)
     existing = repository.get_latest_by_user_and_load(user_id=user.id, load_id=load.id)
-    now = datetime.utcnow()
+    now = _now_in_notification_timezone()
     if existing is not None:
         updated = Notification(
             id=existing.id,
@@ -182,8 +197,9 @@ def notify_load_validated_success(
     *,
     load: Load,
     template: Template,
+    user: User,
 ) -> None:
-    """Inform the load owner about the final validation summary."""
+    """Inform involved parties about the final validation summary."""
 
     if not load.user_id:
         return
@@ -222,6 +238,38 @@ def notify_load_validated_success(
         title=title,
         message=message,
         payload=payload,
+    )
+
+    if status != LOAD_STATUS_VALIDATED_SUCCESS:
+        return
+
+    creator_id = user.created_by
+    if not creator_id:
+        return
+
+    admin = UserRepository(session).get(creator_id)
+    if admin is None:
+        return
+
+    admin_message = (
+        f"La carga '{load.file_name}' del usuario {user.name} para la plantilla "
+        f"'{template.name}' finalizó con validación exitosa."
+    )
+    admin_payload = {
+        "template_id": template.id,
+        "load_id": load.id,
+        "status": status,
+        "user_id": user.id,
+        "user_name": user.name,
+        "file_name": load.file_name,
+    }
+    _persist_notification(
+        session,
+        user_id=admin.id,
+        event_type="load.validated.success.admin",
+        title="Carga validada exitosamente",
+        message=admin_message,
+        payload=admin_payload,
     )
 
 
