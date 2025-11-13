@@ -60,16 +60,10 @@ class TemplateColumnUpdate(BaseModel):
             extra = "forbid"
 
 
-class TemplateColumnUpdateWithId(TemplateColumnUpdate):
-    """Payload required to update a template column with its identifier."""
-
-    id: int
-
-
 class TemplateColumnBulkUpdate(BaseModel):
     """Payload wrapper to update many columns at once."""
 
-    columns: list[TemplateColumnUpdateWithId]
+    columns: list[TemplateColumnUpdate]
 
 
 class TemplateColumnRead(TemplateColumnBase):

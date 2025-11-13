@@ -93,8 +93,36 @@ class KPIReportRead(BaseModel):
             orm_mode = True
 
 
+class ClientKPIReportRead(BaseModel):
+    available_templates: int = Field(
+        ..., description="Cantidad de plantillas disponibles para el usuario"
+    )
+    current_month_loads: int = Field(
+        ..., description="Número de cargas realizadas por el usuario en el mes actual"
+    )
+    success_rate: float = Field(
+        ..., description="Porcentaje de cargas exitosas del usuario en el mes actual"
+    )
+    total_loads: int = Field(
+        ..., description="Cantidad total de cargas históricas realizadas por el usuario"
+    )
+    successful_loads: int = Field(
+        ..., description="Cantidad total de cargas que finalizaron exitosamente"
+    )
+    successful_rows: int = Field(
+        ..., description="Cantidad de filas procesadas exitosamente en el mes actual"
+    )
+
+    if ConfigDict is not None:  # pragma: no branch - runtime configuration
+        model_config = ConfigDict(from_attributes=True)
+    else:  # pragma: no cover - compatibility path for pydantic v1
+        class Config:
+            orm_mode = True
+
+
 __all__ = [
     "KPIReportRead",
+    "ClientKPIReportRead",
     "MonthlyComparisonRead",
     "TemplatePublicationSummaryRead",
     "ValidationEffectivenessRead",

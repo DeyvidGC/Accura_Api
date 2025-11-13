@@ -23,6 +23,7 @@ from .rule import (
     RuleUpdate,
 )
 from .kpi import (
+    ClientKPIReportRead,
     KPIReportRead,
     HistorySnapshotRead,
     MonthlyComparisonRead,
@@ -38,7 +39,6 @@ from .template import (
     TemplateColumnRule,
     TemplateColumnRead,
     TemplateColumnUpdate,
-    TemplateColumnUpdateWithId,
     TemplateCreate,
     TemplateDuplicate,
     TemplateStatusUpdate,
@@ -79,6 +79,7 @@ __all__ = [
     "RuleRead",
     "RuleUpdate",
     "KPIReportRead",
+    "ClientKPIReportRead",
     "HistorySnapshotRead",
     "MonthlyComparisonRead",
     "RuleSummaryRead",
@@ -91,7 +92,6 @@ __all__ = [
     "TemplateColumnRule",
     "TemplateColumnRead",
     "TemplateColumnUpdate",
-    "TemplateColumnUpdateWithId",
     "TemplateCreate",
     "TemplateDuplicate",
     "TemplateStatusUpdate",
