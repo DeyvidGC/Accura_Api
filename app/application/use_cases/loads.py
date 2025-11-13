@@ -278,10 +278,9 @@ def process_template_load(
             report_filename=report_filename,
             report_size=report_size,
         )
-        notify_load_status_changed(
+        notify_load_validated_success(
             session, load=load, template=template, user=user
         )
-        notify_load_validated_success(session, load=load, template=template)
     except Exception as exc:  # pragma: no cover - defensive path
         failed_load = _mark_load_as_failed(load_repo, load, str(exc))
         try:

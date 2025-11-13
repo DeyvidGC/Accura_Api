@@ -17,7 +17,7 @@ from app.domain.entities import (
     User,
 )
 from app.infrastructure.notifications import dispatch_notification
-from app.infrastructure.repositories import NotificationRepository
+from app.infrastructure.repositories import NotificationRepository, UserRepository
 
 def _persist_notification(
     session: Session,
@@ -182,8 +182,9 @@ def notify_load_validated_success(
     *,
     load: Load,
     template: Template,
+    user: User,
 ) -> None:
-    """Inform the load owner about the final validation summary."""
+    """Inform involved parties about the final validation summary."""
 
     if not load.user_id:
         return
@@ -222,6 +223,38 @@ def notify_load_validated_success(
         title=title,
         message=message,
         payload=payload,
+    )
+
+    if status != LOAD_STATUS_VALIDATED_SUCCESS:
+        return
+
+    creator_id = user.created_by
+    if not creator_id:
+        return
+
+    admin = UserRepository(session).get(creator_id)
+    if admin is None:
+        return
+
+    admin_message = (
+        f"La carga '{load.file_name}' del usuario {user.name} para la plantilla "
+        f"'{template.name}' finalizó con validación exitosa."
+    )
+    admin_payload = {
+        "template_id": template.id,
+        "load_id": load.id,
+        "status": status,
+        "user_id": user.id,
+        "user_name": user.name,
+        "file_name": load.file_name,
+    }
+    _persist_notification(
+        session,
+        user_id=admin.id,
+        event_type="load.validated.success.admin",
+        title="Carga validada exitosamente",
+        message=admin_message,
+        payload=admin_payload,
     )
 
 
