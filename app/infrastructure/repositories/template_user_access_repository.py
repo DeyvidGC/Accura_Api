@@ -22,20 +22,23 @@ class TemplateUserAccessRepository:
         template_id: int,
         *,
         include_inactive: bool = False,
+        include_scheduled: bool = False,
     ) -> Sequence[TemplateUserAccess]:
         query = self.session.query(TemplateUserAccessModel).filter(
             TemplateUserAccessModel.template_id == template_id
         )
         if not include_inactive:
             now = datetime.utcnow()
-            query = query.filter(
+            filters = [
                 TemplateUserAccessModel.revoked_at.is_(None),
-                TemplateUserAccessModel.start_date <= now,
                 (
                     TemplateUserAccessModel.end_date.is_(None)
                     | (TemplateUserAccessModel.end_date >= now)
                 ),
-            )
+            ]
+            if not include_scheduled:
+                filters.append(TemplateUserAccessModel.start_date <= now)
+            query = query.filter(*filters)
         query = query.order_by(TemplateUserAccessModel.start_date.desc())
         return [self._to_entity(model) for model in query.all()]
 
