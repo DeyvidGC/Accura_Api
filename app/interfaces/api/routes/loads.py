@@ -20,14 +20,20 @@ from app.application.use_cases.loads import (
     get_load as get_load_uc,
     get_load_original_file as get_load_original_file_uc,
     get_load_report as get_load_report_uc,
+    get_load_with_template as get_load_with_template_uc,
     list_loads as list_loads_uc,
     process_template_load as process_template_load_uc,
     upload_template_load as upload_template_load_uc,
 )
-from app.domain.entities import Load, User
+from app.domain.entities import Load, Template, User
 from app.infrastructure.database import SessionLocal, get_db
 from app.interfaces.api.dependencies import get_current_active_user
-from app.interfaces.api.schemas import LoadRead, LoadUploadResponse
+from app.interfaces.api.schemas import (
+    LoadRead,
+    LoadUploadResponse,
+    LoadWithTemplateRead,
+    TemplateRead,
+)
 
 router = APIRouter(tags=["loads"])
 logger = logging.getLogger(__name__)
@@ -37,6 +43,12 @@ def _load_to_read_model(load: Load) -> LoadRead:
     if hasattr(LoadRead, "model_validate"):
         return LoadRead.model_validate(load)
     return LoadRead.from_orm(load)
+
+
+def _template_to_read_model(template: Template) -> TemplateRead:
+    if hasattr(TemplateRead, "model_validate"):
+        return TemplateRead.model_validate(template)
+    return TemplateRead.from_orm(template)
 
 
 def _schedule_cleanup(background_tasks: BackgroundTasks, path: Path) -> None:
@@ -166,6 +178,29 @@ def read_load(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return _load_to_read_model(load)
+
+
+@router.get("/loads/{load_id}/details", response_model=LoadWithTemplateRead)
+def read_load_with_template(
+    load_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+) -> LoadWithTemplateRead:
+    """Obtiene la carga y el detalle completo de su plantilla asociada."""
+
+    try:
+        load, template = get_load_with_template_uc(
+            db, load_id=load_id, current_user=current_user
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    return LoadWithTemplateRead(
+        load=_load_to_read_model(load),
+        template=_template_to_read_model(template),
+    )
 
 
 @router.get("/loads/{load_id}/report")

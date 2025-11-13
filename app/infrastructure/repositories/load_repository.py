@@ -6,14 +6,21 @@ from datetime import datetime
 from typing import Sequence
 
 from sqlalchemy import func, or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.domain.entities import (
     LOAD_STATUS_VALIDATED_SUCCESS,
     LOAD_STATUS_VALIDATED_WITH_ERRORS,
     Load,
+    Template,
 )
-from app.infrastructure.models import LoadModel, UserModel
+from app.infrastructure.models import (
+    LoadModel,
+    TemplateColumnModel,
+    TemplateModel,
+    UserModel,
+)
+from app.infrastructure.repositories.template_repository import TemplateRepository
 
 _COMPLETED_STATUSES = (
     LOAD_STATUS_VALIDATED_SUCCESS,
@@ -58,6 +65,23 @@ class LoadRepository:
     def get(self, load_id: int) -> Load | None:
         model = self.session.get(LoadModel, load_id)
         return self._to_entity(model) if model else None
+
+    def get_with_template(self, load_id: int) -> tuple[Load, Template] | None:
+        model = (
+            self.session.query(LoadModel)
+            .options(
+                joinedload(LoadModel.template)
+                .joinedload(TemplateModel.columns)
+                .joinedload(TemplateColumnModel.rules)
+            )
+            .filter(LoadModel.id == load_id)
+            .first()
+        )
+        if model is None or model.template is None:
+            return None
+        load = self._to_entity(model)
+        template = TemplateRepository._to_entity(model.template)
+        return load, template
 
     def create(self, load: Load) -> Load:
         model = LoadModel()

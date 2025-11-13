@@ -341,6 +341,37 @@ def get_load(
     return load
 
 
+def get_load_with_template(
+    session: Session,
+    *,
+    load_id: int,
+    current_user: User,
+) -> tuple[Load, Template]:
+    """Return the load along with its template details if accessible to the user."""
+
+    repository = LoadRepository(session)
+    result = repository.get_with_template(load_id)
+    if result is None:
+        raise ValueError("Carga no encontrada")
+    load, template = result
+
+    if current_user.is_admin():
+        if load.user_id == current_user.id:
+            return load, template
+        user_map = UserRepository(session).get_map_by_ids(
+            [load.user_id], include_deleted=True
+        )
+        user = user_map.get(load.user_id)
+        if user is None or user.created_by != current_user.id:
+            raise PermissionError("No autorizado")
+        return load, template
+
+    if load.user_id != current_user.id:
+        raise PermissionError("No autorizado")
+
+    return load, template
+
+
 def get_load_report(
     session: Session,
     *,

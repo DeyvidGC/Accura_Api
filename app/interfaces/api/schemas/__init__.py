@@ -4,7 +4,7 @@ from .assistant import (
 )
 from .audit_log import AuditLogRead
 from .digital_file import DigitalFileRead
-from .load import LoadRead, LoadUploadResponse
+from .load import LoadRead, LoadUploadResponse, LoadWithTemplateRead
 from .auth import (
     ForgotPasswordRequest,
     ForgotPasswordResponse,
@@ -64,6 +64,7 @@ __all__ = [
     "DigitalFileRead",
     "LoadRead",
     "LoadUploadResponse",
+    "LoadWithTemplateRead",
     "NotificationMarkReadRequest",
     "NotificationRead",
     "RecentActivityRead",
