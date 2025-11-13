@@ -16,6 +16,7 @@ from .create_template_column import (
     NewTemplateColumnData,
     create_template_columns,
 )
+from .artifacts import refresh_template_resources
 
 
 def replace_template_columns(
@@ -41,15 +42,22 @@ def replace_template_columns(
     for column in existing_columns:
         column_repository.delete(column.id, deleted_by=actor_id)
 
-    if not columns:
-        return []
+    created_columns: list[TemplateColumn] = []
+    if columns:
+        created_columns = create_template_columns(
+            session,
+            template_id=template_id,
+            columns=columns,
+            created_by=actor_id,
+        )
 
-    return create_template_columns(
+    refresh_template_resources(
         session,
-        template_id=template_id,
-        columns=columns,
-        created_by=actor_id,
+        template_id,
+        actor_id=actor_id,
     )
+
+    return created_columns
 
 
 __all__ = [
