@@ -36,6 +36,7 @@ from app.application.use_cases.templates import (
     get_template_excel as get_template_excel_uc,
     list_template_access as list_template_access_uc,
     list_templates as list_templates_uc,
+    list_user_template_access as list_user_template_access_uc,
     list_user_templates as list_user_templates_uc,
     update_template as update_template_uc,
     update_template_status as update_template_status_uc,
@@ -244,6 +245,33 @@ def list_templates_for_user(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail) from exc
 
     return [_template_to_read_model(template) for template in templates]
+
+
+@router.get("/users/{user_id}/access", response_model=list[TemplateUserAccessRead])
+def list_template_accesses_for_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+) -> list[TemplateUserAccessRead]:
+    """Devuelve los accesos a plantillas configurados para el usuario indicado."""
+
+    try:
+        accesses = list_user_template_access_uc(
+            db, user_id=user_id, current_user=current_user
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        if detail == "Usuario no encontrado":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail=detail
+            ) from exc
+        if detail == "No autorizado":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail=detail
+            ) from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail) from exc
+
+    return [_access_to_read_model(access) for access in accesses]
 
 
 @router.get("/{template_id}", response_model=TemplateRead)

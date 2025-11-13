@@ -838,6 +838,34 @@ Las plantillas definen la estructura de los datos que se cargarán y las reglas 
     ```json
     {"detail": "No autorizado"}
     ```
+
+#### C.8.5 Listar accesos por usuario
+- **Método y URL:** `GET /templates/users/{user_id}/access`
+- **Roles permitidos:** administradores o el propio usuario.
+- **Descripción:**
+  - Los clientes reciben únicamente los accesos activos con fecha de inicio no posterior al día actual.
+  - Los administradores reciben todos los accesos configurados para el usuario, incluyendo los futuros o vencidos.
+- **Respuesta 200 (éxito):**
+```json
+[
+  {
+    "id": 42,
+    "template_id": 3,
+    "user_id": 8,
+    "start_date": "2024-05-01",
+    "end_date": "2024-12-31",
+    "revoked_at": null,
+    "revoked_by": null,
+    "created_at": "2024-04-20T12:00:00Z",
+    "updated_at": "2024-04-20T12:00:00Z"
+  }
+]
+```
+- **Errores frecuentes:**
+  - `403 Forbidden`
+    ```json
+    {"detail": "No autorizado"}
+    ```
   - `404 Not Found`
     ```json
     {"detail": "Usuario no encontrado"}

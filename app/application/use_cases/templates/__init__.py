@@ -10,6 +10,7 @@ from .get_template import get_template
 from .get_template_excel import get_template_excel
 from .grant_template_access import grant_template_access
 from .list_template_access import list_template_access
+from .list_user_template_access import list_user_template_access
 from .list_templates import list_templates
 from .list_user_templates import list_user_templates
 from .revoke_template_access import revoke_template_access
@@ -28,6 +29,7 @@ __all__ = [
     "get_template_excel",
     "grant_template_access",
     "list_template_access",
+    "list_user_template_access",
     "list_templates",
     "list_user_templates",
     "revoke_template_access",
