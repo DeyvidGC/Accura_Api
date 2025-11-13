@@ -278,12 +278,17 @@ def process_template_load(
             report_filename=report_filename,
             report_size=report_size,
         )
-        notify_load_status_changed(
+        notify_load_validated_success(
             session, load=load, template=template, user=user
         )
-        notify_load_validated_success(session, load=load, template=template)
     except Exception as exc:  # pragma: no cover - defensive path
-        _mark_load_as_failed(load_repo, load, str(exc))
+        failed_load = _mark_load_as_failed(load_repo, load, str(exc))
+        try:
+            notify_load_status_changed(
+                session, load=failed_load, template=template, user=user
+            )
+        except Exception:  # pragma: no cover - defensive path
+            pass
         if isinstance(exc, (ValueError, PermissionError)):
             raise
         raise ValueError(str(exc)) from exc
@@ -997,9 +1002,11 @@ def _register_loaded_file(
     )
 
 
-def _mark_load_as_failed(repository: LoadRepository, load: Load, message: str) -> None:
+def _mark_load_as_failed(
+    repository: LoadRepository, load: Load, message: str
+) -> Load:
     finished_at = datetime.utcnow()
-    repository.update(
+    return repository.update(
         Load(
             id=load.id,
             template_id=load.template_id,
