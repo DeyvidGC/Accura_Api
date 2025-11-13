@@ -95,7 +95,7 @@ class TemplateUserAccessGrantItem(BaseModel):
 
 class TemplateUserAccessRevokeItem(BaseModel):
     template_id: int = Field(..., ge=1)
-    access_id: int = Field(..., ge=1)
+    user_id: int = Field(..., ge=1)
 
     if ConfigDict is not None:  # pragma: no branch
         model_config = ConfigDict(extra="forbid")

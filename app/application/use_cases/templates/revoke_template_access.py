@@ -12,7 +12,7 @@ def revoke_template_access(
     session: Session,
     *,
     template_id: int,
-    access_id: int,
+    user_id: int,
     revoked_by: int,
 ) -> TemplateUserAccess:
     """Revoke the specified access assignment."""
@@ -22,14 +22,17 @@ def revoke_template_access(
         raise ValueError("Plantilla no encontrada")
 
     repository = TemplateUserAccessRepository(session)
-    access = repository.get(access_id)
-    if access is None or access.template_id != template_id:
+    access = repository.get_by_template_and_user(
+        template_id=template_id,
+        user_id=user_id,
+    )
+    if access is None:
         raise ValueError("Acceso no encontrado")
     if access.revoked_at is not None:
         raise ValueError("El acceso ya está revocado")
 
     return repository.revoke(
-        access_id=access_id,
+        access_id=access.id,
         revoked_by=revoked_by,
         revoked_at=datetime.utcnow(),
     )

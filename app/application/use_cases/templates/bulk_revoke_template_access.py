@@ -23,7 +23,7 @@ def bulk_revoke_template_access(
             revoke_template_access(
                 session,
                 template_id=revocation["template_id"],
-                access_id=revocation["access_id"],
+                user_id=revocation["user_id"],
                 revoked_by=revoked_by,
             )
         )
