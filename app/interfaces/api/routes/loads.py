@@ -170,23 +170,6 @@ def list_loads(
     return [_load_to_read_model(load) for load in loads]
 
 
-@router.get("/loads/{load_id}", response_model=LoadRead)
-def read_load(
-    load_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
-) -> LoadRead:
-    """Obtiene la carga identificada por ``load_id`` si el usuario tiene acceso."""
-
-    try:
-        load = get_load_uc(db, load_id=load_id, current_user=current_user)
-    except PermissionError as exc:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    return _load_to_read_model(load)
-
-
 @router.get("/loads/details", response_model=list[LoadWithTemplateSummaryRead])
 def list_loads_with_template_details(
     template_id: int | None = Query(default=None, ge=1),
@@ -213,6 +196,23 @@ def list_loads_with_template_details(
         )
         for load, template, user in loads_with_templates
     ]
+
+
+@router.get("/loads/{load_id}", response_model=LoadRead)
+def read_load(
+    load_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+) -> LoadRead:
+    """Obtiene la carga identificada por ``load_id`` si el usuario tiene acceso."""
+
+    try:
+        load = get_load_uc(db, load_id=load_id, current_user=current_user)
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return _load_to_read_model(load)
 
 
 @router.get("/loads/{load_id}/report")
