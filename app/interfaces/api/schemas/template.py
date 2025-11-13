@@ -126,6 +126,27 @@ class TemplateStatusUpdate(BaseModel):
             extra = "forbid"
 
 
+class TemplateSummaryRead(BaseModel):
+    id: int
+    user_id: int
+    name: str
+    status: TemplateStatus
+    description: str | None
+    table_name: str
+    created_at: datetime | None
+    updated_at: datetime | None
+    is_active: bool
+    deleted: bool
+    deleted_by: int | None
+    deleted_at: datetime | None
+
+    if ConfigDict is not None:  # pragma: no branch - runtime configuration
+        model_config = ConfigDict(from_attributes=True)
+    else:  # pragma: no cover - compatibility path for pydantic v1
+        class Config:
+            orm_mode = True
+
+
 class TemplateRead(BaseModel):
     id: int
     user_id: int

@@ -9,7 +9,7 @@ try:  # Pydantic v2
 except ImportError:  # pragma: no cover - compatibility path for pydantic v1
     ConfigDict = None  # type: ignore[misc]
 
-from .template import TemplateRead
+from .template import TemplateRead, TemplateSummaryRead
 
 
 class LoadRead(BaseModel):
@@ -42,4 +42,14 @@ class LoadWithTemplateRead(BaseModel):
     template: TemplateRead
 
 
-__all__ = ["LoadRead", "LoadUploadResponse", "LoadWithTemplateRead"]
+class LoadWithTemplateSummaryRead(BaseModel):
+    load: LoadRead
+    template: TemplateSummaryRead
+
+
+__all__ = [
+    "LoadRead",
+    "LoadUploadResponse",
+    "LoadWithTemplateRead",
+    "LoadWithTemplateSummaryRead",
+]

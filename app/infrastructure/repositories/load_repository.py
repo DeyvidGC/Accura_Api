@@ -62,6 +62,48 @@ class LoadRepository:
             query = query.limit(limit)
         return [self._to_entity(model) for model in query.all()]
 
+    def list_with_templates(
+        self,
+        *,
+        user_id: int | None = None,
+        creator_id: int | None = None,
+        template_id: int | None = None,
+        skip: int = 0,
+        limit: int | None = None,
+    ) -> Sequence[tuple[Load, Template]]:
+        query = (
+            self.session.query(LoadModel)
+            .options(joinedload(LoadModel.template))
+            .join(TemplateModel, LoadModel.template_id == TemplateModel.id)
+            .filter(TemplateModel.deleted.is_(False))
+        )
+        if user_id is not None:
+            query = query.filter(LoadModel.user_id == user_id)
+        if creator_id is not None:
+            query = query.filter(
+                or_(
+                    LoadModel.user_id == creator_id,
+                    LoadModel.user.has(UserModel.created_by == creator_id),
+                )
+            )
+        if template_id is not None:
+            query = query.filter(LoadModel.template_id == template_id)
+        query = query.order_by(LoadModel.created_at.desc(), LoadModel.id.desc())
+        if skip:
+            query = query.offset(skip)
+        if limit is not None:
+            query = query.limit(limit)
+
+        pairs: list[tuple[Load, Template]] = []
+        for model in query.all():
+            template_model = model.template
+            if template_model is None:
+                continue
+            load = self._to_entity(model)
+            template = self._template_summary_to_entity(template_model)
+            pairs.append((load, template))
+        return pairs
+
     def get(self, load_id: int) -> Load | None:
         model = self.session.get(LoadModel, load_id)
         return self._to_entity(model) if model else None
@@ -152,6 +194,26 @@ class LoadRepository:
             model.created_at = load.created_at or datetime.utcnow()
         model.started_at = load.started_at
         model.finished_at = load.finished_at
+
+    @staticmethod
+    def _template_summary_to_entity(model: TemplateModel) -> Template:
+        return Template(
+            id=model.id,
+            user_id=model.user_id,
+            name=model.name,
+            status=model.status,
+            description=model.description,
+            table_name=model.table_name,
+            created_by=model.created_by,
+            created_at=model.created_at,
+            updated_by=model.updated_by,
+            updated_at=model.updated_at,
+            is_active=model.is_active,
+            deleted=model.deleted,
+            deleted_by=model.deleted_by,
+            deleted_at=model.deleted_at,
+            columns=[],
+        )
 
 
 __all__ = ["LoadRepository"]
