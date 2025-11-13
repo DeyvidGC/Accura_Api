@@ -7,6 +7,11 @@ from .publisher import (
     notification_publisher,
     serialize_notification,
 )
+from .realtime import (
+    RealtimeEventPublisher,
+    dispatch_realtime_event,
+    realtime_event_publisher,
+)
 
 __all__ = [
     "NotificationConnectionManager",
@@ -15,4 +20,7 @@ __all__ = [
     "notification_publisher",
     "dispatch_notification",
     "serialize_notification",
+    "RealtimeEventPublisher",
+    "realtime_event_publisher",
+    "dispatch_realtime_event",
 ]
