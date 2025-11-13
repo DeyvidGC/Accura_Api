@@ -27,6 +27,7 @@ class TemplateColumnRepository:
             .options(joinedload(TemplateColumnModel.rules))
             .filter(TemplateColumnModel.template_id == template_id)
             .filter(TemplateColumnModel.deleted.is_(False))
+            .order_by(TemplateColumnModel.id.asc())
         )
         return [self._to_entity(model) for model in query.all()]
 
