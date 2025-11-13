@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.application.use_cases.template_columns import (
     NewTemplateColumnData,
     NewTemplateColumnRuleData,
+    TemplateColumnReplacementData,
     create_template_column as create_template_column_uc,
     create_template_columns as create_template_columns_uc,
     delete_template_column as delete_template_column_uc,
