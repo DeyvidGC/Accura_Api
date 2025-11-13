@@ -43,6 +43,24 @@ class TemplateUserAccessRepository:
         model = self.session.get(TemplateUserAccessModel, access_id)
         return self._to_entity(model) if model else None
 
+    def get_by_template_and_user(
+        self,
+        *,
+        template_id: int,
+        user_id: int,
+    ) -> TemplateUserAccess | None:
+        model = (
+            self.session.query(TemplateUserAccessModel)
+            .filter(
+                TemplateUserAccessModel.template_id == template_id,
+                TemplateUserAccessModel.user_id == user_id,
+                TemplateUserAccessModel.revoked_at.is_(None),
+            )
+            .order_by(TemplateUserAccessModel.start_date.desc())
+            .first()
+        )
+        return self._to_entity(model) if model else None
+
     def get_active_access(
         self,
         *,

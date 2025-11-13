@@ -783,8 +783,17 @@ Las plantillas definen la estructura de los datos que se cargarán y las reglas 
     ```
 
 #### C.8.3 Revocar acceso
-- **Método y URL:** `DELETE /templates/{template_id}/access/{access_id}`
+- **Método y URL:** `POST /templates/access/revoke`
 - **Roles permitidos:** administradores.
+- **Cuerpo (JSON):**
+```json
+[
+  {
+    "template_id": 3,
+    "user_id": 8
+  }
+]
+```
 - **Respuesta 200 (éxito):**
 ```json
 {
