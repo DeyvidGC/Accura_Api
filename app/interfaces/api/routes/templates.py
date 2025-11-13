@@ -48,10 +48,11 @@ from app.interfaces.api.dependencies import (
 )
 from app.interfaces.api.schemas import (
     TemplateColumnBulkCreate,
+    TemplateColumnBulkUpdate,
     TemplateColumnCreate,
     TemplateColumnRead,
     TemplateColumnRule as TemplateColumnRuleSchema,
-    TemplateColumnUpdate,
+    TemplateColumnUpdateWithId,
     TemplateCreate,
     TemplateDuplicate,
     TemplateRead,
@@ -426,34 +427,50 @@ def read_template_column(
 
 
 @router.put(
-    "/{template_id}/columns/{column_id}", response_model=TemplateColumnRead
+    "/{template_id}/columns",
+    response_model=TemplateColumnRead | list[TemplateColumnRead],
 )
-def update_template_column(
+def update_template_columns(
     template_id: int,
-    column_id: int,
-    column_in: TemplateColumnUpdate,
+    column_in: TemplateColumnUpdateWithId
+    | list[TemplateColumnUpdateWithId]
+    | TemplateColumnBulkUpdate = Body(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
-) -> TemplateColumnRead:
-    """Actualiza la definición de una columna de plantilla."""
+) -> TemplateColumnRead | list[TemplateColumnRead]:
+    """Actualiza la definición de una o varias columnas de plantilla."""
 
-    if hasattr(column_in, "model_dump"):
-        update_data = column_in.model_dump(exclude_unset=True)
-    else:  # pragma: no cover - compatibility path for pydantic v1
-        update_data = column_in.dict(exclude_unset=True)
+    if isinstance(column_in, TemplateColumnUpdateWithId):
+        payloads = [column_in]
+        single_result = True
+    else:
+        if isinstance(column_in, TemplateColumnBulkUpdate):
+            incoming_columns = column_in.columns
+        else:
+            incoming_columns = column_in
+        payloads = list(incoming_columns)
+        single_result = False
 
     try:
-        column = update_template_column_uc(
-            db,
-            template_id=template_id,
-            column_id=column_id,
-            name=update_data.get("name"),
-            description=update_data.get("description"),
-            rules=_map_rule_payload(column_in.rules) if "rules" in update_data else None,
-            rules_provided="rules" in update_data,
-            is_active=update_data.get("is_active"),
-            updated_by=current_user.id,
-        )
+        updated_columns: list[TemplateColumn] = []
+        for payload in payloads:
+            if hasattr(payload, "model_dump"):
+                update_data = payload.model_dump(exclude_unset=True)
+            else:  # pragma: no cover - compatibility path for pydantic v1
+                update_data = payload.dict(exclude_unset=True)
+
+            column = update_template_column_uc(
+                db,
+                template_id=template_id,
+                column_id=update_data["id"],
+                name=update_data.get("name"),
+                description=update_data.get("description"),
+                rules=_map_rule_payload(payload.rules) if "rules" in update_data else None,
+                rules_provided="rules" in update_data,
+                is_active=update_data.get("is_active"),
+                updated_by=current_user.id,
+            )
+            updated_columns.append(column)
     except ValueError as exc:
         detail = str(exc)
         status_code = status.HTTP_400_BAD_REQUEST
@@ -461,7 +478,9 @@ def update_template_column(
             status_code = status.HTTP_404_NOT_FOUND
         raise HTTPException(status_code=status_code, detail=detail) from exc
 
-    return _column_to_read_model(column)
+    if single_result:
+        return _column_to_read_model(updated_columns[0])
+    return [_column_to_read_model(column) for column in updated_columns]
 
 
 @router.delete(
