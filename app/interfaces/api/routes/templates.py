@@ -33,6 +33,7 @@ from app.application.use_cases.templates import (
     duplicate_template as duplicate_template_uc,
     delete_template as delete_template_uc,
     get_template as get_template_uc,
+    get_template_detail as get_template_detail_uc,
     get_template_excel as get_template_excel_uc,
     list_template_access as list_template_access_uc,
     list_templates as list_templates_uc,
@@ -286,6 +287,29 @@ def read_template(
         template = get_template_uc(db, template_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return _template_to_read_model(template)
+
+
+@router.get("/{template_id}/detail", response_model=TemplateRead)
+def read_template_detail(
+    template_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+) -> TemplateRead:
+    """Obtiene los detalles completos de la plantilla para el usuario actual."""
+
+    try:
+        template = get_template_detail_uc(
+            db, template_id=template_id, requesting_user=current_user
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        if detail == "Plantilla no encontrada":
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail) from exc
+        if detail == "El usuario no tiene acceso a la plantilla":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail) from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail) from exc
+
     return _template_to_read_model(template)
 
 
