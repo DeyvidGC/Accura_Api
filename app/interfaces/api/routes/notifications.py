@@ -72,11 +72,33 @@ def mark_notifications_as_read(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+def _extract_token(websocket: WebSocket) -> str | None:
+    """Return the access token provided via query, header or cookie."""
+
+    token = websocket.query_params.get("token")
+    if token:
+        return token
+
+    authorization = websocket.headers.get("authorization")
+    if authorization:
+        parts = authorization.strip().split()
+        if len(parts) == 1:
+            return parts[0]
+        if len(parts) >= 2 and parts[0].lower() == "bearer":
+            return parts[1]
+
+    cookie_token = websocket.cookies.get("token") or websocket.cookies.get("access_token")
+    if cookie_token:
+        return cookie_token
+
+    return None
+
+
 @router.websocket("/ws")
 async def notifications_websocket(websocket: WebSocket) -> None:
     """Websocket endpoint that streams notifications to the authenticated user."""
 
-    token = websocket.query_params.get("token")
+    token = _extract_token(websocket)
     if not token:
         await websocket.close(code=1008)
         return
