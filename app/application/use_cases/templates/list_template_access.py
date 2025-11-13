@@ -24,7 +24,9 @@ def list_template_access(
     repository = TemplateUserAccessRepository(session)
     return list(
         repository.list_by_template(
-            template_id=template_id, include_inactive=include_inactive
+            template_id=template_id,
+            include_inactive=include_inactive,
+            include_scheduled=current_user.is_admin(),
         )
     )
 

@@ -42,10 +42,9 @@ def grant_template_access(
     normalized_end = _normalize_date(end_date, use_end_of_day=True)
     _validate_access_window(effective_start, normalized_end)
 
-    existing_access = access_repository.get_active_access(
-        user_id=user_id,
+    existing_access = access_repository.get_by_template_and_user(
         template_id=template_id,
-        reference_time=effective_start,
+        user_id=user_id,
     )
     if existing_access is not None:
         raise ValueError("El usuario ya tiene acceso activo a la plantilla")
