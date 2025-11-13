@@ -1,7 +1,7 @@
 """Schemas for template and template column endpoints."""
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, EmailStr, Field
 
@@ -20,6 +20,7 @@ class TemplateColumnRule(BaseModel):
         alias="header rule",
         serialization_alias="header rule",
     )
+    rule: dict[str, Any] | list[Any] | None = None
 
     if ConfigDict is not None:  # pragma: no branch - runtime configuration
         model_config = ConfigDict(populate_by_name=True, from_attributes=True)

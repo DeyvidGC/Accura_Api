@@ -2,6 +2,7 @@
 
 from collections.abc import Sequence
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import exists, func, or_
 from sqlalchemy.orm import Session, joinedload
@@ -11,9 +12,11 @@ from app.infrastructure.repositories.template_column_repository import (
     TemplateColumnRepository,
 )
 from app.infrastructure.models import (
+    RuleModel,
     TemplateColumnModel,
     TemplateModel,
     TemplateUserAccessModel,
+    template_column_rule_table,
 )
 
 
@@ -159,6 +162,28 @@ class TemplateRepository:
         if not include_deleted:
             query = query.filter(TemplateModel.deleted.is_(False))
         return query.filter_by(**filters).first()
+
+    def get_rule_payloads(self, template_id: int) -> dict[int, Any]:
+        rows = (
+            self.session.query(RuleModel.id, RuleModel.rule)
+            .join(
+                template_column_rule_table,
+                template_column_rule_table.c.rule_id == RuleModel.id,
+            )
+            .join(
+                TemplateColumnModel,
+                template_column_rule_table.c.template_column_id
+                == TemplateColumnModel.id,
+            )
+            .filter(TemplateColumnModel.template_id == template_id)
+            .filter(TemplateColumnModel.deleted.is_(False))
+            .filter(RuleModel.deleted.is_(False))
+            .all()
+        )
+        payloads: dict[int, Any] = {}
+        for rule_id, rule_payload in rows:
+            payloads[rule_id] = rule_payload
+        return payloads
 
     @staticmethod
     def _to_entity(model: TemplateModel) -> Template:

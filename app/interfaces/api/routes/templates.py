@@ -1,6 +1,8 @@
 """Rutas para administrar plantillas, sus columnas y accesos."""
 
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 from fastapi import (
     APIRouter,
@@ -33,6 +35,7 @@ from app.application.use_cases.templates import (
     duplicate_template as duplicate_template_uc,
     delete_template as delete_template_uc,
     get_template as get_template_uc,
+    get_template_detail as get_template_detail_uc,
     get_template_excel as get_template_excel_uc,
     list_template_access as list_template_access_uc,
     list_templates as list_templates_uc,
@@ -43,6 +46,7 @@ from app.application.use_cases.templates import (
 )
 from app.domain.entities import Template, TemplateColumn, TemplateUserAccess, User
 from app.infrastructure.database import get_db
+from app.infrastructure.repositories import TemplateRepository
 from app.interfaces.api.dependencies import (
     get_current_active_user,
     require_admin,
@@ -85,12 +89,18 @@ def _schedule_cleanup(background_tasks: BackgroundTasks, path: Path) -> None:
     background_tasks.add_task(_remove_file_safely, path)
 
 
-def _column_to_read_model(column: TemplateColumn) -> TemplateColumnRead:
+def _column_to_read_model(
+    column: TemplateColumn,
+    *,
+    rule_definitions: Mapping[int, Any] | None = None,
+) -> TemplateColumnRead:
     rules_payload: list[dict[str, object]] = []
     for rule in column.rules:
         entry: dict[str, object] = {"id": rule.id}
         if rule.headers:
             entry["header rule"] = list(rule.headers)
+        if rule_definitions and rule.id in rule_definitions:
+            entry["rule"] = rule_definitions[rule.id]
         rules_payload.append(entry)
 
     payload = {
@@ -111,6 +121,36 @@ def _column_to_read_model(column: TemplateColumn) -> TemplateColumnRead:
     if hasattr(TemplateColumnRead, "model_validate"):
         return TemplateColumnRead.model_validate(payload)
     return TemplateColumnRead(**payload)
+
+
+def _template_detail_to_read_model(
+    template: Template, rule_definitions: Mapping[int, Any]
+) -> TemplateRead:
+    columns = [
+        _column_to_read_model(column, rule_definitions=rule_definitions)
+        for column in template.columns
+    ]
+    columns_payload = [_dump_model(column) for column in columns]
+
+    payload = {
+        "id": template.id,
+        "user_id": template.user_id,
+        "name": template.name,
+        "status": template.status,
+        "description": template.description,
+        "table_name": template.table_name,
+        "created_at": template.created_at,
+        "updated_at": template.updated_at,
+        "is_active": template.is_active,
+        "deleted": template.deleted,
+        "deleted_by": template.deleted_by,
+        "deleted_at": template.deleted_at,
+        "columns": columns_payload,
+    }
+
+    if hasattr(TemplateRead, "model_validate"):
+        return TemplateRead.model_validate(payload)
+    return TemplateRead(**payload)
 
 
 def _map_rule_payload(
@@ -287,6 +327,31 @@ def read_template(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return _template_to_read_model(template)
+
+
+@router.get("/{template_id}/detail", response_model=TemplateRead)
+def read_template_detail(
+    template_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+) -> TemplateRead:
+    """Obtiene los detalles completos de la plantilla para el usuario actual."""
+
+    try:
+        template = get_template_detail_uc(
+            db, template_id=template_id, requesting_user=current_user
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        if detail == "Plantilla no encontrada":
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail) from exc
+        if detail == "El usuario no tiene acceso a la plantilla":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail) from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail) from exc
+
+    repository = TemplateRepository(db)
+    rule_definitions = repository.get_rule_payloads(template.id)
+    return _template_detail_to_read_model(template, rule_definitions)
 
 
 @router.put("/{template_id}", response_model=TemplateRead)
