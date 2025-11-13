@@ -13,6 +13,7 @@ from app.domain.entities import (
     LOAD_STATUS_VALIDATED_WITH_ERRORS,
     Load,
     Template,
+    User,
 )
 from app.infrastructure.models import (
     LoadModel,
@@ -21,6 +22,7 @@ from app.infrastructure.models import (
     UserModel,
 )
 from app.infrastructure.repositories.template_repository import TemplateRepository
+from app.infrastructure.repositories.user_repository import UserRepository
 
 _COMPLETED_STATUSES = (
     LOAD_STATUS_VALIDATED_SUCCESS,
@@ -70,10 +72,13 @@ class LoadRepository:
         template_id: int | None = None,
         skip: int = 0,
         limit: int | None = None,
-    ) -> Sequence[tuple[Load, Template]]:
+    ) -> Sequence[tuple[Load, Template, User]]:
         query = (
             self.session.query(LoadModel)
-            .options(joinedload(LoadModel.template))
+            .options(
+                joinedload(LoadModel.template),
+                joinedload(LoadModel.user).joinedload(UserModel.role),
+            )
             .join(TemplateModel, LoadModel.template_id == TemplateModel.id)
             .filter(TemplateModel.deleted.is_(False))
         )
@@ -94,14 +99,16 @@ class LoadRepository:
         if limit is not None:
             query = query.limit(limit)
 
-        pairs: list[tuple[Load, Template]] = []
+        pairs: list[tuple[Load, Template, User]] = []
         for model in query.all():
             template_model = model.template
-            if template_model is None:
+            user_model = model.user
+            if template_model is None or user_model is None:
                 continue
             load = self._to_entity(model)
             template = self._template_summary_to_entity(template_model)
-            pairs.append((load, template))
+            user = self._user_summary_to_entity(user_model)
+            pairs.append((load, template, user))
         return pairs
 
     def get(self, load_id: int) -> Load | None:
@@ -214,6 +221,10 @@ class LoadRepository:
             deleted_at=model.deleted_at,
             columns=[],
         )
+
+    @staticmethod
+    def _user_summary_to_entity(model: UserModel) -> User:
+        return UserRepository._to_entity(model)
 
 
 __all__ = ["LoadRepository"]

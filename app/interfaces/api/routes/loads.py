@@ -33,6 +33,7 @@ from app.interfaces.api.schemas import (
     LoadUploadResponse,
     LoadWithTemplateSummaryRead,
     TemplateSummaryRead,
+    UserSummaryRead,
 )
 
 router = APIRouter(tags=["loads"])
@@ -49,6 +50,12 @@ def _template_summary_to_read_model(template: Template) -> TemplateSummaryRead:
     if hasattr(TemplateSummaryRead, "model_validate"):
         return TemplateSummaryRead.model_validate(template)
     return TemplateSummaryRead.from_orm(template)
+
+
+def _user_summary_to_read_model(user: User) -> UserSummaryRead:
+    if hasattr(UserSummaryRead, "model_validate"):
+        return UserSummaryRead.model_validate(user)
+    return UserSummaryRead.from_orm(user)
 
 
 def _schedule_cleanup(background_tasks: BackgroundTasks, path: Path) -> None:
@@ -202,8 +209,9 @@ def list_loads_with_template_details(
         LoadWithTemplateSummaryRead(
             load=_load_to_read_model(load),
             template=_template_summary_to_read_model(template),
+            user=_user_summary_to_read_model(user),
         )
-        for load, template in loads_with_templates
+        for load, template, user in loads_with_templates
     ]
 
 

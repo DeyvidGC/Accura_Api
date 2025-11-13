@@ -10,6 +10,7 @@ except ImportError:  # pragma: no cover - compatibility path for pydantic v1
     ConfigDict = None  # type: ignore[misc]
 
 from .template import TemplateRead, TemplateSummaryRead
+from .user import UserSummaryRead
 
 
 class LoadRead(BaseModel):
@@ -45,6 +46,7 @@ class LoadWithTemplateRead(BaseModel):
 class LoadWithTemplateSummaryRead(BaseModel):
     load: LoadRead
     template: TemplateSummaryRead
+    user: UserSummaryRead
 
 
 __all__ = [

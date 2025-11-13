@@ -61,7 +61,7 @@ from .template_user_access import (
     TemplateUserAccessUpdateItem,
     TemplateUserAccessUpdateList,
 )
-from .user import RoleRead, UserCreate, UserRead, UserUpdate
+from .user import RoleRead, UserCreate, UserRead, UserSummaryRead, UserUpdate
 
 __all__ = [
     "AssistantMessageRequest",
@@ -117,5 +117,6 @@ __all__ = [
     "RoleRead",
     "UserCreate",
     "UserRead",
+    "UserSummaryRead",
     "UserUpdate",
 ]

@@ -326,7 +326,7 @@ def list_loads_with_templates(
     template_id: int | None = None,
     skip: int = 0,
     limit: int | None = 100,
-) -> Sequence[tuple[Load, Template]]:
+) -> Sequence[tuple[Load, Template, User]]:
     """Return loads and their templates visible to ``current_user``."""
 
     repository = LoadRepository(session)
