@@ -18,12 +18,13 @@ from sqlalchemy.orm import Session
 from app.application.use_cases.template_columns import (
     NewTemplateColumnData,
     NewTemplateColumnRuleData,
+    TemplateColumnReplacementData,
     create_template_column as create_template_column_uc,
     create_template_columns as create_template_columns_uc,
     delete_template_column as delete_template_column_uc,
     get_template_column as get_template_column_uc,
     list_template_columns as list_template_columns_uc,
-    update_template_column as update_template_column_uc,
+    replace_template_columns as replace_template_columns_uc,
 )
 from app.application.use_cases.templates import (
     bulk_grant_template_access as bulk_grant_template_access_uc,
@@ -504,25 +505,33 @@ def update_template_columns(
         single_result = False
 
     try:
-        updated_columns: list[TemplateColumn] = []
+        updates: list[TemplateColumnReplacementData] = []
         for payload in payloads:
             if hasattr(payload, "model_dump"):
                 update_data = payload.model_dump(exclude_unset=True)
             else:  # pragma: no cover - compatibility path for pydantic v1
                 update_data = payload.dict(exclude_unset=True)
 
-            column = update_template_column_uc(
-                db,
-                template_id=template_id,
-                column_id=update_data["id"],
-                name=update_data.get("name"),
-                description=update_data.get("description"),
-                rules=_map_rule_payload(payload.rules) if "rules" in update_data else None,
-                rules_provided="rules" in update_data,
-                is_active=update_data.get("is_active"),
-                updated_by=current_user.id,
+            updates.append(
+                TemplateColumnReplacementData(
+                    id=update_data["id"],
+                    name=update_data.get("name"),
+                    description=update_data.get("description"),
+                    rules=
+                        _map_rule_payload(payload.rules)
+                        if "rules" in update_data
+                        else None,
+                    rules_provided="rules" in update_data,
+                    is_active=update_data.get("is_active"),
+                )
             )
-            updated_columns.append(column)
+
+        updated_columns = replace_template_columns_uc(
+            db,
+            template_id=template_id,
+            updates=updates,
+            actor_id=current_user.id,
+        )
     except ValueError as exc:
         detail = str(exc)
         status_code = status.HTTP_400_BAD_REQUEST
