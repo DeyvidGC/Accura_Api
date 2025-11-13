@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from sqlalchemy.orm import Session
 
 from app.domain.entities import (
@@ -18,6 +19,20 @@ from app.domain.entities import (
 )
 from app.infrastructure.notifications import dispatch_notification
 from app.infrastructure.repositories import NotificationRepository, UserRepository
+
+try:
+    _NOTIFICATION_TIMEZONE = ZoneInfo("America/Lima")
+except ZoneInfoNotFoundError:  # pragma: no cover - fallback for missing tzdata
+    try:
+        _NOTIFICATION_TIMEZONE = ZoneInfo("America/Bogota")
+    except ZoneInfoNotFoundError:  # pragma: no cover - fallback for missing tzdata
+        _NOTIFICATION_TIMEZONE = timezone(timedelta(hours=-5))
+
+
+def _now_in_notification_timezone() -> datetime:
+    """Return the current time localized to the notifications timezone."""
+
+    return datetime.now(_NOTIFICATION_TIMEZONE)
 
 def _persist_notification(
     session: Session,
@@ -35,7 +50,7 @@ def _persist_notification(
         title=title,
         message=message,
         payload=payload or {},
-        created_at=datetime.utcnow(),
+        created_at=_now_in_notification_timezone(),
         read_at=None,
     )
     repository = NotificationRepository(session)
@@ -100,7 +115,7 @@ def _persist_or_update_load_notification(
     }
     repository = NotificationRepository(session)
     existing = repository.get_latest_by_user_and_load(user_id=user.id, load_id=load.id)
-    now = datetime.utcnow()
+    now = _now_in_notification_timezone()
     if existing is not None:
         updated = Notification(
             id=existing.id,
