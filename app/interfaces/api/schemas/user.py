@@ -64,3 +64,15 @@ class UserRead(BaseModel):
     else:  # pragma: no cover - compatibility path for pydantic v1
         class Config:
             orm_mode = True
+
+
+class UserSummaryRead(BaseModel):
+    id: int
+    name: str
+    email: EmailStr
+
+    if ConfigDict is not None:  # pragma: no branch - runtime configuration
+        model_config = ConfigDict(from_attributes=True)
+    else:  # pragma: no cover - compatibility path for pydantic v1
+        class Config:
+            orm_mode = True
