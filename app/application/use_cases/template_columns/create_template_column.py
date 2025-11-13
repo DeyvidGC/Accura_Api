@@ -38,6 +38,7 @@ class NewTemplateColumnData:
     name: str
     description: str | None = None
     rules: Sequence[NewTemplateColumnRuleData] | None = None
+    is_active: bool = True
 
 
 def _ensure_template_is_editable(template_repository: TemplateRepository, template_id: int):
@@ -86,7 +87,7 @@ def _build_column(
         created_at=now,
         updated_by=None,
         updated_at=None,
-        is_active=True,
+        is_active=payload.is_active,
         deleted=False,
         deleted_by=None,
         deleted_at=None,
