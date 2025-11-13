@@ -192,7 +192,6 @@ class TemplateColumnRepository:
             serialized.append(
                 {
                     "rule_id": assignment.id,
-                    "header_rule": entries,
                     "Header rule": entries,
                 }
             )
@@ -224,10 +223,7 @@ class TemplateColumnRepository:
                 except (TypeError, ValueError):
                     continue
                 headers = (
-                    entry.get("header_rule")
-                    or entry.get("Header rule")
-                    or entry.get("headers")
-                    or entry.get("header")
+                    entry.get("Header rule")
                 )
                 if isinstance(headers, str):
                     candidates = [headers]
