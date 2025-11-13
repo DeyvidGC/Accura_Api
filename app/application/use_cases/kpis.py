@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import and_, func
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
 from app.domain.entities import (
@@ -17,6 +17,7 @@ from app.infrastructure.models import (
     RuleModel,
     TemplateColumnModel,
     TemplateModel,
+    TemplateUserAccessModel,
     UserModel,
 )
 from app.infrastructure.models.template_column import template_column_rule_table
@@ -77,6 +78,18 @@ class KPIReport:
     validations: ValidationEffectiveness
     rules: RuleSummary
     history: HistorySnapshot
+
+
+@dataclass
+class ClientKPIReport:
+    """Aggregated KPI metrics tailored for end-user dashboards."""
+
+    available_templates: int
+    current_month_loads: int
+    success_rate: float
+    total_loads: int
+    successful_loads: int
+    successful_rows: int
 
 
 def _month_boundaries(reference: datetime) -> tuple[datetime, datetime]:
@@ -317,12 +330,135 @@ def get_kpis(
     )
 
 
+def get_client_kpis(
+    session: Session,
+    *,
+    user_id: int,
+    reference: datetime | None = None,
+) -> ClientKPIReport:
+    """Compute KPI metrics for a specific end-user."""
+
+    now = reference or datetime.utcnow()
+    current_start, next_month_start = _month_boundaries(now)
+
+    available_templates = (
+        session.query(func.count(func.distinct(TemplateModel.id)))
+        .join(
+            TemplateUserAccessModel,
+            TemplateUserAccessModel.template_id == TemplateModel.id,
+        )
+        .filter(
+            TemplateUserAccessModel.user_id == user_id,
+            TemplateUserAccessModel.revoked_at.is_(None),
+            TemplateUserAccessModel.start_date <= now,
+            or_(
+                TemplateUserAccessModel.end_date.is_(None),
+                TemplateUserAccessModel.end_date >= now,
+            ),
+            TemplateModel.deleted.is_(False),
+            TemplateModel.is_active.is_(True),
+        )
+        .scalar()
+        or 0
+    )
+
+    monthly_loads = (
+        session.query(func.count(LoadModel.id))
+        .filter(
+            LoadModel.user_id == user_id,
+            LoadModel.created_at >= current_start,
+            LoadModel.created_at < next_month_start,
+        )
+        .scalar()
+        or 0
+    )
+
+    monthly_successful_loads = (
+        session.query(func.count(LoadModel.id))
+        .filter(
+            LoadModel.user_id == user_id,
+            LoadModel.created_at >= current_start,
+            LoadModel.created_at < next_month_start,
+            LoadModel.status == LOAD_STATUS_VALIDATED_SUCCESS,
+        )
+        .scalar()
+        or 0
+    )
+
+    success_rate = (
+        round((monthly_successful_loads / monthly_loads) * 100, 2)
+        if monthly_loads
+        else 0.0
+    )
+
+    total_loads = (
+        session.query(func.count(LoadModel.id))
+        .filter(LoadModel.user_id == user_id)
+        .scalar()
+        or 0
+    )
+
+    successful_loads = (
+        session.query(func.count(LoadModel.id))
+        .filter(
+            LoadModel.user_id == user_id,
+            LoadModel.status == LOAD_STATUS_VALIDATED_SUCCESS,
+        )
+        .scalar()
+        or 0
+    )
+
+    completed_statuses = (
+        LOAD_STATUS_VALIDATED_SUCCESS,
+        LOAD_STATUS_VALIDATED_WITH_ERRORS,
+    )
+
+    monthly_rows_total = (
+        session.query(func.coalesce(func.sum(LoadModel.total_rows), 0))
+        .filter(
+            LoadModel.user_id == user_id,
+            LoadModel.finished_at.isnot(None),
+            LoadModel.finished_at >= current_start,
+            LoadModel.finished_at < next_month_start,
+            LoadModel.status.in_(completed_statuses),
+        )
+        .scalar()
+        or 0
+    )
+
+    monthly_error_rows = (
+        session.query(func.coalesce(func.sum(LoadModel.error_rows), 0))
+        .filter(
+            LoadModel.user_id == user_id,
+            LoadModel.finished_at.isnot(None),
+            LoadModel.finished_at >= current_start,
+            LoadModel.finished_at < next_month_start,
+            LoadModel.status.in_(completed_statuses),
+        )
+        .scalar()
+        or 0
+    )
+
+    successful_rows = max(int(monthly_rows_total) - int(monthly_error_rows), 0)
+
+    return ClientKPIReport(
+        available_templates=int(available_templates),
+        current_month_loads=int(monthly_loads),
+        success_rate=float(success_rate),
+        total_loads=int(total_loads),
+        successful_loads=int(successful_loads),
+        successful_rows=int(successful_rows),
+    )
+
+
 __all__ = [
     "KPIReport",
+    "ClientKPIReport",
     "MonthlyComparison",
     "TemplatePublicationSummary",
     "ValidationEffectiveness",
     "RuleSummary",
     "HistorySnapshot",
     "get_kpis",
+    "get_client_kpis",
 ]

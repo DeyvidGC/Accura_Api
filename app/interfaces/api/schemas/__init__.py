@@ -23,6 +23,7 @@ from .rule import (
     RuleUpdate,
 )
 from .kpi import (
+    ClientKPIReportRead,
     KPIReportRead,
     HistorySnapshotRead,
     MonthlyComparisonRead,
@@ -79,6 +80,7 @@ __all__ = [
     "RuleRead",
     "RuleUpdate",
     "KPIReportRead",
+    "ClientKPIReportRead",
     "HistorySnapshotRead",
     "MonthlyComparisonRead",
     "RuleSummaryRead",
