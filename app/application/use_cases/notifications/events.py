@@ -151,8 +151,8 @@ def notify_template_processing(
     """Inform the load owner that processing has started."""
 
     message = (
-        f"Tu carga '{load.file_name}' para la plantilla '{template.name}' está en proceso. "
-        f"Estado actual: {LOAD_STATUS_PROCESSING}."
+        f"La carga del archivo '{load.file_name}' para la plantilla "
+        f"'{template.name}' está siendo procesada. Estado actual: {LOAD_STATUS_PROCESSING}."
     )
     _persist_or_update_load_notification(
         session,
@@ -209,22 +209,22 @@ def notify_load_validated_success(
         event_type = "load.validated.success"
         title = "Validación completada"
         message_detail = (
-            "finalizó con validación exitosa"
-            f" (estado: {LOAD_STATUS_VALIDATED_SUCCESS})"
+            "se ha validado correctamente"
+            f". Estado final: {LOAD_STATUS_VALIDATED_SUCCESS}."
         )
     elif status == LOAD_STATUS_VALIDATED_WITH_ERRORS:
         event_type = "load.validated.errors"
         title = "Validación con observaciones"
         message_detail = (
-            "finalizó con observaciones de validación"
-            f" (estado: {LOAD_STATUS_VALIDATED_WITH_ERRORS})"
+            "se ha validado con observaciones"
+            f". Estado final: {LOAD_STATUS_VALIDATED_WITH_ERRORS}."
         )
     else:
         return
 
     message = (
-        f"Tu carga '{load.file_name}' para la plantilla '{template.name}' "
-        f"{message_detail}."
+        f"La carga del archivo '{load.file_name}' para la plantilla "
+        f"'{template.name}' {message_detail}"
     )
     payload = {
         "template_id": template.id,
@@ -252,8 +252,8 @@ def notify_load_validated_success(
         return
 
     admin_message = (
-        f"La carga '{load.file_name}' del usuario {user.name} para la plantilla "
-        f"'{template.name}' finalizó con validación exitosa."
+        f"La carga del archivo '{load.file_name}' del usuario {user.name} para la plantilla "
+        f"'{template.name}' se ha validado correctamente. Estado final: {status}."
     )
     admin_payload = {
         "template_id": template.id,
@@ -287,22 +287,25 @@ def notify_load_status_changed(
         event_type = "load.completed.success"
         title = "Validación exitosa"
         message = (
-            f"Tu carga '{load.file_name}' para la plantilla '{template.name}' "
-            f"finalizó exitosamente. Estado final: {LOAD_STATUS_VALIDATED_SUCCESS}."
+            f"La carga del archivo '{load.file_name}' para la plantilla "
+            f"'{template.name}' se ha validado correctamente. "
+            f"Estado final: {LOAD_STATUS_VALIDATED_SUCCESS}."
         )
     elif status == LOAD_STATUS_VALIDATED_WITH_ERRORS:
         event_type = "load.completed.errors"
         title = "Validación con observaciones"
         message = (
-            f"Tu carga '{load.file_name}' para la plantilla '{template.name}' "
-            f"finalizó con observaciones. Estado final: {LOAD_STATUS_VALIDATED_WITH_ERRORS}."
+            f"La carga del archivo '{load.file_name}' para la plantilla "
+            f"'{template.name}' se ha validado con observaciones. "
+            f"Estado final: {LOAD_STATUS_VALIDATED_WITH_ERRORS}."
         )
     elif status == LOAD_STATUS_FAILED:
         event_type = "load.completed.failed"
         title = "Validación fallida"
         message = (
-            f"Tu carga '{load.file_name}' para la plantilla '{template.name}' "
-            f"no pudo completarse. Estado final: {LOAD_STATUS_FAILED}."
+            f"La carga del archivo '{load.file_name}' para la plantilla "
+            f"'{template.name}' no se pudo validar. Estado final: {LOAD_STATUS_FAILED}. "
+            "Verifica que el archivo corresponda a la plantilla."
         )
     else:
         return
