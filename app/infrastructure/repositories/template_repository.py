@@ -187,11 +187,14 @@ class TemplateRepository:
 
     @staticmethod
     def _to_entity(model: TemplateModel) -> Template:
-        columns = [
-            TemplateRepository._column_to_entity(col)
-            for col in model.columns
-            if not col.deleted
-        ]
+        columns = sorted(
+            (
+                TemplateRepository._column_to_entity(col)
+                for col in model.columns
+                if not col.deleted
+            ),
+            key=lambda column: (column.id is None, column.id or 0),
+        )
         return Template(
             id=model.id,
             user_id=model.user_id,

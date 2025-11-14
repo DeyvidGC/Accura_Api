@@ -141,7 +141,12 @@ def create_template_table(table_name: str, columns: Sequence[TemplateColumn]) ->
     table_columns = [Column("id", Integer, primary_key=True, autoincrement=True)]
     reserved_names = {column.name for column in table_columns}
 
-    for column in columns:
+    sorted_columns = sorted(
+        columns,
+        key=lambda column: (column.id is None, column.id or 0),
+    )
+
+    for column in sorted_columns:
         safe_column_name = normalize_identifier(column.name, kind="column")
         if safe_column_name in reserved_names:
             msg = (
