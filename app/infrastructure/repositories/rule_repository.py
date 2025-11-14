@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from datetime import datetime
 
-from sqlalchemy import desc
+from sqlalchemy import desc, false
 from sqlalchemy.orm import Session
 
 from app.domain.entities import Rule
@@ -25,7 +25,7 @@ class RuleRepository:
         limit: int = 100,
         creator_id: int | None = None,
     ) -> Sequence[Rule]:
-        query = self.session.query(RuleModel).filter(RuleModel.deleted.is_(False))
+        query = self.session.query(RuleModel).filter(RuleModel.deleted == false())
         if creator_id is not None:
             query = query.filter(RuleModel.created_by == creator_id)
         query = query.order_by(desc(RuleModel.created_at), desc(RuleModel.id))
@@ -38,7 +38,7 @@ class RuleRepository:
     def list_recent(
         self, *, limit: int = 5, creator_id: int | None = None
     ) -> Sequence[Rule]:
-        query = self.session.query(RuleModel).filter(RuleModel.deleted.is_(False))
+        query = self.session.query(RuleModel).filter(RuleModel.deleted == false())
         if creator_id is not None:
             query = query.filter(RuleModel.created_by == creator_id)
         query = query.order_by(desc(RuleModel.id))
@@ -49,7 +49,7 @@ class RuleRepository:
     def list_by_creator(self, creator_id: int) -> Sequence[Rule]:
         query = (
             self.session.query(RuleModel)
-            .filter(RuleModel.deleted.is_(False))
+            .filter(RuleModel.deleted == false())
             .filter(RuleModel.created_by == creator_id)
             .order_by(desc(RuleModel.created_at))
         )
@@ -113,7 +113,7 @@ class RuleRepository:
     def _get_model(self, include_deleted: bool = False, **filters) -> RuleModel | None:
         query = self.session.query(RuleModel)
         if not include_deleted:
-            query = query.filter(RuleModel.deleted.is_(False))
+            query = query.filter(RuleModel.deleted == false())
         return query.filter_by(**filters).first()
 
     def find_conflicting_rule_name(
@@ -132,7 +132,7 @@ class RuleRepository:
             return None
 
         query = self.session.query(RuleModel.id, RuleModel.rule).filter(
-            RuleModel.deleted.is_(False)
+            RuleModel.deleted == false()
         )
         if created_by is None:
             query = query.filter(RuleModel.created_by.is_(None))

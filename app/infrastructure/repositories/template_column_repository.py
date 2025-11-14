@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 
+from sqlalchemy import false
 from sqlalchemy.orm import Session, joinedload
 
 from app.domain.entities import TemplateColumn, TemplateColumnRule
@@ -26,7 +27,7 @@ class TemplateColumnRepository:
             self.session.query(TemplateColumnModel)
             .options(joinedload(TemplateColumnModel.rules))
             .filter(TemplateColumnModel.template_id == template_id)
-            .filter(TemplateColumnModel.deleted.is_(False))
+            .filter(TemplateColumnModel.deleted == false())
             .order_by(TemplateColumnModel.id.asc())
         )
         return [self._to_entity(model) for model in query.all()]
@@ -128,7 +129,7 @@ class TemplateColumnRepository:
             joinedload(TemplateColumnModel.rules)
         )
         if not include_deleted:
-            query = query.filter(TemplateColumnModel.deleted.is_(False))
+            query = query.filter(TemplateColumnModel.deleted == false())
         return query.filter_by(**filters).first()
 
     def _apply_entity_to_model(
@@ -273,7 +274,7 @@ class TemplateColumnRepository:
             )
             .filter(
                 template_column_rule_table.c.rule_id == rule_id,
-                TemplateColumnModel.deleted.is_(False),
+                TemplateColumnModel.deleted == false(),
             )
         )
         return query.first() is not None
@@ -291,7 +292,7 @@ class TemplateColumnRepository:
             )
             .filter(
                 template_column_rule_table.c.rule_id == rule_id,
-                TemplateColumnModel.deleted.is_(False),
+                TemplateColumnModel.deleted == false(),
                 TemplateModel.status == "published",
             )
         )

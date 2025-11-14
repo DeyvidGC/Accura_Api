@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import and_, func, or_
+from sqlalchemy import and_, false, func, or_, true
 from sqlalchemy.orm import Session
 
 from app.domain.entities import (
@@ -126,11 +126,11 @@ def get_kpis(
 
     def _active_users_count(start: datetime, end: datetime) -> int:
         filters = [
-            UserModel.is_active.is_(True),
+            UserModel.is_active == true(),
             UserModel.last_login.isnot(None),
             UserModel.last_login >= start,
             UserModel.last_login < end,
-            UserModel.deleted.is_(False),
+            UserModel.deleted == false(),
         ]
         if admin_user_id is not None:
             filters.append(UserModel.created_by == admin_user_id)
@@ -145,7 +145,7 @@ def get_kpis(
     active_users_current = _active_users_count(current_start, next_month_start)
     active_users_previous = _active_users_count(previous_start, previous_end)
 
-    template_filters = [TemplateModel.deleted.is_(False)]
+    template_filters = [TemplateModel.deleted == false()]
     if admin_user_id is not None:
         template_filters.append(TemplateModel.created_by == admin_user_id)
 
@@ -168,13 +168,13 @@ def get_kpis(
 
     active_templates = (
         session.query(func.count(TemplateModel.id))
-        .filter(and_(TemplateModel.is_active.is_(True), *template_filters))
+        .filter(and_(TemplateModel.is_active == true(), *template_filters))
         .scalar()
     ) or 0
 
     unpublished_templates = max(int(total_templates) - int(published_templates), 0)
 
-    monthly_load_filters = [TemplateModel.deleted.is_(False)]
+    monthly_load_filters = [TemplateModel.deleted == false()]
     if admin_user_id is not None:
         monthly_load_filters.append(TemplateModel.created_by == admin_user_id)
 
@@ -231,7 +231,7 @@ def get_kpis(
         .scalar()
     ) or 0
 
-    rule_filters = [RuleModel.deleted.is_(False)]
+    rule_filters = [RuleModel.deleted == false()]
     if admin_user_id is not None:
         rule_filters.append(RuleModel.created_by == admin_user_id)
 
@@ -241,7 +241,7 @@ def get_kpis(
 
     active_rules = (
         session.query(func.count(RuleModel.id))
-        .filter(and_(RuleModel.is_active.is_(True), *rule_filters))
+        .filter(and_(RuleModel.is_active == true(), *rule_filters))
         .scalar()
     ) or 0
 
@@ -256,9 +256,9 @@ def get_kpis(
         .join(RuleModel, template_column_rule_table.c.rule_id == RuleModel.id)
         .join(TemplateModel, TemplateColumnModel.template_id == TemplateModel.id)
         .filter(
-            TemplateColumnModel.deleted.is_(False),
-            TemplateModel.deleted.is_(False),
-            RuleModel.deleted.is_(False),
+            TemplateColumnModel.deleted == false(),
+            TemplateModel.deleted == false(),
+            RuleModel.deleted == false(),
         )
     )
     if admin_user_id is not None:
@@ -268,7 +268,7 @@ def get_kpis(
 
     assigned_rules = assigned_rules_query.scalar() or 0
 
-    loads_filters = [TemplateModel.deleted.is_(False)]
+    loads_filters = [TemplateModel.deleted == false()]
     if admin_user_id is not None:
         loads_filters.append(TemplateModel.created_by == admin_user_id)
 
@@ -355,8 +355,8 @@ def get_client_kpis(
                 TemplateUserAccessModel.end_date.is_(None),
                 TemplateUserAccessModel.end_date >= now,
             ),
-            TemplateModel.deleted.is_(False),
-            TemplateModel.is_active.is_(True),
+            TemplateModel.deleted == false(),
+            TemplateModel.is_active == true(),
         )
         .scalar()
         or 0

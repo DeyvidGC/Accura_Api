@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Sequence
 
-from sqlalchemy import func, or_
+from sqlalchemy import false, func, or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.domain.entities import (
@@ -80,7 +80,7 @@ class LoadRepository:
                 joinedload(LoadModel.user).joinedload(UserModel.role),
             )
             .join(TemplateModel, LoadModel.template_id == TemplateModel.id)
-            .filter(TemplateModel.deleted.is_(False))
+            .filter(TemplateModel.deleted == false())
         )
         if user_id is not None:
             query = query.filter(LoadModel.user_id == user_id)

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import or_
+from sqlalchemy import false, or_
 from sqlalchemy.orm import Session
 
 from app.domain.entities import (
@@ -75,7 +75,7 @@ def get_recent_activity(
             RoleModel.alias.label("role_alias"),
         )
         .join(RoleModel, UserModel.role_id == RoleModel.id)
-        .filter(UserModel.deleted.is_(False))
+        .filter(UserModel.deleted == false())
     )
 
     if current_user.is_admin():
