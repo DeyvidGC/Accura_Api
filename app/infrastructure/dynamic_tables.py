@@ -51,7 +51,7 @@ _CANONICAL_TYPE_LABELS: dict[str, str] = {
     "lista": "Lista",
     "lista compleja": "Lista compleja",
     "lista completa": "Lista compleja",
-    "telefono": "Telefono",
+    "telefono": "Teléfono",
     "correo": "Correo",
     "fecha": "Fecha",
     "dependencia": "Dependencia",

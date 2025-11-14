@@ -1544,8 +1544,8 @@ def _validate_text_rule(
 ) -> tuple[str, list[str]]:
     text_value = str(value)
     errors: list[str] = []
-    min_length = _coerce_int(rule_config.get("Longitud minima"))
-    max_length = _coerce_int(rule_config.get("Longitud maxima"))
+    min_length = _coerce_int(rule_config.get("Longitud mínima"))
+    max_length = _coerce_int(rule_config.get("Longitud máxima"))
     length = len(text_value)
     if min_length is not None and max_length is not None:
         if length < min_length or length > max_length:
@@ -1597,8 +1597,8 @@ def _validate_document_rule(
 ) -> tuple[str, list[str]]:
     text_value = str(value)
     errors: list[str] = []
-    min_length = _coerce_int(rule_config.get("Longitud minima"))
-    max_length = _coerce_int(rule_config.get("Longitud maxima"))
+    min_length = _coerce_int(rule_config.get("Longitud mínima"))
+    max_length = _coerce_int(rule_config.get("Longitud máxima"))
     length = len(text_value)
     if min_length is not None and max_length is not None:
         if length < min_length or length > max_length:
@@ -2015,8 +2015,8 @@ def _validate_phone_rule(
             ]
         local_digits = digits[len(code_digits) :]
 
-    min_length = _coerce_int(rule_config.get("Longitud minima"))
-    max_length = _coerce_int(rule_config.get("Longitud maxima"))
+    min_length = _coerce_int(rule_config.get("Longitud mínima"))
+    max_length = _coerce_int(rule_config.get("Longitud máxima"))
     length = len(local_digits)
     if min_length is not None and max_length is not None:
         if length < min_length or length > max_length:

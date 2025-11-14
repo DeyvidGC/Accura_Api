@@ -273,16 +273,16 @@ Los usuarios poseen un **nombre** (máximo 50 caracteres), un **correo electrón
   },
   "Header": [
     "password",
-    "Longitud minima",
-    "Longitud maxima"
+    "Longitud mínima",
+    "Longitud máxima"
   ],
   "Regla": {
     "reglas especifica": [
       {
         "password": true,
         "Texto": {
-          "Longitud minima": 8,
-          "Longitud maxima": 128
+          "Longitud mínima": 8,
+          "Longitud máxima": 128
         }
       }
     ]
@@ -907,8 +907,8 @@ Las plantillas definen la estructura de los datos que se cargarán y las reglas 
     "inválido": "ventas.txt"
   },
   "Regla": {
-    "Longitud minima": 5,
-    "Longitud maxima": 255
+    "Longitud mínima": 5,
+    "Longitud máxima": 255
   }
 }
 ```
@@ -1314,7 +1314,7 @@ Las reglas permiten definir validaciones avanzadas para las columnas de las plan
 
 ### G.6 Regla de dependencia por tipo de documento
 - **Descripción:** ejemplo de una validación dependiente donde el formato del número de documento varía según el tipo seleccionado.
-- **Nota:** El arreglo `Header` de las reglas de dependencia debe incluir el campo dependiente y los encabezados propios de cada tipo configurado (por ejemplo, `Longitud minima` y `Longitud maxima` para reglas de documentos).
+- **Nota:** El arreglo `Header` de las reglas de dependencia debe listar únicamente las propiedades configurables que se muestran en la tabla (por ejemplo, `Tipo Documento`, `Longitud mínima` y `Longitud máxima` para reglas de documentos). El orden debe coincidir con el de la interfaz.
 - **Estructura:**
 ```json
 {
@@ -1335,30 +1335,30 @@ Las reglas permiten definir validaciones avanzadas para las columnas de las plan
   },
   "Header": [
     "Tipo Documento",
-    "Longitud minima",
-    "Longitud maxima"
+    "Longitud mínima",
+    "Longitud máxima"
   ],
   "Regla": {
     "reglas especifica": [
       {
         "Tipo Documento": "DNI",
         "Documento": {
-          "Longitud minima": 8,
-          "Longitud maxima": 8
+          "Longitud mínima": 8,
+          "Longitud máxima": 8
         }
       },
       {
         "Tipo Documento": "RUC",
         "Documento": {
-          "Longitud minima": 9,
-          "Longitud maxima": 12
+          "Longitud mínima": 9,
+          "Longitud máxima": 12
         }
       },
       {
         "Tipo Documento": "PASAPORTE",
         "Documento": {
-          "Longitud minima": 11,
-          "Longitud maxima": 11
+          "Longitud mínima": 11,
+          "Longitud máxima": 11
         }
       }
     ]
