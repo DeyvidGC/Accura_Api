@@ -7,7 +7,14 @@ from datetime import datetime
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from app.domain.entities import ActivityEvent, User
+from app.domain.entities import (
+    ActivityEvent,
+    User,
+    LOAD_STATUS_FAILED,
+    LOAD_STATUS_PROCESSING,
+    LOAD_STATUS_VALIDATED_SUCCESS,
+    LOAD_STATUS_VALIDATED_WITH_ERRORS,
+)
 from app.infrastructure.models import (
     LoadModel,
     TemplateModel,
@@ -33,6 +40,9 @@ def get_recent_activity(
         session.query(
             LoadModel.id,
             LoadModel.created_at,
+            LoadModel.started_at,
+            LoadModel.finished_at,
+            LoadModel.status,
             LoadModel.file_name,
             TemplateModel.id.label("template_id"),
             TemplateModel.name.label("template_name"),
@@ -111,16 +121,16 @@ def get_recent_activity(
     events: list[ActivityEvent] = []
 
     for row in load_rows:
-        created_at = _safe_datetime(row.created_at)
-        summary = (
-            f"{row.user_name} cargó '{row.file_name}' en la plantilla "
-            f"'{row.template_name}'."
+        created_at = _safe_datetime(row.created_at, row.started_at)
+        processing_summary = (
+            f"{row.user_name} inició la carga del archivo '{row.file_name}' "
+            f"en la plantilla '{row.template_name}'. Estado: {LOAD_STATUS_PROCESSING}."
         )
         events.append(
             ActivityEvent(
                 event_id=f"load-{row.id}",
                 event_type="load.uploaded",
-                summary=summary,
+                summary=processing_summary,
                 created_at=created_at,
                 metadata={
                     "load_id": row.id,
@@ -129,9 +139,65 @@ def get_recent_activity(
                     "user_id": row.user_id,
                     "user_name": row.user_name,
                     "file_name": row.file_name,
+                    "status": LOAD_STATUS_PROCESSING,
+                    "stage": "processing",
+                    "created_at": row.created_at,
+                    "started_at": row.started_at,
                 },
             )
         )
+
+        finished_at = _safe_datetime(row.finished_at) if row.finished_at else None
+        status = row.status
+        if finished_at and status:
+            if status == LOAD_STATUS_VALIDATED_SUCCESS:
+                event_type = "load.completed.success"
+                summary = (
+                    f"{row.user_name} completó la validación del archivo "
+                    f"'{row.file_name}' para la plantilla '{row.template_name}'. "
+                    f"Estado final: {status}."
+                )
+            elif status == LOAD_STATUS_VALIDATED_WITH_ERRORS:
+                event_type = "load.completed.errors"
+                summary = (
+                    f"{row.user_name} finalizó la validación del archivo "
+                    f"'{row.file_name}' para la plantilla '{row.template_name}' "
+                    f"con observaciones. Estado final: {status}."
+                )
+            elif status == LOAD_STATUS_FAILED:
+                event_type = "load.completed.failed"
+                summary = (
+                    f"{row.user_name} no pudo validar el archivo '{row.file_name}' "
+                    f"para la plantilla '{row.template_name}'. Estado final: {status}."
+                )
+            else:
+                event_type = "load.completed"
+                summary = (
+                    f"{row.user_name} finalizó la carga del archivo '{row.file_name}' "
+                    f"para la plantilla '{row.template_name}'. Estado final: {status}."
+                )
+
+            events.append(
+                ActivityEvent(
+                    event_id=f"load-{row.id}-completed",
+                    event_type=event_type,
+                    summary=summary,
+                    created_at=finished_at,
+                    metadata={
+                        "load_id": row.id,
+                        "template_id": row.template_id,
+                        "template_name": row.template_name,
+                        "user_id": row.user_id,
+                        "user_name": row.user_name,
+                        "file_name": row.file_name,
+                        "status": status,
+                        "stage": "completed",
+                        "created_at": row.created_at,
+                        "started_at": row.started_at,
+                        "finished_at": row.finished_at,
+                    },
+                )
+            )
 
     for row in access_rows:
         created_at = _safe_datetime(row.created_at, row.start_date)
