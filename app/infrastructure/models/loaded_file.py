@@ -24,8 +24,8 @@ class LoadedFileModel(Base):
     num_load = Column(Integer, nullable=False)
     created_user_id = Column(
         Integer,
-        ForeignKey("user.id", ondelete="CASCADE"),
-        nullable=False,
+        ForeignKey("user.id", ondelete="SET NULL"),
+        nullable=True,
         index=True,
     )
     created_at = Column(DateTime, nullable=False, server_default=func.now())
