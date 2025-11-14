@@ -1,6 +1,6 @@
 """Security helpers for hashing and token generation."""
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 import secrets
 import string
 
@@ -8,6 +8,7 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 
 from app.config import get_settings
+from app.utils import now_in_app_timezone
 
 # ---- Hashing con UNA SOLA LIBRERÍA (passlib) ----
 # Ajusta "rounds" según tu presupuesto de CPU. 310000 es una buena base hoy.
@@ -31,7 +32,7 @@ settings = get_settings()
 
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
-    expire = datetime.utcnow() + (
+    expire = now_in_app_timezone() + (
         expires_delta or timedelta(minutes=settings.access_token_expire_minutes)
     )
     return jwt.encode({**data, "exp": expire}, settings.secret_key, algorithm="HS256")

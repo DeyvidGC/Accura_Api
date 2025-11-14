@@ -57,6 +57,13 @@ class Settings(BaseSettings):
     azure_storage_container_name: str = Field(
         description="Azure Blob Storage container name where files will be stored",
     )
+    app_timezone: str = Field(
+        default="America/Bogota",
+        description=(
+            "IANA timezone identifier (or UTC offset such as 'UTC-05') used for"
+            " timestamps like created_at, updated_at and deleted_at."
+        ),
+    )
 
     if "SettingsConfigDict" in globals() and SettingsConfigDict is not None:
         model_config = SettingsConfigDict(

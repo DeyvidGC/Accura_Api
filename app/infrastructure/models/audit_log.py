@@ -1,11 +1,12 @@
 """SQLAlchemy model for audit records of template table operations."""
 
-from sqlalchemy import Column, DateTime, Integer, String, func
+from sqlalchemy import Column, DateTime, Integer, String
 from sqlalchemy.dialects.mssql import JSON as MSSQLJSON
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.types import JSON
 
 from app.infrastructure.database import Base
+from app.utils import now_in_app_timezone
 
 _audit_json_type = (
     JSONB().with_variant(JSON(), "sqlite").with_variant(MSSQLJSON(), "mssql")
@@ -22,9 +23,13 @@ class AuditLogModel(Base):
     columns = Column(_audit_json_type, nullable=False)
     operation = Column(String(50), nullable=False)
     created_by = Column(Integer, nullable=True)
-    created_at = Column(DateTime, nullable=False, server_default=func.now())
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, default=now_in_app_timezone
+    )
     updated_by = Column(Integer, nullable=True)
-    updated_at = Column(DateTime, nullable=True, onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), nullable=True, onupdate=now_in_app_timezone
+    )
 
 
 __all__ = ["AuditLogModel"]

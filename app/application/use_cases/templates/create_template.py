@@ -1,13 +1,12 @@
 """Use case for creating templates."""
 
-from datetime import datetime
-
 from sqlalchemy.orm import Session
 
 from app.domain.entities import Template
 from app.application.use_cases.notifications import notify_template_created
 from app.infrastructure.dynamic_tables import IdentifierError, ensure_identifier
 from app.infrastructure.repositories import TemplateRepository
+from app.utils import now_in_app_timezone
 
 DEFAULT_TEMPLATE_STATUS = "unpublished"
 
@@ -44,7 +43,7 @@ def create_template(
     if existing_by_name is not None:
         raise ValueError("El nombre de la plantilla ya está en uso")
 
-    now = datetime.utcnow()
+    now = now_in_app_timezone()
     template = Template(
         id=None,
         user_id=user_id,

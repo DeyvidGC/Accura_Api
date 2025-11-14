@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from datetime import datetime
 
 from sqlalchemy import desc, false
 from sqlalchemy.orm import Session
 
 from app.domain.entities import Rule
 from app.infrastructure.models import RuleModel
+from app.utils import ensure_app_timezone, now_in_app_timezone
 
 
 class RuleRepository:
@@ -85,7 +85,7 @@ class RuleRepository:
             raise ValueError(msg)
         if model.deleted:
             return
-        now = datetime.utcnow()
+        now = now_in_app_timezone()
         model.deleted = True
         model.deleted_by = deleted_by
         model.deleted_at = now
@@ -101,13 +101,13 @@ class RuleRepository:
             id=model.id,
             rule=model.rule,
             created_by=model.created_by,
-            created_at=model.created_at,
+            created_at=ensure_app_timezone(model.created_at),
             updated_by=model.updated_by,
-            updated_at=model.updated_at,
+            updated_at=ensure_app_timezone(model.updated_at),
             is_active=model.is_active,
             deleted=model.deleted,
             deleted_by=model.deleted_by,
-            deleted_at=model.deleted_at,
+            deleted_at=ensure_app_timezone(model.deleted_at),
         )
 
     def _get_model(self, include_deleted: bool = False, **filters) -> RuleModel | None:
@@ -152,13 +152,13 @@ class RuleRepository:
         model.rule = rule.rule
         model.created_by = rule.created_by
         if rule.created_at is not None:
-            model.created_at = rule.created_at
+            model.created_at = ensure_app_timezone(rule.created_at)
         model.updated_by = rule.updated_by
-        model.updated_at = rule.updated_at
+        model.updated_at = ensure_app_timezone(rule.updated_at)
         model.is_active = rule.is_active
         model.deleted = rule.deleted
         model.deleted_by = rule.deleted_by
-        model.deleted_at = rule.deleted_at
+        model.deleted_at = ensure_app_timezone(rule.deleted_at)
 
     @staticmethod
     def _extract_rule_names(rule_data) -> list[str]:

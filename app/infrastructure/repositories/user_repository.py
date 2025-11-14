@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import datetime
 
 from sqlalchemy import false
 from sqlalchemy.orm import Session, joinedload
 
 from app.domain.entities import Role, User
 from app.infrastructure.models import RoleModel, UserModel
+from app.utils import ensure_app_timezone, now_in_app_timezone
 
 
 class UserRepository:
@@ -79,7 +79,7 @@ class UserRepository:
         if model.deleted:
             return
 
-        now = datetime.utcnow()
+        now = now_in_app_timezone()
         # Preserve the existing password reset requirement flag when deleting the user.
         original_must_change_password = model.must_change_password
         model.deleted = True
@@ -126,15 +126,15 @@ class UserRepository:
             email=model.email,
             password=model.password,
             must_change_password=model.must_change_password,
-            last_login=model.last_login,
+            last_login=ensure_app_timezone(model.last_login),
             created_by=model.created_by,
-            created_at=model.created_at,
+            created_at=ensure_app_timezone(model.created_at),
             updated_by=model.updated_by,
-            updated_at=model.updated_at,
+            updated_at=ensure_app_timezone(model.updated_at),
             is_active=model.is_active,
             deleted=model.deleted,
             deleted_by=model.deleted_by,
-            deleted_at=model.deleted_at,
+            deleted_at=ensure_app_timezone(model.deleted_at),
         )
 
     def _get_model(self, include_deleted: bool = False, **filters) -> UserModel | None:
@@ -149,20 +149,22 @@ class UserRepository:
     ) -> None:
         if include_creation_fields:
             model.created_by = user.created_by
-            model.created_at = user.created_at
+            model.created_at = (
+                ensure_app_timezone(user.created_at) or now_in_app_timezone()
+            )
         model.role_id = user.role.id
         model.name = user.name
         model.email = user.email
         model.password = user.password
         model.must_change_password = user.must_change_password
-        model.last_login = user.last_login
+        model.last_login = ensure_app_timezone(user.last_login)
         if not include_creation_fields:
             model.updated_by = user.updated_by
-            model.updated_at = user.updated_at
+            model.updated_at = ensure_app_timezone(user.updated_at)
         model.is_active = user.is_active
         model.deleted = user.deleted
         model.deleted_by = user.deleted_by
-        model.deleted_at = user.deleted_at
+        model.deleted_at = ensure_app_timezone(user.deleted_at)
 
     @staticmethod
     def _role_to_entity(model_role) -> Role:

@@ -1,7 +1,5 @@
 """Use case for retrieving the full template details for a user."""
 
-from datetime import datetime
-
 from sqlalchemy.orm import Session
 
 from app.domain.entities import Template, User
@@ -9,6 +7,7 @@ from app.infrastructure.repositories import (
     TemplateRepository,
     TemplateUserAccessRepository,
 )
+from app.utils import now_in_app_timezone
 
 
 def get_template_detail(
@@ -29,7 +28,7 @@ def get_template_detail(
         access = access_repository.get_active_access(
             user_id=requesting_user.id,
             template_id=template_id,
-            reference_time=datetime.utcnow(),
+            reference_time=now_in_app_timezone(),
         )
         if access is None:
             raise ValueError("El usuario no tiene acceso a la plantilla")

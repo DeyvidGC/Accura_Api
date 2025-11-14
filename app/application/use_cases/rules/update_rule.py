@@ -1,13 +1,13 @@
 """Use case for updating validation rules."""
 
 from dataclasses import replace
-from datetime import datetime
 from typing import Any
 
 from sqlalchemy.orm import Session
 
 from app.domain.entities import Rule
 from app.infrastructure.repositories import RuleRepository, TemplateColumnRepository
+from app.utils import now_in_app_timezone
 from .validators import ensure_unique_rule_names
 
 
@@ -46,7 +46,7 @@ def update_rule(
         rule=new_rule,
         is_active=is_active if is_active is not None else current.is_active,
         updated_by=updated_by if updated_by is not None else current.updated_by,
-        updated_at=datetime.utcnow(),
+        updated_at=now_in_app_timezone(),
     )
 
     return repository.update(updated_rule)

@@ -16,7 +16,11 @@ _RULE_TYPES_REQUIRING_HEADER_FIELD = {"lista compleja"}
 _RULE_TYPES_REQUIRING_COLUMN_HEADER = {"lista compleja"}
 _RULE_TYPES_WITH_REQUIRED_HEADERS = {
     "lista compleja",
-    "dependencia",
+    "validacion conjunta",
+    "duplicados",
+}
+_HEADER_ENFORCEMENT_RULE_TYPES = {
+    "lista compleja",
     "validacion conjunta",
     "duplicados",
 }
@@ -379,7 +383,7 @@ def _validate_column_headers_for_rule(
     definitions = _iter_rule_definitions(rule_payload)
     allows_column_header = False
     requires_column_header = False
-    skip_header_enforcement = False
+    skip_header_enforcement = True
     dependency_rule_present = False
     column_type = _normalize_type_label(column.data_type)
     header_rules_by_type: dict[str, list[str]] = {}
@@ -390,6 +394,8 @@ def _validate_column_headers_for_rule(
         header_rule_values = _extract_rule_headers(definition, "Header rule")
         if not header_rule_values:
             header_rule_values = _infer_header_rule(definition)
+        if rule_type in _HEADER_ENFORCEMENT_RULE_TYPES:
+            skip_header_enforcement = False
         if header_rule_values:
             allows_column_header = True
             if rule_type in _RULE_TYPES_WITH_REQUIRED_HEADERS:
@@ -413,7 +419,6 @@ def _validate_column_headers_for_rule(
             continue
         if rule_type == "dependencia":
             allows_column_header = True
-            requires_column_header = True
             dependency_rule_present = True
             continue
         if rule_type == "validacion conjunta":

@@ -1,7 +1,5 @@
 """Use case to duplicate an existing template."""
 
-from datetime import datetime
-
 from sqlalchemy.orm import Session
 
 from app.application.use_cases.template_columns.validators import (
@@ -14,6 +12,7 @@ from app.infrastructure.repositories import (
     TemplateColumnRepository,
     TemplateRepository,
 )
+from app.utils import now_in_app_timezone
 
 
 def duplicate_template(
@@ -46,7 +45,7 @@ def duplicate_template(
 
     rule_repository = RuleRepository(session)
     column_repository = TemplateColumnRepository(session)
-    now = datetime.utcnow()
+    now = now_in_app_timezone()
     new_columns: list[TemplateColumn] = []
     for column in source_template.columns:
         new_columns.append(

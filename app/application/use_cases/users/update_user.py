@@ -1,13 +1,13 @@
 """Use case for updating user information."""
 
 from dataclasses import replace
-from datetime import datetime
 
 from sqlalchemy.orm import Session
 
 from app.domain.entities import User
 from app.infrastructure.repositories import RoleRepository, UserRepository
 from app.infrastructure.security import get_password_hash
+from app.utils import now_in_app_timezone
 from .validators import ensure_valid_gmail
 
 
@@ -65,7 +65,7 @@ def update_user(
         ),
         is_active=is_active if is_active is not None else current_user.is_active,
         updated_by=updated_by if updated_by is not None else current_user.updated_by,
-        updated_at=datetime.utcnow(),
+        updated_at=now_in_app_timezone(),
         deleted=current_user.deleted,
         deleted_by=current_user.deleted_by,
         deleted_at=current_user.deleted_at,

@@ -1,7 +1,6 @@
 """Use case for updating templates."""
 
 from dataclasses import replace
-from datetime import datetime
 
 from sqlalchemy.orm import Session
 
@@ -26,6 +25,7 @@ from app.infrastructure.repositories import (
     RuleRepository,
     TemplateRepository,
 )
+from app.utils import now_in_app_timezone
 
 ALLOWED_STATUSES = {"unpublished", "published"}
 
@@ -115,7 +115,7 @@ def update_template(
         table_name=new_table_name,
         is_active=is_active if is_active is not None else current.is_active,
         updated_by=updated_by if updated_by is not None else current.updated_by,
-        updated_at=datetime.utcnow(),
+        updated_at=now_in_app_timezone(),
     )
 
     saved_template = repository.update(updated_template)
@@ -141,7 +141,7 @@ def update_template(
                     columns=[column.name for column in current.columns],
                     operation="eliminacion",
                     created_by=updated_template.updated_by,
-                    created_at=datetime.utcnow(),
+                    created_at=now_in_app_timezone(),
                     updated_by=None,
                     updated_at=None,
                 )
@@ -167,7 +167,7 @@ def update_template(
                 table_name=saved_template.table_name,
             )
             description = saved_template.description
-            now = datetime.utcnow()
+            now = now_in_app_timezone()
             if existing_digital_file is None:
                 digital_file_repository.create(
                     DigitalFile(
@@ -177,7 +177,7 @@ def update_template(
                         description=description,
                         path=excel_info.blob_path,
                         created_by=updated_template.updated_by,
-                        created_at=now,
+                    created_at=now,
                         updated_by=None,
                         updated_at=None,
                     )
@@ -203,7 +203,7 @@ def update_template(
                     columns=[column.name for column in saved_template.columns],
                     operation=operation,
                     created_by=updated_template.updated_by,
-                    created_at=datetime.utcnow(),
+                    created_at=now_in_app_timezone(),
                     updated_by=None,
                     updated_at=None,
                 )

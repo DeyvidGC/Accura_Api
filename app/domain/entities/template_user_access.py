@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
+from app.utils import ensure_app_timezone, now_in_app_timezone
+
 
 @dataclass
 class TemplateUserAccess:
@@ -25,11 +27,14 @@ class TemplateUserAccess:
 
         if self.revoked_at is not None:
             return False
-        if reference_time is None:
-            reference_time = datetime.utcnow()
-        if reference_time < self.start_date:
+        current = ensure_app_timezone(reference_time) or now_in_app_timezone()
+        start = ensure_app_timezone(self.start_date)
+        if start is None:
             return False
-        if self.end_date is not None and reference_time > self.end_date:
+        if current < start:
+            return False
+        end = ensure_app_timezone(self.end_date)
+        if end is not None and current > end:
             return False
         return True
 

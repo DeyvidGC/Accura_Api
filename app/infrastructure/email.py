@@ -54,7 +54,7 @@ def _extract_sendgrid_error_details(body: Any) -> str | None:
                 return "; ".join(messages)
         # Fall back to a JSON string for unrecognised payloads
         try:
-            return json.dumps(parsed)
+            return json.dumps(parsed, ensure_ascii=False)
         except (TypeError, ValueError):
             return None
 

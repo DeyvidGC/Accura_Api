@@ -1,7 +1,5 @@
 """Use case for deleting templates."""
 
-from datetime import datetime
-
 from sqlalchemy.orm import Session
 
 from app.domain.entities import AuditLog
@@ -12,6 +10,7 @@ from app.infrastructure.repositories import (
     DigitalFileRepository,
     TemplateRepository,
 )
+from app.utils import now_in_app_timezone
 
 
 def delete_template(
@@ -47,7 +46,7 @@ def delete_template(
                 columns=[column.name for column in template.columns],
                 operation="eliminacion",
                 created_by=deleted_by,
-                created_at=datetime.utcnow(),
+                created_at=now_in_app_timezone(),
                 updated_by=None,
                 updated_at=None,
             )

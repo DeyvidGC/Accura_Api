@@ -1,7 +1,6 @@
 """Persistence layer for templates."""
 
 from collections.abc import Sequence
-from datetime import datetime
 from typing import Any
 
 from sqlalchemy import exists, false, func, or_
@@ -18,6 +17,7 @@ from app.infrastructure.models import (
     TemplateUserAccessModel,
     template_column_rule_table,
 )
+from app.utils import ensure_app_timezone, now_in_app_timezone
 
 
 class TemplateRepository:
@@ -47,7 +47,7 @@ class TemplateRepository:
         if creator_id is not None:
             query = query.filter(TemplateModel.created_by == creator_id)
         if user_id is not None:
-            now = datetime.utcnow()
+            now = now_in_app_timezone()
             access_exists = (
                 self.session.query(TemplateUserAccessModel.id)
                 .filter(TemplateUserAccessModel.template_id == TemplateModel.id)
@@ -145,7 +145,7 @@ class TemplateRepository:
             raise ValueError(msg)
         if model.deleted:
             return
-        now = datetime.utcnow()
+        now = now_in_app_timezone()
         model.deleted = True
         model.deleted_by = deleted_by
         model.deleted_at = now
@@ -203,13 +203,13 @@ class TemplateRepository:
             description=model.description,
             table_name=model.table_name,
             created_by=model.created_by,
-            created_at=model.created_at,
+            created_at=ensure_app_timezone(model.created_at),
             updated_by=model.updated_by,
-            updated_at=model.updated_at,
+            updated_at=ensure_app_timezone(model.updated_at),
             is_active=model.is_active,
             deleted=model.deleted,
             deleted_by=model.deleted_by,
-            deleted_at=model.deleted_at,
+            deleted_at=ensure_app_timezone(model.deleted_at),
             columns=columns,
         )
 
@@ -235,13 +235,13 @@ class TemplateRepository:
             description=model.description,
             data_type=model.data_type,
             created_by=model.created_by,
-            created_at=model.created_at,
+            created_at=ensure_app_timezone(model.created_at),
             updated_by=model.updated_by,
-            updated_at=model.updated_at,
+            updated_at=ensure_app_timezone(model.updated_at),
             is_active=model.is_active,
             deleted=model.deleted,
             deleted_by=model.deleted_by,
-            deleted_at=model.deleted_at,
+            deleted_at=ensure_app_timezone(model.deleted_at),
         )
 
     @staticmethod
@@ -253,7 +253,9 @@ class TemplateRepository:
     ) -> None:
         if include_creation_fields:
             model.created_by = template.created_by
-            model.created_at = template.created_at
+            model.created_at = (
+                ensure_app_timezone(template.created_at) or now_in_app_timezone()
+            )
             model.updated_by = None
             model.updated_at = None
         model.user_id = template.user_id
@@ -263,11 +265,11 @@ class TemplateRepository:
         model.table_name = template.table_name
         if not include_creation_fields:
             model.updated_by = template.updated_by
-            model.updated_at = template.updated_at
+            model.updated_at = ensure_app_timezone(template.updated_at)
         model.is_active = template.is_active
         model.deleted = template.deleted
         model.deleted_by = template.deleted_by
-        model.deleted_at = template.deleted_at
+        model.deleted_at = ensure_app_timezone(template.deleted_at)
 
     @staticmethod
     def _relationship_loaded(model: TemplateModel) -> bool:

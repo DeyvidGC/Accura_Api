@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime
 import re
 import unicodedata
 from typing import Any
@@ -18,6 +17,7 @@ from app.infrastructure.repositories import (
     TemplateColumnRepository,
     TemplateRepository,
 )
+from app.utils import now_in_app_timezone
 
 from .naming import derive_column_identifier, normalize_column_display_name
 from .validators import ensure_rule_header_dependencies
@@ -71,7 +71,7 @@ def _build_column(
     forbidden_names.add(normalized_key)
     forbidden_identifiers.add(identifier)
 
-    now = datetime.utcnow()
+    now = now_in_app_timezone()
     assignments, normalized_type = _prepare_rule_assignments(
         rule_repository, payload.rules
     )

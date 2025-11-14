@@ -1,11 +1,10 @@
 """Persistence helpers for digital files."""
 
-from datetime import datetime
-
 from sqlalchemy.orm import Session
 
 from app.domain.entities import DigitalFile
 from app.infrastructure.models import DigitalFileModel
+from app.utils import ensure_app_timezone, now_in_app_timezone
 
 
 class DigitalFileRepository:
@@ -78,9 +77,9 @@ class DigitalFileRepository:
             description=model.description,
             path=model.path,
             created_by=model.created_by,
-            created_at=model.created_at,
+            created_at=ensure_app_timezone(model.created_at),
             updated_by=model.updated_by,
-            updated_at=model.updated_at,
+            updated_at=ensure_app_timezone(model.updated_at),
         )
 
     @staticmethod
@@ -93,15 +92,19 @@ class DigitalFileRepository:
         model.template_id = digital_file.template_id
         if include_creation_fields:
             model.created_by = digital_file.created_by
-            model.created_at = digital_file.created_at or datetime.utcnow()
+            model.created_at = (
+                ensure_app_timezone(digital_file.created_at) or now_in_app_timezone()
+            )
             model.updated_by = digital_file.updated_by
-            model.updated_at = digital_file.updated_at
+            model.updated_at = ensure_app_timezone(digital_file.updated_at)
         model.name = digital_file.name
         model.description = digital_file.description
         model.path = digital_file.path
         if not include_creation_fields:
             model.updated_by = digital_file.updated_by
-            model.updated_at = digital_file.updated_at or datetime.utcnow()
+            model.updated_at = (
+                ensure_app_timezone(digital_file.updated_at) or now_in_app_timezone()
+            )
 
 
 __all__ = ["DigitalFileRepository"]

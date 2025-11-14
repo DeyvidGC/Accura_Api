@@ -1,9 +1,10 @@
 """SQLAlchemy model for user access to templates."""
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, func
+from sqlalchemy import Column, DateTime, ForeignKey, Integer
 from sqlalchemy.orm import relationship
 
 from app.infrastructure.database import Base
+from app.utils import now_in_app_timezone
 
 
 class TemplateUserAccessModel(Base):
@@ -24,12 +25,18 @@ class TemplateUserAccessModel(Base):
         nullable=False,
         index=True,
     )
-    start_date = Column(DateTime, nullable=False, default=func.now())
-    end_date = Column(DateTime, nullable=True)
-    revoked_at = Column(DateTime, nullable=True)
+    start_date = Column(
+        DateTime(timezone=True), nullable=False, default=now_in_app_timezone
+    )
+    end_date = Column(DateTime(timezone=True), nullable=True)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
     revoked_by = Column(Integer, ForeignKey("user.id"), nullable=True)
-    created_at = Column(DateTime, nullable=False, server_default=func.now())
-    updated_at = Column(DateTime, nullable=True, onupdate=func.now())
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, default=now_in_app_timezone
+    )
+    updated_at = Column(
+        DateTime(timezone=True), nullable=True, onupdate=now_in_app_timezone
+    )
 
     template = relationship(
         "TemplateModel",
