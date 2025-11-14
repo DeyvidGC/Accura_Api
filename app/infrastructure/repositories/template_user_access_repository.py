@@ -8,11 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.domain.entities import TemplateUserAccess
 from app.infrastructure.models import TemplateUserAccessModel
-from app.utils import (
-    ensure_app_naive_datetime,
-    ensure_app_timezone,
-    now_in_app_timezone,
-)
+from app.utils import ensure_app_naive_datetime, now_in_app_timezone
 
 
 class TemplateUserAccessRepository:
@@ -166,12 +162,12 @@ class TemplateUserAccessRepository:
             id=model.id,
             template_id=model.template_id,
             user_id=model.user_id,
-            start_date=ensure_app_timezone(model.start_date),
-            end_date=ensure_app_timezone(model.end_date),
-            revoked_at=ensure_app_timezone(model.revoked_at),
+            start_date=ensure_app_naive_datetime(model.start_date),
+            end_date=ensure_app_naive_datetime(model.end_date),
+            revoked_at=ensure_app_naive_datetime(model.revoked_at),
             revoked_by=model.revoked_by,
-            created_at=ensure_app_timezone(model.created_at),
-            updated_at=ensure_app_timezone(model.updated_at),
+            created_at=ensure_app_naive_datetime(model.created_at),
+            updated_at=ensure_app_naive_datetime(model.updated_at),
         )
 
     @staticmethod

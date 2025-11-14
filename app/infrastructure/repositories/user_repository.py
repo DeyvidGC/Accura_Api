@@ -9,11 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.domain.entities import Role, User
 from app.infrastructure.models import RoleModel, UserModel
-from app.utils import (
-    ensure_app_naive_datetime,
-    ensure_app_timezone,
-    now_in_app_timezone,
-)
+from app.utils import ensure_app_naive_datetime, now_in_app_timezone
 
 
 class UserRepository:
@@ -130,15 +126,15 @@ class UserRepository:
             email=model.email,
             password=model.password,
             must_change_password=model.must_change_password,
-            last_login=ensure_app_timezone(model.last_login),
+            last_login=ensure_app_naive_datetime(model.last_login),
             created_by=model.created_by,
-            created_at=ensure_app_timezone(model.created_at),
+            created_at=ensure_app_naive_datetime(model.created_at),
             updated_by=model.updated_by,
-            updated_at=ensure_app_timezone(model.updated_at),
+            updated_at=ensure_app_naive_datetime(model.updated_at),
             is_active=model.is_active,
             deleted=model.deleted,
             deleted_by=model.deleted_by,
-            deleted_at=ensure_app_timezone(model.deleted_at),
+            deleted_at=ensure_app_naive_datetime(model.deleted_at),
         )
 
     def _get_model(self, include_deleted: bool = False, **filters) -> UserModel | None:

@@ -9,11 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.domain.entities import LoadedFile
 from app.infrastructure.models import LoadedFileModel
-from app.utils import (
-    ensure_app_naive_datetime,
-    ensure_app_timezone,
-    now_in_app_timezone,
-)
+from app.utils import ensure_app_naive_datetime, now_in_app_timezone
 
 
 class LoadedFileRepository:
@@ -57,7 +53,7 @@ class LoadedFileRepository:
             size_bytes=model.size_bytes,
             num_load=model.num_load,
             created_user_id=model.created_user_id,
-            created_at=ensure_app_timezone(model.created_at),
+            created_at=ensure_app_naive_datetime(model.created_at),
         )
 
     @staticmethod

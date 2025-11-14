@@ -9,11 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.domain.entities import Notification
 from app.infrastructure.models import NotificationModel
-from app.utils import (
-    ensure_app_naive_datetime,
-    ensure_app_timezone,
-    now_in_app_timezone,
-)
+from app.utils import ensure_app_naive_datetime, now_in_app_timezone
 
 
 class NotificationRepository:
@@ -138,8 +134,8 @@ class NotificationRepository:
             title=model.title,
             message=model.message,
             payload=model.payload or {},
-            created_at=ensure_app_timezone(model.created_at),
-            read_at=ensure_app_timezone(model.read_at),
+            created_at=ensure_app_naive_datetime(model.created_at),
+            read_at=ensure_app_naive_datetime(model.read_at),
         )
 
 

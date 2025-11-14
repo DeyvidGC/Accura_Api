@@ -6,7 +6,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.types import JSON
 
 from app.infrastructure.database import Base
-from app.utils import now_in_app_timezone
+from app.utils import now_in_app_naive_datetime
 
 _audit_json_type = (
     JSONB().with_variant(JSON(), "sqlite").with_variant(MSSQLJSON(), "mssql")
@@ -24,11 +24,11 @@ class AuditLogModel(Base):
     operation = Column(String(50), nullable=False)
     created_by = Column(Integer, nullable=True)
     created_at = Column(
-        DateTime(timezone=True), nullable=False, default=now_in_app_timezone
+        DateTime(), nullable=False, default=now_in_app_naive_datetime
     )
     updated_by = Column(Integer, nullable=True)
     updated_at = Column(
-        DateTime(timezone=True), nullable=True, onupdate=now_in_app_timezone
+        DateTime(), nullable=True, onupdate=now_in_app_naive_datetime
     )
 
 

@@ -17,11 +17,7 @@ from app.infrastructure.models import (
     TemplateUserAccessModel,
     template_column_rule_table,
 )
-from app.utils import (
-    ensure_app_naive_datetime,
-    ensure_app_timezone,
-    now_in_app_timezone,
-)
+from app.utils import ensure_app_naive_datetime, now_in_app_timezone
 
 
 class TemplateRepository:
@@ -207,13 +203,13 @@ class TemplateRepository:
             description=model.description,
             table_name=model.table_name,
             created_by=model.created_by,
-            created_at=ensure_app_timezone(model.created_at),
+            created_at=ensure_app_naive_datetime(model.created_at),
             updated_by=model.updated_by,
-            updated_at=ensure_app_timezone(model.updated_at),
+            updated_at=ensure_app_naive_datetime(model.updated_at),
             is_active=model.is_active,
             deleted=model.deleted,
             deleted_by=model.deleted_by,
-            deleted_at=ensure_app_timezone(model.deleted_at),
+            deleted_at=ensure_app_naive_datetime(model.deleted_at),
             columns=columns,
         )
 
@@ -239,13 +235,13 @@ class TemplateRepository:
             description=model.description,
             data_type=model.data_type,
             created_by=model.created_by,
-            created_at=ensure_app_timezone(model.created_at),
+            created_at=ensure_app_naive_datetime(model.created_at),
             updated_by=model.updated_by,
-            updated_at=ensure_app_timezone(model.updated_at),
+            updated_at=ensure_app_naive_datetime(model.updated_at),
             is_active=model.is_active,
             deleted=model.deleted,
             deleted_by=model.deleted_by,
-            deleted_at=ensure_app_timezone(model.deleted_at),
+            deleted_at=ensure_app_naive_datetime(model.deleted_at),
         )
 
     @staticmethod

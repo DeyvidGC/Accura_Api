@@ -7,7 +7,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.types import JSON
 
 from app.infrastructure.database import Base
-from app.utils import now_in_app_timezone
+from app.utils import now_in_app_naive_datetime
 
 _rule_json_type = (
     JSONB().with_variant(JSON(), "sqlite").with_variant(MSSQLJSON(), "mssql")
@@ -22,12 +22,10 @@ class RuleModel(Base):
     id = Column(Integer, primary_key=True, index=True)
     rule = Column(_rule_json_type, nullable=False)
     created_by = Column(Integer, nullable=True)
-    created_at = Column(
-        DateTime(timezone=True), nullable=False, default=now_in_app_timezone
-    )
+    created_at = Column(DateTime(), nullable=False, default=now_in_app_naive_datetime)
     updated_by = Column(Integer, nullable=True)
     updated_at = Column(
-        DateTime(timezone=True), nullable=True, onupdate=now_in_app_timezone
+        DateTime(), nullable=True, onupdate=now_in_app_naive_datetime
     )
     is_active = Column(Boolean, nullable=False, default=True)
     deleted = Column(
@@ -37,7 +35,7 @@ class RuleModel(Base):
         server_default=expression.false(),
     )
     deleted_by = Column(Integer, nullable=True)
-    deleted_at = Column(DateTime(timezone=True), nullable=True)
+    deleted_at = Column(DateTime(), nullable=True)
 
 
 __all__ = ["RuleModel"]

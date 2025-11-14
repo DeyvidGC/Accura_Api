@@ -4,7 +4,7 @@ from sqlalchemy import Column, DateTime, ForeignKey, Integer
 from sqlalchemy.orm import relationship
 
 from app.infrastructure.database import Base
-from app.utils import now_in_app_timezone
+from app.utils import now_in_app_naive_datetime
 
 
 class TemplateUserAccessModel(Base):
@@ -26,16 +26,16 @@ class TemplateUserAccessModel(Base):
         index=True,
     )
     start_date = Column(
-        DateTime(timezone=True), nullable=False, default=now_in_app_timezone
+        DateTime(), nullable=False, default=now_in_app_naive_datetime
     )
-    end_date = Column(DateTime(timezone=True), nullable=True)
-    revoked_at = Column(DateTime(timezone=True), nullable=True)
+    end_date = Column(DateTime(), nullable=True)
+    revoked_at = Column(DateTime(), nullable=True)
     revoked_by = Column(Integer, ForeignKey("user.id"), nullable=True)
     created_at = Column(
-        DateTime(timezone=True), nullable=False, default=now_in_app_timezone
+        DateTime(), nullable=False, default=now_in_app_naive_datetime
     )
     updated_at = Column(
-        DateTime(timezone=True), nullable=True, onupdate=now_in_app_timezone
+        DateTime(), nullable=True, onupdate=now_in_app_naive_datetime
     )
 
     template = relationship(

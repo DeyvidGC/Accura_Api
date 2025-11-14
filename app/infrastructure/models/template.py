@@ -5,7 +5,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import expression
 
 from app.infrastructure.database import Base
-from app.utils import now_in_app_timezone
+from app.utils import now_in_app_naive_datetime
 
 
 class TemplateModel(Base):
@@ -21,11 +21,11 @@ class TemplateModel(Base):
     table_name = Column(String(63), nullable=False)
     created_by = Column(Integer, nullable=True)
     created_at = Column(
-        DateTime(timezone=True), nullable=False, default=now_in_app_timezone
+        DateTime(), nullable=False, default=now_in_app_naive_datetime
     )
     updated_by = Column(Integer, nullable=True)
     updated_at = Column(
-        DateTime(timezone=True), nullable=True, onupdate=now_in_app_timezone
+        DateTime(), nullable=True, onupdate=now_in_app_naive_datetime
     )
     is_active = Column(Boolean, nullable=False, default=True)
     deleted = Column(
@@ -35,7 +35,7 @@ class TemplateModel(Base):
         server_default=expression.false(),
     )
     deleted_by = Column(Integer, nullable=True)
-    deleted_at = Column(DateTime(timezone=True), nullable=True)
+    deleted_at = Column(DateTime(), nullable=True)
 
     user = relationship("UserModel", lazy="joined")
     columns = relationship(

@@ -38,6 +38,16 @@ def now_in_app_timezone() -> datetime:
     return datetime.now(tz=get_app_timezone())
 
 
+def now_in_app_naive_datetime() -> datetime:
+    """Return the current localized time without attaching ``tzinfo``."""
+
+    localized = ensure_app_naive_datetime(now_in_app_timezone())
+    if localized is None:  # pragma: no cover - defensive guard
+        msg = "Failed to compute the application naive datetime"
+        raise RuntimeError(msg)
+    return localized
+
+
 def ensure_app_timezone(value: datetime | None) -> datetime | None:
     """Normalize ``value`` so it is expressed in the configured timezone."""
 

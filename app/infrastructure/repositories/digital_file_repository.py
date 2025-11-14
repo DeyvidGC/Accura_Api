@@ -4,11 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.domain.entities import DigitalFile
 from app.infrastructure.models import DigitalFileModel
-from app.utils import (
-    ensure_app_naive_datetime,
-    ensure_app_timezone,
-    now_in_app_timezone,
-)
+from app.utils import ensure_app_naive_datetime, now_in_app_timezone
 
 
 class DigitalFileRepository:
@@ -81,9 +77,9 @@ class DigitalFileRepository:
             description=model.description,
             path=model.path,
             created_by=model.created_by,
-            created_at=ensure_app_timezone(model.created_at),
+            created_at=ensure_app_naive_datetime(model.created_at),
             updated_by=model.updated_by,
-            updated_at=ensure_app_timezone(model.updated_at),
+            updated_at=ensure_app_naive_datetime(model.updated_at),
         )
 
     @staticmethod

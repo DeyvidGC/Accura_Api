@@ -9,11 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.domain.entities import Rule
 from app.infrastructure.models import RuleModel
-from app.utils import (
-    ensure_app_naive_datetime,
-    ensure_app_timezone,
-    now_in_app_timezone,
-)
+from app.utils import ensure_app_naive_datetime, now_in_app_timezone
 
 
 class RuleRepository:
@@ -105,13 +101,13 @@ class RuleRepository:
             id=model.id,
             rule=model.rule,
             created_by=model.created_by,
-            created_at=ensure_app_timezone(model.created_at),
+            created_at=ensure_app_naive_datetime(model.created_at),
             updated_by=model.updated_by,
-            updated_at=ensure_app_timezone(model.updated_at),
+            updated_at=ensure_app_naive_datetime(model.updated_at),
             is_active=model.is_active,
             deleted=model.deleted,
             deleted_by=model.deleted_by,
-            deleted_at=ensure_app_timezone(model.deleted_at),
+            deleted_at=ensure_app_naive_datetime(model.deleted_at),
         )
 
     def _get_model(self, include_deleted: bool = False, **filters) -> RuleModel | None:
