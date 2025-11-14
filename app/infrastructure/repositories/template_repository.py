@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import exists, func, or_
+from sqlalchemy import exists, false, func, or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.domain.entities import Template, TemplateColumn, TemplateColumnRule
@@ -42,7 +42,7 @@ class TemplateRepository:
                     TemplateColumnModel.rules
                 )
             )
-            .filter(TemplateModel.deleted.is_(False))
+            .filter(TemplateModel.deleted == false())
         )
         if creator_id is not None:
             query = query.filter(TemplateModel.created_by == creator_id)
@@ -88,7 +88,7 @@ class TemplateRepository:
                     TemplateColumnModel.rules
                 )
             )
-            .filter(TemplateModel.deleted.is_(False))
+            .filter(TemplateModel.deleted == false())
         )
         if created_by is None:
             query = query.filter(TemplateModel.created_by.is_(None))
@@ -109,7 +109,7 @@ class TemplateRepository:
                     TemplateColumnModel.rules
                 )
             )
-            .filter(TemplateModel.deleted.is_(False))
+            .filter(TemplateModel.deleted == false())
             .filter(TemplateModel.created_by == creator_id)
             .order_by(TemplateModel.created_at.desc())
         )
@@ -160,7 +160,7 @@ class TemplateRepository:
             joinedload(TemplateModel.columns).joinedload(TemplateColumnModel.rules)
         )
         if not include_deleted:
-            query = query.filter(TemplateModel.deleted.is_(False))
+            query = query.filter(TemplateModel.deleted == false())
         return query.filter_by(**filters).first()
 
     def get_rule_payloads(self, template_id: int) -> dict[int, Any]:
@@ -176,8 +176,8 @@ class TemplateRepository:
                 == TemplateColumnModel.id,
             )
             .filter(TemplateColumnModel.template_id == template_id)
-            .filter(TemplateColumnModel.deleted.is_(False))
-            .filter(RuleModel.deleted.is_(False))
+            .filter(TemplateColumnModel.deleted == false())
+            .filter(RuleModel.deleted == false())
             .all()
         )
         payloads: dict[int, Any] = {}

@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from datetime import datetime
 
+from sqlalchemy import false
 from sqlalchemy.orm import Session, joinedload
 
 from app.domain.entities import Role, User
@@ -27,7 +28,7 @@ class UserRepository:
         query = (
             self.session.query(UserModel)
             .options(joinedload(UserModel.role))
-            .filter(UserModel.deleted.is_(False))
+            .filter(UserModel.deleted == false())
         )
         if creator_id is not None:
             query = query.filter(UserModel.created_by == creator_id)
@@ -95,7 +96,7 @@ class UserRepository:
         query = (
             self.session.query(UserModel.id)
             .join(RoleModel, UserModel.role_id == RoleModel.id)
-            .filter(UserModel.deleted.is_(False))
+            .filter(UserModel.deleted == false())
             .filter(RoleModel.alias.ilike(alias))
         )
         return [user_id for (user_id,) in query.all()]
@@ -113,7 +114,7 @@ class UserRepository:
             .filter(UserModel.id.in_(unique_ids))
         )
         if not include_deleted:
-            query = query.filter(UserModel.deleted.is_(False))
+            query = query.filter(UserModel.deleted == false())
         return {model.id: self._to_entity(model) for model in query.all()}
 
     @staticmethod
@@ -139,7 +140,7 @@ class UserRepository:
     def _get_model(self, include_deleted: bool = False, **filters) -> UserModel | None:
         query = self.session.query(UserModel).options(joinedload(UserModel.role))
         if not include_deleted:
-            query = query.filter(UserModel.deleted.is_(False))
+            query = query.filter(UserModel.deleted == false())
         return query.filter_by(**filters).first()
 
     @staticmethod
