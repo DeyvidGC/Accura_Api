@@ -46,11 +46,11 @@ _RELEVANT_KEYWORDS: tuple[str, ...] = (
 )
 
 _SIMPLE_RULE_HEADERS: dict[str, tuple[str, ...]] = {
-    "Texto": ("Longitud minima", "Longitud maxima"),
+    "Texto": ("Longitud mínima", "Longitud máxima"),
     "Número": ("Valor mínimo", "Valor máximo", "Número de decimales"),
-    "Documento": ("Longitud minima", "Longitud maxima"),
+    "Documento": ("Longitud mínima", "Longitud máxima"),
     "Lista": ("Lista",),
-    "Telefono": ("Longitud minima", "Código de país"),
+    "Teléfono": ("Longitud mínima", "Código de país"),
     "Correo": ("Formato", "Longitud máxima"),
     "Fecha": ("Formato", "Fecha mínima", "Fecha máxima"),
 }
@@ -620,14 +620,13 @@ class StructuredChatService:
             "Asegúrate de definir todas las propiedades requeridas y de que 'Regla' siga las restricciones "
             "correspondientes según el tipo de dato. "
             "Cuando definas reglas del tipo 'Dependencia', omite la propiedad 'Nombre dependiente'. "
-            "En 'Header' incluye primero el campo condicionante y luego cada encabezado que describa las restricciones "
-            "propias de los tipos configurados (por ejemplo: 'Tipo Documento', 'Longitud minima', 'Longitud maxima'). "
-            "En 'Header rule' lista únicamente los campos que participan en la validación en el orden de evaluación; "
-            "para dependencias comienza por el campo condicionante y continúa con el campo dependiente (por ejemplo: "
-            "'Tipo Documento', 'Documento'). "
+            "En 'Header' incluye únicamente las propiedades configurables de la regla "
+            "(por ejemplo: 'Tipo de documento', 'Longitud mínima', 'Longitud máxima'). "
+            "En 'Header rule' registra primero la propiedad condicionante y luego la propiedad dependiente "
+            "(por ejemplo: 'Tipo de documento', 'Número de documento'). "
             "Dentro de 'Regla', cada elemento de 'reglas especifica' debe definir el valor del campo condicionante y, "
             "además, incluir objetos separados por cada tipo aplicable (Texto, Número, Documento, Lista, Lista compleja, "
-            "Telefono, Correo o Fecha) usando exactamente los nombres del esquema y solo las restricciones relevantes. "
+            "Teléfono, Correo o Fecha) usando exactamente los nombres del esquema y solo las restricciones relevantes. "
             "Si el mensaje del usuario no especifica algún valor requerido, dedúcelo o propón uno coherente "
             "con las prácticas y terminología del sector asegurador, manteniendo consistencia con casos de uso reales "
             "de validación de datos en InsurTech (por ejemplo: verificación de formatos de pólizas, número de documento, "
@@ -781,7 +780,7 @@ class StructuredChatService:
             "Documento",
             "Lista",
             "Lista compleja",
-            "Telefono",
+            "Teléfono",
             "Correo",
             "Fecha",
             "Dependencia",

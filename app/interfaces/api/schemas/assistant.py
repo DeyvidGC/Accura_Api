@@ -25,7 +25,7 @@ class TipoDatoEnum(str, Enum):
     DOCUMENTO = "Documento"
     LISTA = "Lista"
     LISTA_COMPLEJA = "Lista compleja"
-    TELEFONO = "Telefono"
+    TELEFONO = "Teléfono"
     CORREO = "Correo"
     FECHA = "Fecha"
     DEPENDENCIA = "Dependencia"
@@ -34,12 +34,12 @@ class TipoDatoEnum(str, Enum):
 
 
 DEPENDENCY_TYPE_HEADERS: dict[str, tuple[str, ...]] = {
-    "texto": ("Longitud minima", "Longitud maxima"),
+    "texto": ("Longitud mínima", "Longitud máxima"),
     "numero": ("Valor mínimo", "Valor máximo", "Número de decimales"),
-    "documento": ("Longitud minima", "Longitud maxima"),
+    "documento": ("Longitud mínima", "Longitud máxima"),
     "lista": ("Lista",),
     "lista compleja": ("Lista compleja",),
-    "telefono": ("Longitud minima", "Código de país"),
+    "telefono": ("Longitud mínima", "Código de país"),
     "correo": ("Formato", "Longitud máxima"),
     "fecha": ("Formato", "Fecha mínima", "Fecha máxima"),
 }
@@ -135,9 +135,9 @@ class AssistantMessageResponse(BaseModel):
                 raise ValueError(f"'{name}' debe ser una cadena no vacía.")
 
         if tipo == TipoDatoEnum.TEXTO:
-            ensure_keys({"Longitud minima", "Longitud maxima"})
-            ensure_int("Longitud minima", minimum=0)
-            ensure_int("Longitud maxima", minimum=0)
+            ensure_keys({"Longitud mínima", "Longitud máxima"})
+            ensure_int("Longitud mínima", minimum=0)
+            ensure_int("Longitud máxima", minimum=0)
 
         elif tipo == TipoDatoEnum.NUMERO:
             ensure_keys({"Valor mínimo", "Valor máximo", "Número de decimales"})
@@ -146,9 +146,9 @@ class AssistantMessageResponse(BaseModel):
             ensure_int("Número de decimales", minimum=0)
 
         elif tipo == TipoDatoEnum.DOCUMENTO:
-            ensure_keys({"Longitud minima", "Longitud maxima"})
-            ensure_int("Longitud minima", minimum=1)
-            ensure_int("Longitud maxima", minimum=1)
+            ensure_keys({"Longitud mínima", "Longitud máxima"})
+            ensure_int("Longitud mínima", minimum=1)
+            ensure_int("Longitud máxima", minimum=1)
 
         elif tipo == TipoDatoEnum.LISTA:
             if not isinstance(regla, dict):  # pragma: no cover - defensive
@@ -187,8 +187,8 @@ class AssistantMessageResponse(BaseModel):
                         )
 
         elif tipo == TipoDatoEnum.TELEFONO:
-            ensure_keys({"Longitud minima", "Código de país"})
-            ensure_int("Longitud minima", minimum=1)
+            ensure_keys({"Longitud mínima", "Código de país"})
+            ensure_int("Longitud mínima", minimum=1)
             codigo = regla.get("Código de país")
             if not isinstance(codigo, str) or not re.fullmatch(r"^\+\d{1,3}$", codigo):
                 raise ValueError("'Código de país' debe cumplir el patrón +<código numérico> de 1 a 3 dígitos.")
@@ -372,14 +372,14 @@ class AssistantMessageResponse(BaseModel):
                         has_supported_config = True
                         if normalized_clave == "texto":
                             contenido = remap_dependency_config(
-                                contenido, ("Longitud minima", "Longitud maxima"), clave
+                                contenido, ("Longitud mínima", "Longitud máxima"), clave
                             )
                             entrada[clave] = contenido
                             ensure_config_int_value(
-                                contenido, "Longitud minima", minimum=0, type_label=clave
+                                contenido, "Longitud mínima", minimum=0, type_label=clave
                             )
                             ensure_config_int_value(
-                                contenido, "Longitud maxima", minimum=0, type_label=clave
+                                contenido, "Longitud máxima", minimum=0, type_label=clave
                             )
                         elif normalized_clave == "numero":
                             contenido = remap_dependency_config(
@@ -399,14 +399,14 @@ class AssistantMessageResponse(BaseModel):
                             )
                         elif normalized_clave == "documento":
                             contenido = remap_dependency_config(
-                                contenido, ("Longitud minima", "Longitud maxima"), clave
+                                contenido, ("Longitud mínima", "Longitud máxima"), clave
                             )
                             entrada[clave] = contenido
                             ensure_config_int_value(
-                                contenido, "Longitud minima", minimum=1, type_label=clave
+                                contenido, "Longitud mínima", minimum=1, type_label=clave
                             )
                             ensure_config_int_value(
-                                contenido, "Longitud maxima", minimum=1, type_label=clave
+                                contenido, "Longitud máxima", minimum=1, type_label=clave
                             )
                         elif normalized_clave == "lista":
                             if not isinstance(contenido, dict):
@@ -490,11 +490,11 @@ class AssistantMessageResponse(BaseModel):
                                         )
                         elif normalized_clave == "telefono":
                             contenido = remap_dependency_config(
-                                contenido, ("Longitud minima", "Código de país"), clave
+                                contenido, ("Longitud mínima", "Código de país"), clave
                             )
                             entrada[clave] = contenido
                             ensure_config_int_value(
-                                contenido, "Longitud minima", minimum=1, type_label=clave
+                                contenido, "Longitud mínima", minimum=1, type_label=clave
                             )
                             codigo = contenido.get("Código de país")
                             if not isinstance(codigo, str) or not re.fullmatch(r"^\+\d{1,3}$", codigo):

@@ -44,7 +44,7 @@ _DEPENDENCY_TYPE_ALIASES: dict[str, str] = {
     "documento": "Documento",
     "lista": "Lista",
     "lista compleja": "Lista compleja",
-    "telefono": "Telefono",
+    "telefono": "Teléfono",
     "correo": "Correo",
     "fecha": "Fecha",
 }

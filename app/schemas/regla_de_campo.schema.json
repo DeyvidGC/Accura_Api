@@ -23,7 +23,7 @@
         "Documento",
         "Lista",
         "Lista compleja",
-        "Telefono",
+        "Teléfono",
         "Correo",
         "Fecha",
         "Dependencia",
@@ -55,10 +55,10 @@
           "Regla": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["Longitud minima", "Longitud maxima"],
+            "required": ["Longitud mínima", "Longitud máxima"],
             "properties": {
-              "Longitud minima": { "type": "integer", "minimum": 0 },
-              "Longitud maxima": { "type": "integer", "minimum": 0 }
+              "Longitud mínima": { "type": "integer", "minimum": 0 },
+              "Longitud máxima": { "type": "integer", "minimum": 0 }
             }
           }
         }
@@ -88,10 +88,10 @@
           "Regla": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["Longitud minima", "Longitud maxima"],
+            "required": ["Longitud mínima", "Longitud máxima"],
             "properties": {
-              "Longitud minima": { "type": "integer", "minimum": 1 },
-              "Longitud maxima": { "type": "integer", "minimum": 1 }
+              "Longitud mínima": { "type": "integer", "minimum": 1 },
+              "Longitud máxima": { "type": "integer", "minimum": 1 }
             }
           }
         }
@@ -148,15 +148,15 @@
       }
     },
     {
-      "if": { "properties": { "Tipo de dato": { "const": "Telefono" } } },
+      "if": { "properties": { "Tipo de dato": { "const": "Teléfono" } } },
       "then": {
         "properties": {
           "Regla": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["Longitud minima", "Código de país"],
+            "required": ["Longitud mínima", "Código de país"],
             "properties": {
-              "Longitud minima": { "type": "integer", "minimum": 1 },
+              "Longitud mínima": { "type": "integer", "minimum": 1 },
               "Código de país": { "type": "string", "pattern": "^\\+\\d{1,3}$" }
             }
           }
@@ -215,10 +215,10 @@
                     "Texto": {
                       "type": "object",
                       "additionalProperties": false,
-                      "required": ["Longitud minima", "Longitud maxima"],
+                      "required": ["Longitud mínima", "Longitud máxima"],
                       "properties": {
-                        "Longitud minima": { "type": "integer", "minimum": 0 },
-                        "Longitud maxima": { "type": "integer", "minimum": 0 }
+                        "Longitud mínima": { "type": "integer", "minimum": 0 },
+                        "Longitud máxima": { "type": "integer", "minimum": 0 }
                       }
                     },
                     "Número": {
@@ -234,10 +234,10 @@
                     "Documento": {
                       "type": "object",
                       "additionalProperties": false,
-                      "required": ["Longitud minima", "Longitud maxima"],
+                      "required": ["Longitud mínima", "Longitud máxima"],
                       "properties": {
-                        "Longitud minima": { "type": "integer", "minimum": 1 },
-                        "Longitud maxima": { "type": "integer", "minimum": 1 }
+                        "Longitud mínima": { "type": "integer", "minimum": 1 },
+                        "Longitud máxima": { "type": "integer", "minimum": 1 }
                       }
                     },
                     "Lista": {
@@ -273,12 +273,12 @@
                         }
                       }
                     },
-                    "Telefono": {
+                    "Teléfono": {
                       "type": "object",
                       "additionalProperties": false,
-                      "required": ["Longitud minima", "Código de país"],
+                      "required": ["Longitud mínima", "Código de país"],
                       "properties": {
-                        "Longitud minima": { "type": "integer", "minimum": 1 },
+                        "Longitud mínima": { "type": "integer", "minimum": 1 },
                         "Código de país": { "type": "string", "pattern": "^\\+\\d{1,3}$" }
                       }
                     },
@@ -303,7 +303,7 @@
                     }
                   },
                   "patternProperties": {
-                    "^(?!(Texto|Número|Documento|Lista|Lista compleja|Telefono|Correo|Fecha)$).+": {
+                    "^(?!(Texto|Número|Documento|Lista|Lista compleja|Teléfono|Correo|Fecha)$).+": {
                       "anyOf": [
                         { "type": "string", "minLength": 1 },
                         { "type": "number" },
@@ -340,7 +340,7 @@
                     { "required": ["Documento"] },
                     { "required": ["Lista"] },
                     { "required": ["Lista compleja"] },
-                    { "required": ["Telefono"] },
+                    { "required": ["Teléfono"] },
                     { "required": ["Correo"] },
                     { "required": ["Fecha"] }
                   ]
