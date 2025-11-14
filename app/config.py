@@ -15,16 +15,6 @@ class Settings(BaseSettings):
     """Application configuration values loaded from environment variables."""
 
     database_url: str = Field(
-        default=(
-            "Driver={ODBC Driver 18 for SQL Server};"
-            "Server=tcp:accura-db-server.database.windows.net,1433;"
-            "Database=accura_db;"
-            "Uid=admin-accura;"
-            "Pwd={your_password_here};"
-            "Encrypt=yes;"
-            "TrustServerCertificate=no;"
-            "Connection Timeout=30;"
-        ),
         description=(
             "Database connection URL. Accepts either a standard SQLAlchemy URL or "
             "a raw Azure SQL ODBC connection string like the default example."
