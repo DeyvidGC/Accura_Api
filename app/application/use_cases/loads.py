@@ -1360,6 +1360,7 @@ def _compose_column_error_detail(
     if invalid_values:
         values_text = ", ".join(invalid_values)
         base_detail = f"La combinación de valores {values_text} no es válida"
+        normalized_reason = ""
     elif dependent_field:
         dependent_display = _format_cell_display(dependent_value)
         base_detail = (

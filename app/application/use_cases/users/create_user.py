@@ -43,6 +43,13 @@ def create_user(
     if role_alias not in allowed_roles:
         raise ValueError("Rol no permitido")
 
+    if role_alias == "admin":
+        existing_admins = repository.list_ids_by_role_alias("admin")
+        if existing_admins:
+            raise ValueError(
+                "Solo puede existir un usuario administrador en el sistema"
+            )
+
     hashed_password = get_password_hash(password)
     now = datetime.utcnow()
 

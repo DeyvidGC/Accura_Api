@@ -367,9 +367,7 @@ class AssistantMessageResponse(BaseModel):
 
                     if isinstance(contenido, dict) and normalized_clave in allowed_types:
                         if type_label_seen is not None:
-                            raise ValueError(
-                                "Cada elemento de 'reglas especifica' debe definir un único tipo de dato."
-                            )
+                            continue
                         type_label_seen = normalized_clave
                         has_supported_config = True
                         if normalized_clave == "texto":
@@ -667,10 +665,16 @@ class AssistantMessageResponse(BaseModel):
                 if _normalize_label(label) not in normalized_header_values
             ]
             if missing_headers:
-                raise ValueError(
-                    "El header debe incluir los siguientes campos para la regla dependiente: "
-                    + ", ".join(sorted(missing_headers))
-                )
+                existing_headers = {
+                    _normalize_label(label): label for label in self.header
+                }
+                for label in sorted(missing_headers):
+                    normalized_label = _normalize_label(label)
+                    if normalized_label in existing_headers:
+                        continue
+                    self.header.append(label)
+                    existing_headers[normalized_label] = label
+                header_lookup.update(existing_headers)
 
         elif tipo == TipoDatoEnum.DUPLICADOS:
             candidate_keys = ("Campos", "Columnas", "Fields", "fields")
