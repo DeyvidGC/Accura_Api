@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import asdict
+from datetime import datetime
 from typing import Iterable
 
 from anyio import from_thread
@@ -50,12 +51,25 @@ def serialize_load_event(event: LoadEvent) -> dict[str, object]:
     """Return a JSON-serializable representation of ``event``."""
 
     payload = asdict(event)
-    for key in ("created_at", "started_at", "finished_at"):
-        value = payload.get(key)
-        if value is None:
-            continue
-        payload[key] = value.isoformat()
+    _normalize_datetime_values(payload)
     return payload
+
+
+def _normalize_datetime_values(data: dict[str, object] | list[object]) -> None:
+    """Convert ``datetime`` instances nested inside ``data`` into ISO strings."""
+
+    if isinstance(data, dict):
+        for key, value in data.items():
+            if isinstance(value, datetime):
+                data[key] = value.isoformat()
+            elif isinstance(value, (dict, list)):
+                _normalize_datetime_values(value)
+    elif isinstance(data, list):
+        for index, item in enumerate(data):
+            if isinstance(item, datetime):
+                data[index] = item.isoformat()
+            elif isinstance(item, (dict, list)):
+                _normalize_datetime_values(item)
 
 
 load_event_publisher = LoadEventPublisher(notification_manager)
