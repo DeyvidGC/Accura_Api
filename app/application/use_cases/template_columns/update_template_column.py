@@ -1,7 +1,6 @@
 """Use case for updating template columns."""
 
 from dataclasses import replace
-from datetime import datetime
 from collections.abc import Sequence
 
 from sqlalchemy.orm import Session
@@ -13,6 +12,7 @@ from app.infrastructure.repositories import (
     TemplateColumnRepository,
     TemplateRepository,
 )
+from app.utils import now_in_app_timezone
 
 from .naming import derive_column_identifier, normalize_column_display_name
 from .validators import ensure_rule_header_dependencies
@@ -88,7 +88,7 @@ def update_template_column(
         rules=new_rules,
         is_active=is_active if is_active is not None else current.is_active,
         updated_by=updated_by if updated_by is not None else current.updated_by,
-        updated_at=datetime.utcnow(),
+        updated_at=now_in_app_timezone(),
     )
 
     existing_columns = list(column_repository.list_by_template(template_id))

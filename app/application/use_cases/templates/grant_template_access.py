@@ -11,6 +11,7 @@ from app.infrastructure.repositories import (
     TemplateUserAccessRepository,
     UserRepository,
 )
+from app.utils import ensure_app_timezone, now_in_app_timezone
 
 
 def grant_template_access(
@@ -38,7 +39,7 @@ def grant_template_access(
 
     access_repository = TemplateUserAccessRepository(session)
 
-    effective_start = _normalize_date(start_date) or _current_utc_day_start()
+    effective_start = _normalize_date(start_date) or _current_day_start()
     normalized_end = _normalize_date(end_date, use_end_of_day=True)
     _validate_access_window(effective_start, normalized_end)
 
@@ -78,7 +79,8 @@ def _normalize_date(
     if isinstance(value, datetime):
         value = value.date()
     boundary = time.max if use_end_of_day else time.min
-    return datetime.combine(value, boundary)
+    combined = datetime.combine(value, boundary)
+    return ensure_app_timezone(combined)
 
 
 def _validate_access_window(start: datetime, end: datetime | None) -> None:
@@ -91,11 +93,12 @@ def _validate_access_window(start: datetime, end: datetime | None) -> None:
         )
 
 
-def _current_utc_day_start() -> datetime:
-    """Return the UTC start-of-day ``datetime`` for the current day."""
+def _current_day_start() -> datetime:
+    """Return the configured timezone start-of-day ``datetime`` for today."""
 
-    now = datetime.utcnow()
-    return datetime.combine(now.date(), time.min)
+    now = now_in_app_timezone()
+    combined = datetime.combine(now.date(), time.min)
+    return ensure_app_timezone(combined)
 
 
 __all__ = ["grant_template_access"]

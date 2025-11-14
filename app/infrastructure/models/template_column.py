@@ -8,7 +8,6 @@ from sqlalchemy import (
     Integer,
     String,
     Table,
-    func,
 )
 from sqlalchemy.dialects.mssql import JSON as MSSQLJSON
 from sqlalchemy.dialects.postgresql import JSONB
@@ -18,6 +17,7 @@ from sqlalchemy.sql import expression
 
 from app.infrastructure.database import Base
 from app.infrastructure.models.rule import RuleModel
+from app.utils import now_in_app_timezone
 
 _header_json_type = (
     JSONB().with_variant(JSON(), "sqlite").with_variant(MSSQLJSON(), "mssql")
@@ -59,9 +59,13 @@ class TemplateColumnModel(Base):
     data_type = Column(String(50), nullable=False)
     rule_header = Column(_header_json_type, nullable=True)
     created_by = Column(Integer, nullable=True)
-    created_at = Column(DateTime, nullable=False, server_default=func.now())
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, default=now_in_app_timezone
+    )
     updated_by = Column(Integer, nullable=True)
-    updated_at = Column(DateTime, nullable=True, onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), nullable=True, onupdate=now_in_app_timezone
+    )
     is_active = Column(Boolean, nullable=False, default=True)
     deleted = Column(
         Boolean,
@@ -70,7 +74,7 @@ class TemplateColumnModel(Base):
         server_default=expression.false(),
     )
     deleted_by = Column(Integer, nullable=True)
-    deleted_at = Column(DateTime, nullable=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
 
     template = relationship("TemplateModel", back_populates="columns")
     rules = relationship(

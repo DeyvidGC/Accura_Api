@@ -1,6 +1,5 @@
 """Use case for retrieving the Excel file associated with a template."""
 
-from datetime import datetime
 from pathlib import Path
 
 from sqlalchemy.orm import Session
@@ -12,6 +11,7 @@ from app.infrastructure.repositories import (
     TemplateUserAccessRepository,
 )
 from app.infrastructure.template_files import download_template_excel
+from app.utils import now_in_app_timezone
 
 
 def get_template_excel(
@@ -32,7 +32,7 @@ def get_template_excel(
         access = access_repository.get_active_access(
             user_id=requesting_user.id,
             template_id=template_id,
-            reference_time=datetime.utcnow(),
+            reference_time=now_in_app_timezone(),
         )
         if access is None:
             raise ValueError("El usuario no tiene acceso a la plantilla")

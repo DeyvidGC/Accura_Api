@@ -50,6 +50,7 @@ from app.infrastructure.repositories import (
     UserRepository,
 )
 from app.infrastructure.storage import download_blob_to_path, upload_blob
+from app.utils import now_in_app_timezone
 
 _SUPPORTED_EXTENSIONS = {".xlsx", ".xls", ".csv"}
 _REPORT_PREFIX = "Reports"
@@ -147,7 +148,7 @@ def upload_template_load(
         raise ValueError("El archivo proporcionado está vacío")
 
     load_repo = LoadRepository(session)
-    now = datetime.utcnow()
+    now = now_in_app_timezone()
     load = load_repo.create(
         Load(
             id=None,
@@ -251,7 +252,7 @@ def process_template_load(
             if error_rows == 0
             else LOAD_STATUS_VALIDATED_WITH_ERRORS
         )
-        finished_at = datetime.utcnow()
+        finished_at = now_in_app_timezone()
         load = load_repo.update(
             Load(
                 id=load.id,
@@ -1031,7 +1032,7 @@ def _register_loaded_file(
 def _mark_load_as_failed(
     repository: LoadRepository, load: Load, message: str
 ) -> Load:
-    finished_at = datetime.utcnow()
+    finished_at = now_in_app_timezone()
     return repository.update(
         Load(
             id=load.id,

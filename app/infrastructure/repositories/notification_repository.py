@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import datetime
 from typing import Iterable
 
 from sqlalchemy.orm import Session
 
 from app.domain.entities import Notification
 from app.infrastructure.models import NotificationModel
+from app.utils import ensure_app_timezone, now_in_app_timezone
 
 
 class NotificationRepository:
@@ -65,7 +65,7 @@ class NotificationRepository:
             raise ValueError(msg)
         self._apply_entity_to_model(model, notification, include_creation_fields=False)
         if notification.created_at is not None:
-            model.created_at = notification.created_at
+            model.created_at = ensure_app_timezone(notification.created_at)
         self.session.add(model)
         self.session.commit()
         self.session.refresh(model)
@@ -78,7 +78,10 @@ class NotificationRepository:
         self.session.query(NotificationModel).filter(
             NotificationModel.id.in_(ids),
             NotificationModel.user_id == user_id,
-        ).update({NotificationModel.read_at: datetime.utcnow()}, synchronize_session=False)
+        ).update(
+            {NotificationModel.read_at: now_in_app_timezone()},
+            synchronize_session=False,
+        )
         self.session.commit()
 
     def get_latest_by_user_and_load(
@@ -107,13 +110,15 @@ class NotificationRepository:
         include_creation_fields: bool,
     ) -> None:
         if include_creation_fields:
-            model.created_at = notification.created_at or datetime.utcnow()
+            model.created_at = (
+                ensure_app_timezone(notification.created_at) or now_in_app_timezone()
+            )
         model.user_id = notification.user_id
         model.event_type = notification.event_type
         model.title = notification.title
         model.message = notification.message
         model.payload = notification.payload or {}
-        model.read_at = notification.read_at
+        model.read_at = ensure_app_timezone(notification.read_at)
 
     @staticmethod
     def _to_entity(model: NotificationModel) -> Notification:
@@ -124,8 +129,8 @@ class NotificationRepository:
             title=model.title,
             message=model.message,
             payload=model.payload or {},
-            created_at=model.created_at,
-            read_at=model.read_at,
+            created_at=ensure_app_timezone(model.created_at),
+            read_at=ensure_app_timezone(model.read_at),
         )
 
 

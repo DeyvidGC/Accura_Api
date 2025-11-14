@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.domain.entities import TemplateUserAccess
 from app.infrastructure.repositories import TemplateRepository, TemplateUserAccessRepository
+from app.utils import ensure_app_timezone, now_in_app_timezone
 
 
 def update_template_access(
@@ -53,7 +54,7 @@ def update_template_access(
         revoked_at=access.revoked_at,
         revoked_by=access.revoked_by,
         created_at=access.created_at,
-        updated_at=datetime.utcnow(),
+        updated_at=now_in_app_timezone(),
     )
 
     return repository.update(updated_access)
@@ -69,7 +70,8 @@ def _normalize_date(
     if isinstance(value, datetime):
         value = value.date()
     boundary = time.max if use_end_of_day else time.min
-    return datetime.combine(value, boundary)
+    combined = datetime.combine(value, boundary)
+    return ensure_app_timezone(combined)
 
 
 def _validate_access_window(start: datetime, end: datetime | None) -> None:

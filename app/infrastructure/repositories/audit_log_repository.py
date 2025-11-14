@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.domain.entities import AuditLog
 from app.infrastructure.models import AuditLogModel
+from app.utils import ensure_app_timezone, now_in_app_timezone
 
 
 class AuditLogRepository:
@@ -63,9 +64,9 @@ class AuditLogRepository:
             columns=list(model.columns) if model.columns is not None else [],
             operation=model.operation,
             created_by=model.created_by,
-            created_at=model.created_at,
+            created_at=ensure_app_timezone(model.created_at),
             updated_by=model.updated_by,
-            updated_at=model.updated_at,
+            updated_at=ensure_app_timezone(model.updated_at),
         )
 
     @staticmethod
@@ -74,9 +75,11 @@ class AuditLogRepository:
         model.columns = list(entry.columns)
         model.operation = entry.operation
         model.created_by = entry.created_by
-        model.created_at = entry.created_at
+        model.created_at = (
+            ensure_app_timezone(entry.created_at) or now_in_app_timezone()
+        )
         model.updated_by = entry.updated_by
-        model.updated_at = entry.updated_at
+        model.updated_at = ensure_app_timezone(entry.updated_at)
 
 
 __all__ = ["AuditLogRepository"]

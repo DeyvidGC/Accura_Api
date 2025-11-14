@@ -1,13 +1,13 @@
 """Use case to reset a user's password identified by email."""
 
 from dataclasses import replace
-from datetime import datetime
 
 from sqlalchemy.orm import Session
 
 from app.domain.entities import User
 from app.infrastructure.repositories import UserRepository
 from app.infrastructure.security import get_password_hash, generate_secure_password
+from app.utils import now_in_app_timezone
 
 from .validators import ensure_valid_gmail
 
@@ -35,7 +35,7 @@ def reset_password_by_email(session: Session, *, email: str) -> tuple[User, str]
         password=hashed_password,
         must_change_password=True,
         updated_by=user.id,
-        updated_at=datetime.utcnow(),
+        updated_at=now_in_app_timezone(),
     )
 
     persisted_user = repository.update(updated_user)

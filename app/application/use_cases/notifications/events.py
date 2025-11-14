@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone, timedelta
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from sqlalchemy.orm import Session
 
 from app.domain.entities import (
@@ -23,20 +21,7 @@ from app.domain.entities import (
 )
 from app.infrastructure.notifications import dispatch_notification, dispatch_load_event
 from app.infrastructure.repositories import NotificationRepository, UserRepository
-
-try:
-    _NOTIFICATION_TIMEZONE = ZoneInfo("America/Lima")
-except ZoneInfoNotFoundError:  # pragma: no cover - fallback for missing tzdata
-    try:
-        _NOTIFICATION_TIMEZONE = ZoneInfo("America/Bogota")
-    except ZoneInfoNotFoundError:  # pragma: no cover - fallback for missing tzdata
-        _NOTIFICATION_TIMEZONE = timezone(timedelta(hours=-5))
-
-
-def _now_in_notification_timezone() -> datetime:
-    """Return the current time localized to the notifications timezone."""
-
-    return datetime.now(_NOTIFICATION_TIMEZONE)
+from app.utils import ensure_app_timezone, now_in_app_timezone
 
 def _persist_notification(
     session: Session,
@@ -54,7 +39,7 @@ def _persist_notification(
         title=title,
         message=message,
         payload=payload or {},
-        created_at=_now_in_notification_timezone(),
+        created_at=now_in_app_timezone(),
         read_at=None,
     )
     repository = NotificationRepository(session)
@@ -180,7 +165,7 @@ def _persist_or_update_load_notification(
     }
     repository = NotificationRepository(session)
     existing = repository.get_latest_by_user_and_load(user_id=user.id, load_id=load.id)
-    now = _now_in_notification_timezone()
+    now = now_in_app_timezone()
     if existing is not None:
         updated = Notification(
             id=existing.id,
@@ -248,11 +233,13 @@ def notify_template_access_granted(
     """Notify a user that they gained access to a template."""
 
     message = f"Se te otorgó acceso a la plantilla '{template.name}'."
+    start_date = ensure_app_timezone(access.start_date)
+    end_date = ensure_app_timezone(access.end_date)
     payload = {
         "template_id": template.id,
         "access_id": access.id,
-        "access_start": access.start_date.isoformat() if access.start_date else None,
-        "access_end": access.end_date.isoformat() if access.end_date else None,
+        "access_start": start_date.isoformat() if start_date else None,
+        "access_end": end_date.isoformat() if end_date else None,
     }
     _persist_notification(
         session,

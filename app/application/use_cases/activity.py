@@ -22,13 +22,15 @@ from app.infrastructure.models import (
     UserModel,
     RoleModel,
 )
+from app.utils import ensure_app_timezone, now_in_app_timezone
 
 
 def _safe_datetime(*candidates: datetime | None) -> datetime:
     for candidate in candidates:
-        if isinstance(candidate, datetime):
-            return candidate
-    return datetime.utcnow()
+        normalized = ensure_app_timezone(candidate)
+        if isinstance(normalized, datetime):
+            return normalized
+    return now_in_app_timezone()
 
 
 def get_recent_activity(

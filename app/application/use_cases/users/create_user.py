@@ -1,12 +1,11 @@
 """Use case for creating users."""
 
-from datetime import datetime
-
 from sqlalchemy.orm import Session
 
 from app.domain.entities import User
 from app.infrastructure.repositories import RoleRepository, UserRepository
 from app.infrastructure.security import get_password_hash
+from app.utils import now_in_app_timezone
 from .validators import ensure_valid_gmail
 
 
@@ -44,7 +43,7 @@ def create_user(
         raise ValueError("Rol no permitido")
 
     hashed_password = get_password_hash(password)
-    now = datetime.utcnow()
+    now = now_in_app_timezone()
 
     must_change_password = role_alias in allowed_roles
 

@@ -1,9 +1,10 @@
 """SQLAlchemy model storing generated reports for loads."""
 
-from sqlalchemy import BigInteger, Column, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import BigInteger, Column, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
 
 from app.infrastructure.database import Base
+from app.utils import now_in_app_timezone
 
 
 class LoadedFileModel(Base):
@@ -28,7 +29,9 @@ class LoadedFileModel(Base):
         nullable=True,
         index=True,
     )
-    created_at = Column(DateTime, nullable=False, server_default=func.now())
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, default=now_in_app_timezone
+    )
 
     load = relationship("LoadModel", lazy="joined")
     created_user = relationship("UserModel", lazy="joined")

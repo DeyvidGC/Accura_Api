@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-
 from sqlalchemy.orm import Session
 
 from app.domain.entities import DigitalFile
@@ -20,6 +18,7 @@ from app.infrastructure.repositories import (
     TemplateColumnRepository,
     TemplateRepository,
 )
+from app.utils import now_in_app_timezone
 
 
 def refresh_template_resources(
@@ -73,7 +72,7 @@ def refresh_template_resources(
         table_name=template.table_name,
     )
 
-    now = datetime.utcnow()
+    now = now_in_app_timezone()
     digital_repository.create(
         DigitalFile(
             id=None,

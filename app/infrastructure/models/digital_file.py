@@ -1,8 +1,9 @@
 """SQLAlchemy model for stored digital files."""
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String
 
 from app.infrastructure.database import Base
+from app.utils import now_in_app_timezone
 
 
 class DigitalFileModel(Base):
@@ -16,9 +17,13 @@ class DigitalFileModel(Base):
     description = Column(String(255), nullable=True)
     path = Column(String(255), nullable=False)
     created_by = Column(Integer, nullable=True)
-    created_at = Column(DateTime, nullable=False, server_default=func.now())
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, default=now_in_app_timezone
+    )
     updated_by = Column(Integer, nullable=True)
-    updated_at = Column(DateTime, nullable=True, onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), nullable=True, onupdate=now_in_app_timezone
+    )
 
 
 __all__ = ["DigitalFileModel"]

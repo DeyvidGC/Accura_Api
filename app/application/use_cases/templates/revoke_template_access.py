@@ -1,11 +1,10 @@
 """Use case for revoking a previously granted template access."""
 
-from datetime import datetime
-
 from sqlalchemy.orm import Session
 
 from app.domain.entities import TemplateUserAccess
 from app.infrastructure.repositories import TemplateRepository, TemplateUserAccessRepository
+from app.utils import now_in_app_timezone
 
 
 def revoke_template_access(
@@ -34,7 +33,7 @@ def revoke_template_access(
     return repository.revoke(
         access_id=access.id,
         revoked_by=revoked_by,
-        revoked_at=datetime.utcnow(),
+        revoked_at=now_in_app_timezone(),
     )
 
 

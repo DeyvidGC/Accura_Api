@@ -1,10 +1,11 @@
 """SQLAlchemy model for the user table."""
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
 from sqlalchemy.sql import expression
 from sqlalchemy.orm import relationship
 
 from app.infrastructure.database import Base
+from app.utils import now_in_app_timezone
 
 class UserModel(Base):
     """Database representation of the system user."""
@@ -17,11 +18,15 @@ class UserModel(Base):
     email = Column(String(120), nullable=False, index=True)
     password = Column(String(255), nullable=False)
     must_change_password = Column(Boolean, nullable=False, default=False)
-    last_login = Column(DateTime, nullable=True)
+    last_login = Column(DateTime(timezone=True), nullable=True)
     created_by = Column(Integer, nullable=True)
-    created_at = Column(DateTime, nullable=False, server_default=func.now())
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, default=now_in_app_timezone
+    )
     updated_by = Column(Integer, nullable=True)
-    updated_at = Column(DateTime, nullable=True, onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), nullable=True, onupdate=now_in_app_timezone
+    )
     is_active = Column(Boolean, nullable=False, default=True)
     deleted = Column(
         Boolean,
@@ -30,7 +35,7 @@ class UserModel(Base):
         server_default=expression.false(),
     )
     deleted_by = Column(Integer, nullable=True)
-    deleted_at = Column(DateTime, nullable=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
     role = relationship("RoleModel", lazy="joined")
     template_accesses = relationship(
         "TemplateUserAccessModel",

@@ -21,6 +21,7 @@ from app.infrastructure.models import (
     UserModel,
 )
 from app.infrastructure.models.template_column import template_column_rule_table
+from app.utils import ensure_app_timezone, now_in_app_timezone
 
 
 @dataclass
@@ -119,7 +120,7 @@ def get_kpis(
 ) -> KPIReport:
     """Compute KPI metrics required by the administrative dashboard."""
 
-    now = reference or datetime.utcnow()
+    now = ensure_app_timezone(reference) or now_in_app_timezone()
     current_start, next_month_start = _month_boundaries(now)
     previous_start = _previous_month_start(current_start)
     previous_end = current_start
@@ -338,7 +339,7 @@ def get_client_kpis(
 ) -> ClientKPIReport:
     """Compute KPI metrics for a specific end-user."""
 
-    now = reference or datetime.utcnow()
+    now = ensure_app_timezone(reference) or now_in_app_timezone()
     current_start, next_month_start = _month_boundaries(now)
 
     available_templates = (
