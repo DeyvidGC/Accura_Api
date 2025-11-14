@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Generator
 
+from urllib.parse import quote_plus
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
@@ -15,13 +17,24 @@ class Base(DeclarativeBase):
 
 
 settings = get_settings()
+
+
+def _resolve_database_url(raw_url: str) -> str:
+    """Return a SQLAlchemy-compatible URL for the configured database."""
+
+    normalized = raw_url.lstrip()
+    if normalized.lower().startswith("driver="):
+        # Allow plain ODBC connection strings such as those provided by Azure SQL.
+        return f"mssql+pyodbc:///?odbc_connect={quote_plus(normalized)}"
+    return raw_url
+
+
+database_url = _resolve_database_url(settings.database_url)
 connect_args: dict[str, object] = {}
-if settings.database_url.startswith("sqlite"):
+if database_url.startswith("sqlite"):
     connect_args = {"check_same_thread": False}
 
-engine = create_engine(
-    settings.database_url, pool_pre_ping=True, connect_args=connect_args
-)
+engine = create_engine(database_url, pool_pre_ping=True, connect_args=connect_args)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
