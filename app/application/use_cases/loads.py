@@ -22,8 +22,6 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.application.use_cases.notifications import (
-    broadcast_load_history_processing,
-    broadcast_load_history_status,
     notify_load_status_changed,
     notify_load_validated_success,
     notify_template_processing,
@@ -169,9 +167,6 @@ def upload_template_load(
     notify_template_processing(
         session, load=load, template=template, user=user
     )
-    broadcast_load_history_processing(
-        session, load=load, template=template, user=user
-    )
     return load
 
 
@@ -286,9 +281,6 @@ def process_template_load(
         notify_load_validated_success(
             session, load=load, template=template, user=user
         )
-        broadcast_load_history_status(
-            session, load=load, template=template, user=user
-        )
     except Exception as exc:  # pragma: no cover - defensive path
         failed_load = _mark_load_as_failed(load_repo, load, str(exc))
         try:
@@ -297,9 +289,6 @@ def process_template_load(
             )
         except Exception:  # pragma: no cover - defensive path
             pass
-        broadcast_load_history_status(
-            session, load=failed_load, template=template, user=user
-        )
         if isinstance(exc, (ValueError, PermissionError)):
             raise
         raise ValueError(str(exc)) from exc
