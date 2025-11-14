@@ -50,6 +50,20 @@ def ensure_app_timezone(value: datetime | None) -> datetime | None:
     return value.astimezone(tz)
 
 
+def ensure_app_naive_datetime(value: datetime | None) -> datetime | None:
+    """Return ``value`` localized to the app timezone but without ``tzinfo``.
+
+    SQL Server ``DATETIME`` columns do not accept timezone-aware values. This helper
+    allows us to keep working with aware datetimes in the domain layer while storing
+    the localized (naive) representation in the database.
+    """
+
+    localized = ensure_app_timezone(value)
+    if localized is None:
+        return None
+    return localized.replace(tzinfo=None)
+
+
 def _resolve_timezone(tz_name: str) -> tzinfo:
     """Resolve ``tz_name`` into a ``timezone`` instance."""
 

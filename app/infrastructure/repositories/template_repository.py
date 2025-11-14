@@ -17,7 +17,11 @@ from app.infrastructure.models import (
     TemplateUserAccessModel,
     template_column_rule_table,
 )
-from app.utils import ensure_app_timezone, now_in_app_timezone
+from app.utils import (
+    ensure_app_naive_datetime,
+    ensure_app_timezone,
+    now_in_app_timezone,
+)
 
 
 class TemplateRepository:
@@ -47,7 +51,7 @@ class TemplateRepository:
         if creator_id is not None:
             query = query.filter(TemplateModel.created_by == creator_id)
         if user_id is not None:
-            now = now_in_app_timezone()
+            now = ensure_app_naive_datetime(now_in_app_timezone())
             access_exists = (
                 self.session.query(TemplateUserAccessModel.id)
                 .filter(TemplateUserAccessModel.template_id == TemplateModel.id)
@@ -145,7 +149,7 @@ class TemplateRepository:
             raise ValueError(msg)
         if model.deleted:
             return
-        now = now_in_app_timezone()
+        now = ensure_app_naive_datetime(now_in_app_timezone())
         model.deleted = True
         model.deleted_by = deleted_by
         model.deleted_at = now
@@ -254,7 +258,8 @@ class TemplateRepository:
         if include_creation_fields:
             model.created_by = template.created_by
             model.created_at = (
-                ensure_app_timezone(template.created_at) or now_in_app_timezone()
+                ensure_app_naive_datetime(template.created_at)
+                or ensure_app_naive_datetime(now_in_app_timezone())
             )
             model.updated_by = None
             model.updated_at = None
@@ -265,11 +270,11 @@ class TemplateRepository:
         model.table_name = template.table_name
         if not include_creation_fields:
             model.updated_by = template.updated_by
-            model.updated_at = ensure_app_timezone(template.updated_at)
+            model.updated_at = ensure_app_naive_datetime(template.updated_at)
         model.is_active = template.is_active
         model.deleted = template.deleted
         model.deleted_by = template.deleted_by
-        model.deleted_at = ensure_app_timezone(template.deleted_at)
+        model.deleted_at = ensure_app_naive_datetime(template.deleted_at)
 
     @staticmethod
     def _relationship_loaded(model: TemplateModel) -> bool:
