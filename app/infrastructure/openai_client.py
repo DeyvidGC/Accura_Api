@@ -337,7 +337,10 @@ def _infer_dependency_headers(payload: Mapping[str, Any]) -> list[str]:
                 else:
                     additional_labels.append(stripped_key)
 
-        if dependent_label:
+        if additional_labels or nested_values:
+            for label in additional_labels:
+                add_label(label)
+        elif dependent_label:
             add_label(dependent_label)
         for label in additional_labels:
             add_label(label)
