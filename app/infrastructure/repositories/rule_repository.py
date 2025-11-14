@@ -9,7 +9,11 @@ from sqlalchemy.orm import Session
 
 from app.domain.entities import Rule
 from app.infrastructure.models import RuleModel
-from app.utils import ensure_app_timezone, now_in_app_timezone
+from app.utils import (
+    ensure_app_naive_datetime,
+    ensure_app_timezone,
+    now_in_app_timezone,
+)
 
 
 class RuleRepository:
@@ -85,7 +89,7 @@ class RuleRepository:
             raise ValueError(msg)
         if model.deleted:
             return
-        now = now_in_app_timezone()
+        now = ensure_app_naive_datetime(now_in_app_timezone())
         model.deleted = True
         model.deleted_by = deleted_by
         model.deleted_at = now
@@ -152,13 +156,13 @@ class RuleRepository:
         model.rule = rule.rule
         model.created_by = rule.created_by
         if rule.created_at is not None:
-            model.created_at = ensure_app_timezone(rule.created_at)
+            model.created_at = ensure_app_naive_datetime(rule.created_at)
         model.updated_by = rule.updated_by
-        model.updated_at = ensure_app_timezone(rule.updated_at)
+        model.updated_at = ensure_app_naive_datetime(rule.updated_at)
         model.is_active = rule.is_active
         model.deleted = rule.deleted
         model.deleted_by = rule.deleted_by
-        model.deleted_at = ensure_app_timezone(rule.deleted_at)
+        model.deleted_at = ensure_app_naive_datetime(rule.deleted_at)
 
     @staticmethod
     def _extract_rule_names(rule_data) -> list[str]:

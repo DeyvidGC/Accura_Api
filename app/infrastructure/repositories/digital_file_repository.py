@@ -4,7 +4,11 @@ from sqlalchemy.orm import Session
 
 from app.domain.entities import DigitalFile
 from app.infrastructure.models import DigitalFileModel
-from app.utils import ensure_app_timezone, now_in_app_timezone
+from app.utils import (
+    ensure_app_naive_datetime,
+    ensure_app_timezone,
+    now_in_app_timezone,
+)
 
 
 class DigitalFileRepository:
@@ -93,17 +97,19 @@ class DigitalFileRepository:
         if include_creation_fields:
             model.created_by = digital_file.created_by
             model.created_at = (
-                ensure_app_timezone(digital_file.created_at) or now_in_app_timezone()
+                ensure_app_naive_datetime(digital_file.created_at)
+                or ensure_app_naive_datetime(now_in_app_timezone())
             )
             model.updated_by = digital_file.updated_by
-            model.updated_at = ensure_app_timezone(digital_file.updated_at)
+            model.updated_at = ensure_app_naive_datetime(digital_file.updated_at)
         model.name = digital_file.name
         model.description = digital_file.description
         model.path = digital_file.path
         if not include_creation_fields:
             model.updated_by = digital_file.updated_by
             model.updated_at = (
-                ensure_app_timezone(digital_file.updated_at) or now_in_app_timezone()
+                ensure_app_naive_datetime(digital_file.updated_at)
+                or ensure_app_naive_datetime(now_in_app_timezone())
             )
 
 

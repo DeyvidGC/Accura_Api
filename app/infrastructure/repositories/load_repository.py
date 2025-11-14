@@ -22,7 +22,11 @@ from app.infrastructure.models import (
 )
 from app.infrastructure.repositories.template_repository import TemplateRepository
 from app.infrastructure.repositories.user_repository import UserRepository
-from app.utils import ensure_app_timezone, now_in_app_timezone
+from app.utils import (
+    ensure_app_naive_datetime,
+    ensure_app_timezone,
+    now_in_app_timezone,
+)
 
 _COMPLETED_STATUSES = (
     LOAD_STATUS_VALIDATED_SUCCESS,
@@ -199,10 +203,11 @@ class LoadRepository:
         model.report_path = load.report_path
         if include_creation_fields:
             model.created_at = (
-                ensure_app_timezone(load.created_at) or now_in_app_timezone()
+                ensure_app_naive_datetime(load.created_at)
+                or ensure_app_naive_datetime(now_in_app_timezone())
             )
-        model.started_at = ensure_app_timezone(load.started_at)
-        model.finished_at = ensure_app_timezone(load.finished_at)
+        model.started_at = ensure_app_naive_datetime(load.started_at)
+        model.finished_at = ensure_app_naive_datetime(load.finished_at)
 
     @staticmethod
     def _template_summary_to_entity(model: TemplateModel) -> Template:
