@@ -4,7 +4,7 @@ from sqlalchemy import Column, DateTime, ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.orm import relationship
 
 from app.infrastructure.database import Base
-from app.utils import now_in_app_timezone
+from app.utils import now_in_app_naive_datetime
 
 
 class NotificationModel(Base):
@@ -18,10 +18,8 @@ class NotificationModel(Base):
     title = Column(String(120), nullable=False)
     message = Column(Text, nullable=False)
     payload = Column(JSON, nullable=False, default=dict)
-    created_at = Column(
-        DateTime(timezone=True), nullable=False, default=now_in_app_timezone
-    )
-    read_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(), nullable=False, default=now_in_app_naive_datetime)
+    read_at = Column(DateTime(), nullable=True)
 
     user = relationship("UserModel", lazy="joined")
 

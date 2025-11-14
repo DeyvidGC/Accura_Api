@@ -4,7 +4,7 @@ from sqlalchemy import BigInteger, Column, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
 
 from app.infrastructure.database import Base
-from app.utils import now_in_app_timezone
+from app.utils import now_in_app_naive_datetime
 
 
 class LoadedFileModel(Base):
@@ -30,7 +30,7 @@ class LoadedFileModel(Base):
         index=True,
     )
     created_at = Column(
-        DateTime(timezone=True), nullable=False, default=now_in_app_timezone
+        DateTime(), nullable=False, default=now_in_app_naive_datetime
     )
 
     load = relationship("LoadModel", lazy="joined")

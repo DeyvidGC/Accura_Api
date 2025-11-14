@@ -5,7 +5,7 @@ from sqlalchemy.sql import expression
 from sqlalchemy.orm import relationship
 
 from app.infrastructure.database import Base
-from app.utils import now_in_app_timezone
+from app.utils import now_in_app_naive_datetime
 
 class UserModel(Base):
     """Database representation of the system user."""
@@ -18,14 +18,12 @@ class UserModel(Base):
     email = Column(String(120), nullable=False, index=True)
     password = Column(String(255), nullable=False)
     must_change_password = Column(Boolean, nullable=False, default=False)
-    last_login = Column(DateTime(timezone=True), nullable=True)
+    last_login = Column(DateTime(), nullable=True)
     created_by = Column(Integer, nullable=True)
-    created_at = Column(
-        DateTime(timezone=True), nullable=False, default=now_in_app_timezone
-    )
+    created_at = Column(DateTime(), nullable=False, default=now_in_app_naive_datetime)
     updated_by = Column(Integer, nullable=True)
     updated_at = Column(
-        DateTime(timezone=True), nullable=True, onupdate=now_in_app_timezone
+        DateTime(), nullable=True, onupdate=now_in_app_naive_datetime
     )
     is_active = Column(Boolean, nullable=False, default=True)
     deleted = Column(
@@ -35,7 +33,7 @@ class UserModel(Base):
         server_default=expression.false(),
     )
     deleted_by = Column(Integer, nullable=True)
-    deleted_at = Column(DateTime(timezone=True), nullable=True)
+    deleted_at = Column(DateTime(), nullable=True)
     role = relationship("RoleModel", lazy="joined")
     template_accesses = relationship(
         "TemplateUserAccessModel",

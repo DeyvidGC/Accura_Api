@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.domain.entities import TemplateUserAccess
 from app.infrastructure.models import TemplateUserAccessModel
-from app.utils import ensure_app_timezone, now_in_app_timezone
+from app.utils import ensure_app_naive_datetime, now_in_app_timezone
 
 
 class TemplateUserAccessRepository:
@@ -28,7 +28,7 @@ class TemplateUserAccessRepository:
             TemplateUserAccessModel.template_id == template_id
         )
         if not include_inactive:
-            now = now_in_app_timezone()
+            now = ensure_app_naive_datetime(now_in_app_timezone())
             filters = [
                 TemplateUserAccessModel.revoked_at.is_(None),
                 (
@@ -53,7 +53,7 @@ class TemplateUserAccessRepository:
             TemplateUserAccessModel.user_id == user_id
         )
         if not include_inactive:
-            now = now_in_app_timezone()
+            now = ensure_app_naive_datetime(now_in_app_timezone())
             filters = [
                 TemplateUserAccessModel.revoked_at.is_(None),
                 (
@@ -97,7 +97,7 @@ class TemplateUserAccessRepository:
         reference_time: datetime | None = None,
     ) -> TemplateUserAccess | None:
         if reference_time is None:
-            reference_time = now_in_app_timezone()
+            reference_time = ensure_app_naive_datetime(now_in_app_timezone())
         model = (
             self.session.query(TemplateUserAccessModel)
             .filter(
@@ -135,7 +135,10 @@ class TemplateUserAccessRepository:
             msg = f"Template access with id {access_id} not found"
             raise ValueError(msg)
         model.revoked_by = revoked_by
-        model.revoked_at = ensure_app_timezone(revoked_at) or now_in_app_timezone()
+        model.revoked_at = (
+            ensure_app_naive_datetime(revoked_at)
+            or ensure_app_naive_datetime(now_in_app_timezone())
+        )
         model.updated_at = model.revoked_at
         self.session.add(model)
         self.session.commit()
@@ -159,12 +162,12 @@ class TemplateUserAccessRepository:
             id=model.id,
             template_id=model.template_id,
             user_id=model.user_id,
-            start_date=ensure_app_timezone(model.start_date),
-            end_date=ensure_app_timezone(model.end_date),
-            revoked_at=ensure_app_timezone(model.revoked_at),
+            start_date=ensure_app_naive_datetime(model.start_date),
+            end_date=ensure_app_naive_datetime(model.end_date),
+            revoked_at=ensure_app_naive_datetime(model.revoked_at),
             revoked_by=model.revoked_by,
-            created_at=ensure_app_timezone(model.created_at),
-            updated_at=ensure_app_timezone(model.updated_at),
+            created_at=ensure_app_naive_datetime(model.created_at),
+            updated_at=ensure_app_naive_datetime(model.updated_at),
         )
 
     @staticmethod
@@ -176,16 +179,18 @@ class TemplateUserAccessRepository:
     ) -> None:
         model.template_id = access.template_id
         model.user_id = access.user_id
-        model.start_date = ensure_app_timezone(access.start_date)
-        model.end_date = ensure_app_timezone(access.end_date)
-        model.revoked_at = ensure_app_timezone(access.revoked_at)
+        model.start_date = ensure_app_naive_datetime(access.start_date)
+        model.end_date = ensure_app_naive_datetime(access.end_date)
+        model.revoked_at = ensure_app_naive_datetime(access.revoked_at)
         model.revoked_by = access.revoked_by
         if include_creation_fields:
             model.created_at = (
-                ensure_app_timezone(access.created_at) or now_in_app_timezone()
+                ensure_app_naive_datetime(access.created_at)
+                or ensure_app_naive_datetime(now_in_app_timezone())
             )
         model.updated_at = (
-            ensure_app_timezone(access.updated_at) or now_in_app_timezone()
+            ensure_app_naive_datetime(access.updated_at)
+            or ensure_app_naive_datetime(now_in_app_timezone())
         )
 
 

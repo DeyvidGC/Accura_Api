@@ -22,7 +22,7 @@ from app.infrastructure.models import (
 )
 from app.infrastructure.repositories.template_repository import TemplateRepository
 from app.infrastructure.repositories.user_repository import UserRepository
-from app.utils import ensure_app_timezone, now_in_app_timezone
+from app.utils import ensure_app_naive_datetime, now_in_app_timezone
 
 _COMPLETED_STATUSES = (
     LOAD_STATUS_VALIDATED_SUCCESS,
@@ -178,9 +178,9 @@ class LoadRepository:
             total_rows=model.total_rows,
             error_rows=model.error_rows,
             report_path=model.report_path,
-            created_at=ensure_app_timezone(model.created_at),
-            started_at=ensure_app_timezone(model.started_at),
-            finished_at=ensure_app_timezone(model.finished_at),
+            created_at=ensure_app_naive_datetime(model.created_at),
+            started_at=ensure_app_naive_datetime(model.started_at),
+            finished_at=ensure_app_naive_datetime(model.finished_at),
         )
 
     @staticmethod
@@ -199,10 +199,11 @@ class LoadRepository:
         model.report_path = load.report_path
         if include_creation_fields:
             model.created_at = (
-                ensure_app_timezone(load.created_at) or now_in_app_timezone()
+                ensure_app_naive_datetime(load.created_at)
+                or ensure_app_naive_datetime(now_in_app_timezone())
             )
-        model.started_at = ensure_app_timezone(load.started_at)
-        model.finished_at = ensure_app_timezone(load.finished_at)
+        model.started_at = ensure_app_naive_datetime(load.started_at)
+        model.finished_at = ensure_app_naive_datetime(load.finished_at)
 
     @staticmethod
     def _template_summary_to_entity(model: TemplateModel) -> Template:
@@ -214,13 +215,13 @@ class LoadRepository:
             description=model.description,
             table_name=model.table_name,
             created_by=model.created_by,
-            created_at=ensure_app_timezone(model.created_at),
+            created_at=ensure_app_naive_datetime(model.created_at),
             updated_by=model.updated_by,
-            updated_at=ensure_app_timezone(model.updated_at),
+            updated_at=ensure_app_naive_datetime(model.updated_at),
             is_active=model.is_active,
             deleted=model.deleted,
             deleted_by=model.deleted_by,
-            deleted_at=ensure_app_timezone(model.deleted_at),
+            deleted_at=ensure_app_naive_datetime(model.deleted_at),
             columns=[],
         )
 

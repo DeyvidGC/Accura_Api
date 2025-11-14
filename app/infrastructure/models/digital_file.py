@@ -3,7 +3,7 @@
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String
 
 from app.infrastructure.database import Base
-from app.utils import now_in_app_timezone
+from app.utils import now_in_app_naive_datetime
 
 
 class DigitalFileModel(Base):
@@ -17,12 +17,10 @@ class DigitalFileModel(Base):
     description = Column(String(255), nullable=True)
     path = Column(String(255), nullable=False)
     created_by = Column(Integer, nullable=True)
-    created_at = Column(
-        DateTime(timezone=True), nullable=False, default=now_in_app_timezone
-    )
+    created_at = Column(DateTime(), nullable=False, default=now_in_app_naive_datetime)
     updated_by = Column(Integer, nullable=True)
     updated_at = Column(
-        DateTime(timezone=True), nullable=True, onupdate=now_in_app_timezone
+        DateTime(), nullable=True, onupdate=now_in_app_naive_datetime
     )
 
 
