@@ -1,12 +1,15 @@
 """SQLAlchemy model for audit records of template table operations."""
 
 from sqlalchemy import Column, DateTime, Integer, String, func
+from sqlalchemy.dialects.mssql import JSON as MSSQLJSON
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.types import JSON
 
 from app.infrastructure.database import Base
 
-_audit_json_type = JSONB().with_variant(JSON(), "sqlite")
+_audit_json_type = (
+    JSONB().with_variant(JSON(), "sqlite").with_variant(MSSQLJSON(), "mssql")
+)
 
 
 class AuditLogModel(Base):

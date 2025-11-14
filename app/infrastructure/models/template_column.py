@@ -10,6 +10,7 @@ from sqlalchemy import (
     Table,
     func,
 )
+from sqlalchemy.dialects.mssql import JSON as MSSQLJSON
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.types import JSON
@@ -18,7 +19,9 @@ from sqlalchemy.sql import expression
 from app.infrastructure.database import Base
 from app.infrastructure.models.rule import RuleModel
 
-_header_json_type = JSONB().with_variant(JSON(), "sqlite")
+_header_json_type = (
+    JSONB().with_variant(JSON(), "sqlite").with_variant(MSSQLJSON(), "mssql")
+)
 
 
 template_column_rule_table = Table(

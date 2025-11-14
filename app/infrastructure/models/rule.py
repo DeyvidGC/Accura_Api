@@ -2,12 +2,15 @@
 
 from sqlalchemy import Boolean, Column, DateTime, Integer, func
 from sqlalchemy.sql import expression
+from sqlalchemy.dialects.mssql import JSON as MSSQLJSON
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.types import JSON
 
 from app.infrastructure.database import Base
 
-_rule_json_type = JSONB().with_variant(JSON(), "sqlite")
+_rule_json_type = (
+    JSONB().with_variant(JSON(), "sqlite").with_variant(MSSQLJSON(), "mssql")
+)
 
 
 class RuleModel(Base):

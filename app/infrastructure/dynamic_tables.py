@@ -7,6 +7,7 @@ import unicodedata
 from collections.abc import Sequence
 
 from sqlalchemy import Column, Date, Float, Integer, MetaData, String, Table, Text
+from sqlalchemy.dialects.mssql import JSON as MSSQLJSON
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import NoSuchTableError, SQLAlchemyError
 from sqlalchemy.types import JSON
@@ -14,7 +15,9 @@ from sqlalchemy.types import JSON
 from app.domain.entities import TemplateColumn
 from app.infrastructure.database import engine
 
-_json_type = JSONB().with_variant(JSON(), "sqlite")
+_json_type = (
+    JSONB().with_variant(JSON(), "sqlite").with_variant(MSSQLJSON(), "mssql")
+)
 _identifier_regex = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _MAX_IDENTIFIER_LENGTH = 63
 
