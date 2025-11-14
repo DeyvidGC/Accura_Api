@@ -27,8 +27,8 @@ class LoadModel(Base):
     )
     user_id = Column(
         Integer,
-        ForeignKey("user.id", ondelete="CASCADE"),
-        nullable=False,
+        ForeignKey("user.id", ondelete="SET NULL"),
+        nullable=True,
         index=True,
     )
     status = Column(String(40), nullable=False, default="Procesando")
