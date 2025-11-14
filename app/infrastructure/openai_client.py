@@ -324,15 +324,24 @@ def _infer_dependency_headers(payload: Mapping[str, Any]) -> list[str]:
             if normalized_key in _DEPENDENCY_TYPE_ALIASES:
                 nested_values.append(value)
                 continue
+            is_structured_value = isinstance(value, Mapping) or (
+                isinstance(value, Sequence) and not isinstance(value, (str, bytes))
+            )
             if dependent_label is None:
                 dependent_label = stripped_key
+                if is_structured_value:
+                    nested_values.append(value)
             else:
-                additional_labels.append(stripped_key)
+                if is_structured_value:
+                    nested_values.append(value)
+                else:
+                    additional_labels.append(stripped_key)
 
         if dependent_label:
             add_label(dependent_label)
         for label in additional_labels:
             add_label(label)
+
         for nested_value in nested_values:
             _collect_nested_labels(nested_value, add_label)
 
