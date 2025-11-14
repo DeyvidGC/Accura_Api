@@ -64,7 +64,12 @@ def _create_workbook(columns: Sequence[TemplateColumn]) -> Workbook:
     worksheet = workbook.active
     worksheet.title = "Datos"
 
-    headers = [column.name for column in columns]
+    ordered_columns = sorted(
+        columns,
+        key=lambda column: (column.id is None, column.id or 0),
+    )
+
+    headers = [column.name for column in ordered_columns]
     if headers:
         worksheet.append(headers)
         header_fill = PatternFill(fill_type="solid", fgColor="4F81BD")
