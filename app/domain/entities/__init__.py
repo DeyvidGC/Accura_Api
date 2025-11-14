@@ -18,6 +18,12 @@ from .template_user_access import TemplateUserAccess
 from .user import User
 from .notification import Notification
 from .activity_event import ActivityEvent
+from .load_event import (
+    LoadEvent,
+    LoadEventLoad,
+    LoadEventTemplateSummary,
+    LoadEventUserSummary,
+)
 
 __all__ = [
     "AuditLog",
@@ -37,4 +43,8 @@ __all__ = [
     "User",
     "Notification",
     "ActivityEvent",
+    "LoadEvent",
+    "LoadEventLoad",
+    "LoadEventTemplateSummary",
+    "LoadEventUserSummary",
 ]

@@ -12,12 +12,16 @@ from app.domain.entities import (
     LOAD_STATUS_VALIDATED_SUCCESS,
     LOAD_STATUS_VALIDATED_WITH_ERRORS,
     Load,
+    LoadEvent,
+    LoadEventLoad,
+    LoadEventTemplateSummary,
+    LoadEventUserSummary,
     Notification,
     Template,
     TemplateUserAccess,
     User,
 )
-from app.infrastructure.notifications import dispatch_notification
+from app.infrastructure.notifications import dispatch_notification, dispatch_load_event
 from app.infrastructure.repositories import NotificationRepository, UserRepository
 
 try:
@@ -57,6 +61,67 @@ def _persist_notification(
     saved = repository.create(notification)
     dispatch_notification(saved)
     return saved
+
+
+def _load_event_recipients(template: Template, user: User) -> set[int]:
+    """Return the set of user identifiers that should receive load events."""
+
+    recipients = {user.id}
+    if user.created_by:
+        recipients.add(user.created_by)
+    if template.created_by:
+        recipients.add(template.created_by)
+    if template.user_id:
+        recipients.add(template.user_id)
+    return {recipient for recipient in recipients if recipient}
+
+
+def _broadcast_load_event(
+    *, load: Load, template: Template, user: User, event_type: str, stage: str
+) -> None:
+    """Serialize and dispatch a realtime event describing ``load``."""
+
+    recipients = _load_event_recipients(template, user)
+    if not recipients:
+        return
+
+    event = LoadEvent(
+        event_type=event_type,
+        stage=stage,
+        load=LoadEventLoad(
+            id=load.id,
+            template_id=load.template_id,
+            user_id=load.user_id,
+            status=load.status,
+            file_name=load.file_name,
+            total_rows=load.total_rows,
+            error_rows=load.error_rows,
+            report_path=load.report_path,
+            created_at=load.created_at,
+            started_at=load.started_at,
+            finished_at=load.finished_at,
+        ),
+        template=LoadEventTemplateSummary(
+            id=template.id,
+            user_id=template.user_id,
+            name=template.name,
+            status=template.status,
+            description=template.description,
+            table_name=template.table_name,
+            created_at=template.created_at,
+            updated_at=template.updated_at,
+            is_active=template.is_active,
+            deleted=template.deleted,
+            deleted_by=template.deleted_by,
+            deleted_at=template.deleted_at,
+        ),
+        user=LoadEventUserSummary(
+            id=user.id,
+            name=user.name,
+            email=user.email,
+        ),
+    )
+    dispatch_load_event(event, recipients)
 
 
 def notify_template_created(session: Session, *, template: Template) -> None:
@@ -164,6 +229,13 @@ def notify_template_processing(
         message=message,
         status=LOAD_STATUS_PROCESSING,
     )
+    _broadcast_load_event(
+        load=load,
+        template=template,
+        user=user,
+        event_type="load.processing",
+        stage="processing",
+    )
 
 
 def notify_template_access_granted(
@@ -238,6 +310,14 @@ def notify_load_validated_success(
         title=title,
         message=message,
         payload=payload,
+    )
+
+    _broadcast_load_event(
+        load=load,
+        template=template,
+        user=user,
+        event_type=event_type,
+        stage="completed",
     )
 
     if status != LOAD_STATUS_VALIDATED_SUCCESS:
@@ -326,6 +406,13 @@ def notify_load_status_changed(
         title=title,
         message=message,
         status=status,
+    )
+    _broadcast_load_event(
+        load=load,
+        template=template,
+        user=user,
+        event_type=event_type,
+        stage="completed",
     )
 
 
