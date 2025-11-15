@@ -218,7 +218,31 @@ def _infer_dependency_headers_from_block(
         seen.add(normalized)
         ordered.append(candidate)
 
-    _collect_leaf_labels(specifics, add_label)
+    header_rule_context = {"Tipo de dato": "Dependencia", "Regla": rule_block}
+    inferred_rule_headers = _infer_header_rule(header_rule_context)
+    controlling_label: str | None = None
+    if inferred_rule_headers:
+        candidate = inferred_rule_headers[0].strip()
+        if candidate:
+            controlling_label = candidate
+            add_label(candidate)
+
+    collected_nested = False
+    for entry in specifics:
+        if not isinstance(entry, Mapping):
+            continue
+        for value in entry.values():
+            if isinstance(value, Mapping) or (
+                isinstance(value, Sequence) and not isinstance(value, (str, bytes))
+            ):
+                collected_nested = True
+                _collect_leaf_labels(value, add_label)
+
+    if not collected_nested:
+        _collect_leaf_labels(specifics, add_label)
+
+    if not ordered and controlling_label:
+        ordered.append(controlling_label)
 
     return ordered
 
