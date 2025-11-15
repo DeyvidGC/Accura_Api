@@ -627,6 +627,7 @@ class StructuredChatService:
             "En 'Header' incluye únicamente las propiedades configurables de la regla "
             "(por ejemplo: 'Tipo de documento', 'Longitud mínima', 'Longitud máxima') "
             "recorriendo las claves finales (hojas) definidas dentro de 'reglas especifica'. "
+            "No agregues etiquetas que no existan literalmente como claves finales dentro de ese bloque. "
             "En 'Header rule' registra primero la propiedad condicionante y luego la propiedad dependiente "
             "(por ejemplo: 'Tipo de documento', 'Número de documento'). "
             "Dentro de 'Regla', cada elemento de 'reglas especifica' debe definir el valor del campo condicionante y, "

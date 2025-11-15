@@ -361,6 +361,14 @@ def list_rules_by_type_endpoint(
                 header_entries = _deduplicate_headers(
                     _extract_header_entries(definition.get("Header"))
                 )
+                rule_block = definition.get("Regla")
+                inferred_dependency_header: list[str] = []
+                if isinstance(rule_block, Mapping):
+                    inferred_dependency_header = _infer_dependency_headers_from_block(
+                        rule_block
+                    )
+                if definition_type == "dependencia" and inferred_dependency_header:
+                    header_entries = _deduplicate_headers(inferred_dependency_header)
                 explicit_header_rule = _deduplicate_headers(
                     _extract_header_entries(definition.get("Header rule"))
                 )
