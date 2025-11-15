@@ -25,12 +25,12 @@ class TemplateUserAccessRepository:
         include_scheduled: bool = False,
     ) -> Sequence[TemplateUserAccess]:
         query = self.session.query(TemplateUserAccessModel).filter(
-            TemplateUserAccessModel.template_id == template_id
+            TemplateUserAccessModel.template_id == template_id,
+            TemplateUserAccessModel.revoked_at.is_(None),
         )
         if not include_inactive:
             now = ensure_app_naive_datetime(now_in_app_timezone())
             filters = [
-                TemplateUserAccessModel.revoked_at.is_(None),
                 (
                     TemplateUserAccessModel.end_date.is_(None)
                     | (TemplateUserAccessModel.end_date >= now)
@@ -50,12 +50,12 @@ class TemplateUserAccessRepository:
         include_scheduled: bool = False,
     ) -> Sequence[TemplateUserAccess]:
         query = self.session.query(TemplateUserAccessModel).filter(
-            TemplateUserAccessModel.user_id == user_id
+            TemplateUserAccessModel.user_id == user_id,
+            TemplateUserAccessModel.revoked_at.is_(None),
         )
         if not include_inactive:
             now = ensure_app_naive_datetime(now_in_app_timezone())
             filters = [
-                TemplateUserAccessModel.revoked_at.is_(None),
                 (
                     TemplateUserAccessModel.end_date.is_(None)
                     | (TemplateUserAccessModel.end_date >= now)
