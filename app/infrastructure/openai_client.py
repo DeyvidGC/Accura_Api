@@ -821,23 +821,21 @@ class StructuredChatService:
             if not isinstance(payload[field], str) or not payload[field].strip():
                 raise OpenAIServiceError(f"'{field}' debe ser una cadena no vacía.")
 
-        header = payload.get("Header")
-        if not isinstance(header, list) or not header:
-            raise OpenAIServiceError("'Header' debe ser una lista con al menos un elemento.")
-        for index, entry in enumerate(header, start=1):
-            if not isinstance(entry, str) or not entry.strip():
-                raise OpenAIServiceError(
-                    "Cada elemento de 'Header' debe ser una cadena no vacía. "
-                    f"Elemento inválido en la posición {index}."
-                )
+        header_entries = _deduplicate_headers(
+            _extract_header_entries(payload.get("Header"))
+        )
 
         expected_header_list: list[str] | None = None
 
         if tipo == "Lista compleja":
             derived_header = _extract_composite_header_fields(payload.get("Regla"))
             if derived_header:
-                payload["Header"] = derived_header
-                header = derived_header
+                header_entries = derived_header
+
+        if tipo == "Dependencia":
+            inferred_header = _infer_dependency_headers(payload)
+            if inferred_header:
+                header_entries = inferred_header
 
         if tipo == "Dependencia":
             inferred_header = _infer_dependency_headers(payload)
@@ -847,19 +845,27 @@ class StructuredChatService:
 
         expected_simple_headers = _SIMPLE_RULE_HEADERS.get(tipo)
         if expected_simple_headers is not None:
-            normalized_header = [_normalize_for_matching(item) for item in header]
+            normalized_header = [
+                _normalize_for_matching(item) for item in header_entries
+            ]
             expected_list = list(expected_simple_headers)
             normalized_expected = [_normalize_for_matching(item) for item in expected_list]
             if normalized_header != normalized_expected:
                 logger.debug(
                     "Normalizando header para el tipo '%s': recibido=%s, esperado=%s",
                     tipo,
-                    header,
+                    header_entries,
                     expected_list,
                 )
-                payload["Header"] = expected_list
-                header = expected_list
+                header_entries = expected_list
             expected_header_list = expected_list
+
+        if not header_entries:
+            raise OpenAIServiceError(
+                "'Header' debe contener al menos una etiqueta válida derivada de la regla."
+            )
+
+        payload["Header"] = header_entries
 
         header_rule_entries = payload.get("Header rule")
         if isinstance(header_rule_entries, list):
@@ -874,7 +880,7 @@ class StructuredChatService:
             header_rule_entries = list(expected_header_list)
 
         if not header_rule_entries:
-            header_rule_entries = _deduplicate_headers(header)
+            header_rule_entries = _deduplicate_headers(header_entries)
 
         if not header_rule_entries:
             raise OpenAIServiceError(

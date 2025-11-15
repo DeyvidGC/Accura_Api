@@ -497,10 +497,9 @@ def read_rule_headers(
 
         explicit_headers = _extract_header_entries(definition.get("Header"))
         if inferred_headers:
-            if explicit_headers:
-                explicit_headers = _deduplicate_headers(explicit_headers + inferred_headers)
-            else:
-                explicit_headers = inferred_headers
+            explicit_headers = _deduplicate_headers(inferred_headers)
+        else:
+            explicit_headers = _deduplicate_headers(explicit_headers)
 
         headers.extend(explicit_headers)
         explicit = _deduplicate_headers(
