@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from dataclasses import replace
 from collections.abc import Mapping, Sequence
 from typing import Any, Callable
 
@@ -404,10 +405,56 @@ def _extract_bool(value: Any) -> bool:
     return value if isinstance(value, bool) else False
 
 
+def _sanitize_rule_payload(rule_payload: Any) -> Any:
+    if isinstance(rule_payload, Mapping):
+        return _sanitize_rule_definition(rule_payload)
+    if isinstance(rule_payload, Sequence) and not isinstance(rule_payload, (str, bytes)):
+        return [_sanitize_rule_payload(entry) for entry in rule_payload]
+    return rule_payload
+
+
+def _sanitize_rule_definition(definition: Mapping[str, Any]) -> dict[str, Any]:
+    sanitized_definition = dict(definition)
+
+    rule_block_raw = definition.get("Regla")
+    sanitized_rule_block = _sanitize_rule_payload(rule_block_raw)
+    if rule_block_raw is not None:
+        sanitized_definition["Regla"] = sanitized_rule_block
+
+    header_entries = _deduplicate_headers(
+        _extract_header_entries(definition.get("Header"))
+    )
+
+    if isinstance(sanitized_rule_block, (Mapping, Sequence)) and not isinstance(
+        sanitized_rule_block, (str, bytes)
+    ):
+        inferred_specific_headers = _infer_dependency_headers_from_block(
+            sanitized_rule_block
+        )
+        if inferred_specific_headers:
+            header_entries = _deduplicate_headers(inferred_specific_headers)
+        header_entries = _filter_headers_to_specific_leaves(
+            header_entries, sanitized_rule_block
+        )
+
+    if "Header" in sanitized_definition or header_entries:
+        sanitized_definition["Header"] = header_entries
+
+    header_rule_entries = _deduplicate_headers(
+        _extract_header_entries(definition.get("Header rule"))
+    )
+    if "Header rule" in sanitized_definition or header_rule_entries:
+        sanitized_definition["Header rule"] = header_rule_entries
+
+    return sanitized_definition
+
+
 def _to_read_model(rule: Rule) -> RuleRead:
+    sanitized_rule = _sanitize_rule_payload(rule.rule)
+    sanitized_entity = replace(rule, rule=sanitized_rule)
     if hasattr(RuleRead, "model_validate"):
-        return RuleRead.model_validate(rule)
-    return RuleRead.from_orm(rule)
+        return RuleRead.model_validate(sanitized_entity)
+    return RuleRead.from_orm(sanitized_entity)
 
 
 @router.post("/", response_model=RuleRead, status_code=status.HTTP_201_CREATED)
