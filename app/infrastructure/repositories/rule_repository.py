@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import re
+import unicodedata
 from collections.abc import Mapping, Sequence
+from typing import Any
 
 from sqlalchemy import desc, false
 from sqlalchemy.orm import Session
@@ -45,6 +48,57 @@ class RuleRepository:
         if limit is not None:
             query = query.limit(limit)
         return [self._to_entity(model) for model in query.all()]
+
+    def list_recent_by_type(
+        self,
+        *,
+        limit: int = 5,
+        creator_id: int | None = None,
+        rule_types: Sequence[str] = (),
+    ) -> Sequence[Rule]:
+        """Return the most recent rules that match any of the provided types."""
+
+        normalized_types = {
+            self._normalize_label(value)
+            for value in rule_types
+            if isinstance(value, str) and value.strip()
+        }
+        if not normalized_types:
+            return []
+
+        base_query = self.session.query(RuleModel).filter(RuleModel.deleted == false())
+        if creator_id is not None:
+            base_query = base_query.filter(RuleModel.created_by == creator_id)
+        base_query = base_query.order_by(desc(RuleModel.id))
+
+        if limit is None:
+            search_batch = 20
+        else:
+            search_batch = max(limit * 4, 20)
+
+        matches: list[Rule] = []
+        offset = 0
+
+        while True:
+            query = base_query.offset(offset)
+            if search_batch:
+                query = query.limit(search_batch)
+            models = query.all()
+            if not models:
+                break
+
+            for model in models:
+                entity = self._to_entity(model)
+                if self._rule_contains_type(entity.rule, normalized_types):
+                    matches.append(entity)
+                    if limit is not None and len(matches) >= limit:
+                        return matches
+
+            if len(models) < search_batch:
+                break
+            offset += search_batch
+
+        return matches
 
     def list_by_creator(self, creator_id: int) -> Sequence[Rule]:
         query = (
@@ -189,6 +243,34 @@ class RuleRepository:
         if isinstance(rule_data, Sequence) and not isinstance(rule_data, (str, bytes)):
             for entry in rule_data:
                 RuleRepository._collect_rule_names(entry, names)
+
+    @staticmethod
+    def _rule_contains_type(rule_data: Any, normalized_targets: set[str]) -> bool:
+        if isinstance(rule_data, Mapping):
+            type_label = rule_data.get("Tipo de dato")
+            if isinstance(type_label, str):
+                normalized = RuleRepository._normalize_label(type_label)
+                if normalized in normalized_targets:
+                    return True
+            for value in rule_data.values():
+                if RuleRepository._rule_contains_type(value, normalized_targets):
+                    return True
+            return False
+
+        if isinstance(rule_data, Sequence) and not isinstance(rule_data, (str, bytes)):
+            return any(
+                RuleRepository._rule_contains_type(entry, normalized_targets)
+                for entry in rule_data
+            )
+
+        return False
+
+    @staticmethod
+    def _normalize_label(value: str) -> str:
+        normalized = unicodedata.normalize("NFKD", str(value))
+        ascii_label = "".join(char for char in normalized if not unicodedata.combining(char))
+        collapsed = re.sub(r"[\s\-_/]+", " ", ascii_label)
+        return collapsed.lower().strip()
 
 
 __all__ = ["RuleRepository"]

@@ -623,7 +623,7 @@ def ensure_rule_header_dependencies(
                     )
 
                 previous_column = assignments.get(normalized)
-                if previous_column:
+                if previous_column and previous_column != column.name:
                     raise ValueError(
                         "El header '"
                         + original
