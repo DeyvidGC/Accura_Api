@@ -625,7 +625,8 @@ class StructuredChatService:
             "correspondientes según el tipo de dato. "
             "Cuando definas reglas del tipo 'Dependencia', omite la propiedad 'Nombre dependiente'. "
             "En 'Header' incluye únicamente las propiedades configurables de la regla "
-            "(por ejemplo: 'Tipo de documento', 'Longitud mínima', 'Longitud máxima'). "
+            "(por ejemplo: 'Tipo de documento', 'Longitud mínima', 'Longitud máxima') "
+            "recorriendo las claves finales (hojas) definidas dentro de 'reglas especifica'. "
             "En 'Header rule' registra primero la propiedad condicionante y luego la propiedad dependiente "
             "(por ejemplo: 'Tipo de documento', 'Número de documento'). "
             "Dentro de 'Regla', cada elemento de 'reglas especifica' debe definir el valor del campo condicionante y, "
@@ -817,6 +818,12 @@ class StructuredChatService:
             if derived_header:
                 payload["Header"] = derived_header
                 header = derived_header
+
+        if tipo == "Dependencia":
+            inferred_header = _infer_dependency_headers(payload)
+            if inferred_header:
+                payload["Header"] = inferred_header
+                header = inferred_header
 
         expected_simple_headers = _SIMPLE_RULE_HEADERS.get(tipo)
         if expected_simple_headers is not None:
