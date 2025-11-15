@@ -140,6 +140,82 @@ def _extract_dependency_specifics(rule_block: Mapping[str, Any]) -> list[Mapping
     return _iter_specifics(rule_block)
 
 
+def _collect_specific_leaf_headers(
+    rule_block: Mapping[str, Any] | Sequence[Any],
+) -> list[str]:
+    if not isinstance(rule_block, (Mapping, Sequence)) or isinstance(
+        rule_block, (str, bytes)
+    ):
+        return []
+
+    specifics: list[Mapping[str, Any]] = []
+    if isinstance(rule_block, Mapping):
+        specifics = _extract_dependency_specifics(rule_block)
+    else:
+        collected: list[Mapping[str, Any]] = []
+        for entry in rule_block:
+            if isinstance(entry, Mapping):
+                collected.extend(_extract_dependency_specifics(entry))
+        specifics = collected
+
+    if not specifics:
+        return []
+
+    seen: set[str] = set()
+    ordered: list[str] = []
+
+    def add_label(label: str) -> None:
+        if not isinstance(label, str):
+            return
+        candidate = label.strip()
+        if not candidate:
+            return
+        normalized = _normalize_label(candidate)
+        if normalized in seen:
+            return
+        seen.add(normalized)
+        ordered.append(candidate)
+
+    _collect_leaf_labels(specifics, add_label)
+    return ordered
+
+
+def _filter_headers_to_specific_leaves(
+    headers: Sequence[str],
+    rule_block: Mapping[str, Any] | Sequence[Any] | None,
+) -> list[str]:
+    if not isinstance(headers, Sequence) or isinstance(headers, (str, bytes)):
+        if isinstance(headers, Sequence):
+            return list(headers)
+        return []
+
+    if not isinstance(rule_block, (Mapping, Sequence)) or isinstance(
+        rule_block, (str, bytes)
+    ):
+        return list(headers)
+
+    leaf_headers = _collect_specific_leaf_headers(rule_block)
+    if not leaf_headers:
+        return list(headers)
+
+    allowed = {_normalize_label(entry) for entry in leaf_headers}
+    filtered: list[str] = []
+    seen: set[str] = set()
+    for header in headers:
+        if not isinstance(header, str):
+            continue
+        candidate = header.strip()
+        if not candidate:
+            continue
+        normalized = _normalize_label(candidate)
+        if normalized not in allowed or normalized in seen:
+            continue
+        seen.add(normalized)
+        filtered.append(candidate)
+
+    return filtered if filtered else leaf_headers
+
+
 def _is_leaf_value(value: Any) -> bool:
     if isinstance(value, Mapping):
         return False
@@ -416,6 +492,12 @@ def list_rules_by_type_endpoint(
                     header_entries = _deduplicate_headers(
                         _extract_header_entries(definition.get("Header"))
                     )
+                if isinstance(rule_block, (Mapping, Sequence)) and not isinstance(
+                    rule_block, (str, bytes)
+                ):
+                    header_entries = _filter_headers_to_specific_leaves(
+                        header_entries, rule_block
+                    )
                 explicit_header_rule = _deduplicate_headers(
                     _extract_header_entries(definition.get("Header rule"))
                 )
@@ -533,6 +615,12 @@ def read_rule_headers(
             explicit_headers = _deduplicate_headers(inferred_headers)
         else:
             explicit_headers = _deduplicate_headers(explicit_headers)
+        if isinstance(rule_block, (Mapping, Sequence)) and not isinstance(
+            rule_block, (str, bytes)
+        ):
+            explicit_headers = _filter_headers_to_specific_leaves(
+                explicit_headers, rule_block
+            )
 
         headers.extend(explicit_headers)
         explicit = _deduplicate_headers(
