@@ -309,6 +309,49 @@ def _extract_dependency_leaf_labels(rule_block: Any) -> list[str]:
     return ordered
 
 
+def _filter_headers_to_dependency_leaves(
+    headers: Sequence[str], leaf_headers: Sequence[str]
+) -> list[str]:
+    """Restrict the provided headers to those that match the collected leaves."""
+
+    clean_leaf_headers: list[str] = []
+    allowed: set[str] = set()
+    for label in leaf_headers:
+        if not isinstance(label, str):
+            continue
+        candidate = label.strip()
+        if not candidate:
+            continue
+        normalized = _normalize_for_matching(candidate)
+        if normalized in allowed:
+            continue
+        allowed.add(normalized)
+        clean_leaf_headers.append(candidate)
+
+    if not allowed:
+        return [
+            header.strip()
+            for header in headers
+            if isinstance(header, str) and header.strip()
+        ]
+
+    filtered: list[str] = []
+    seen: set[str] = set()
+    for header in headers:
+        if not isinstance(header, str):
+            continue
+        candidate = header.strip()
+        if not candidate:
+            continue
+        normalized = _normalize_for_matching(candidate)
+        if normalized not in allowed or normalized in seen:
+            continue
+        seen.add(normalized)
+        filtered.append(candidate)
+
+    return filtered if filtered else clean_leaf_headers
+
+
 def _extract_dependency_header_fields(rule_config: Any) -> list[str]:
     """Infer header combinations for dependency rules."""
 
@@ -832,16 +875,13 @@ class StructuredChatService:
             if derived_header:
                 header_entries = derived_header
 
+        leaf_headers: list[str] = []
         if tipo == "Dependencia":
-            inferred_header = _infer_dependency_headers(payload)
-            if inferred_header:
-                header_entries = inferred_header
-
-        if tipo == "Dependencia":
-            inferred_header = _infer_dependency_headers(payload)
-            if inferred_header:
-                payload["Header"] = inferred_header
-                header = inferred_header
+            leaf_headers = _infer_dependency_headers(payload)
+            if leaf_headers:
+                header_entries = _filter_headers_to_dependency_leaves(
+                    header_entries, leaf_headers
+                )
 
         expected_simple_headers = _SIMPLE_RULE_HEADERS.get(tipo)
         if expected_simple_headers is not None:
