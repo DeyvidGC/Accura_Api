@@ -178,7 +178,11 @@ def _collect_leaf_labels(value: Any, add_label: Callable[[str], None]) -> None:
             _collect_leaf_labels(entry, add_label)
 
 
-def _infer_dependency_headers_from_block(rule_block: Mapping[str, Any] | Sequence[Any]) -> list[str]:
+def _infer_dependency_headers_from_block(
+    rule_block: Mapping[str, Any] | Sequence[Any],
+) -> list[str]:
+    """Collect leaf keys present inside any ``reglas especifica`` block."""
+
     if isinstance(rule_block, Sequence) and not isinstance(rule_block, (str, bytes)):
         collected: list[str] = []
         seen: set[str] = set()
@@ -374,17 +378,20 @@ def list_rules_by_type_endpoint(
                 if definition_type not in normalized_aliases:
                     continue
 
-                header_entries = _deduplicate_headers(
-                    _extract_header_entries(definition.get("Header"))
-                )
                 rule_block = definition.get("Regla")
-                inferred_dependency_header: list[str] = []
-                if isinstance(rule_block, Mapping):
-                    inferred_dependency_header = _infer_dependency_headers_from_block(
+                inferred_specific_headers: list[str] = []
+                if isinstance(rule_block, (Mapping, Sequence)) and not isinstance(
+                    rule_block, (str, bytes)
+                ):
+                    inferred_specific_headers = _infer_dependency_headers_from_block(
                         rule_block
                     )
-                if definition_type == "dependencia" and inferred_dependency_header:
-                    header_entries = _deduplicate_headers(inferred_dependency_header)
+                if inferred_specific_headers:
+                    header_entries = _deduplicate_headers(inferred_specific_headers)
+                else:
+                    header_entries = _deduplicate_headers(
+                        _extract_header_entries(definition.get("Header"))
+                    )
                 explicit_header_rule = _deduplicate_headers(
                     _extract_header_entries(definition.get("Header rule"))
                 )
@@ -492,7 +499,9 @@ def read_rule_headers(
     for definition in matching_definitions:
         rule_block = definition.get("Regla")
         inferred_headers: list[str] = []
-        if isinstance(rule_block, Mapping) and normalized_type == "dependencia":
+        if isinstance(rule_block, (Mapping, Sequence)) and not isinstance(
+            rule_block, (str, bytes)
+        ):
             inferred_headers = _infer_dependency_headers_from_block(rule_block)
 
         explicit_headers = _extract_header_entries(definition.get("Header"))
