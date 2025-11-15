@@ -283,6 +283,24 @@ def _build_rules_catalog(rules: Sequence[Rule]) -> list[dict[str, Any]]:
     return catalog
 
 
+def _merge_rule_sequences(*batches: Sequence[Rule]) -> list[Rule]:
+    """Merge rule sequences preserving order and avoiding duplicates by id."""
+
+    merged: list[Rule] = []
+    seen_ids: set[int] = set()
+
+    for batch in batches:
+        for rule in batch:
+            identifier = rule.id
+            if isinstance(identifier, int):
+                if identifier in seen_ids:
+                    continue
+                seen_ids.add(identifier)
+            merged.append(rule)
+
+    return merged
+
+
 @router.post("/analyze", response_model=AssistantMessageResponse)
 def analyze_message(
     payload: AssistantMessageRequest,
@@ -296,7 +314,14 @@ def analyze_message(
         recent_rules = list_recent_rules_uc(
             db, current_user=current_user, limit=5
         )
-        serialized_rules = _build_rules_catalog(recent_rules)
+        list_rules = list_recent_rules_uc(
+            db,
+            current_user=current_user,
+            limit=10,
+            rule_types=("Lista", "Lista compleja"),
+        )
+        combined_rules = _merge_rule_sequences(recent_rules, list_rules)
+        serialized_rules = _build_rules_catalog(combined_rules)
         raw_response = assistant.generate_structured_response(
             payload.message,
             recent_rules=serialized_rules or None,
