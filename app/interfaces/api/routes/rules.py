@@ -140,15 +140,42 @@ def _extract_dependency_specifics(rule_block: Mapping[str, Any]) -> list[Mapping
     return _iter_specifics(rule_block)
 
 
-def _collect_nested_labels(value: Any, add_label: Callable[[str], None]) -> None:
+def _is_leaf_value(value: Any) -> bool:
+    if isinstance(value, Mapping):
+        return False
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        if not value:
+            return True
+        return not any(
+            isinstance(entry, Mapping)
+            or (
+                isinstance(entry, Sequence)
+                and not isinstance(entry, (str, bytes))
+            )
+            for entry in value
+        )
+    return True
+
+
+def _collect_leaf_labels(value: Any, add_label: Callable[[str], None]) -> None:
     if isinstance(value, Mapping):
         for key, nested in value.items():
-            if isinstance(key, str):
-                add_label(key)
-            _collect_nested_labels(nested, add_label)
+            if not isinstance(key, str):
+                _collect_leaf_labels(nested, add_label)
+                continue
+
+            candidate = key.strip()
+            if not candidate:
+                _collect_leaf_labels(nested, add_label)
+                continue
+
+            if _is_leaf_value(nested):
+                add_label(candidate)
+            else:
+                _collect_leaf_labels(nested, add_label)
     elif isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
         for entry in value:
-            _collect_nested_labels(entry, add_label)
+            _collect_leaf_labels(entry, add_label)
 
 
 def _infer_dependency_headers_from_block(rule_block: Mapping[str, Any]) -> list[str]:
@@ -171,32 +198,7 @@ def _infer_dependency_headers_from_block(rule_block: Mapping[str, Any]) -> list[
         seen.add(normalized)
         ordered.append(candidate)
 
-    for entry in specifics:
-        dependent_label: str | None = None
-        nested_values: list[Any] = []
-        additional_labels: list[str] = []
-
-        for key, value in entry.items():
-            if not isinstance(key, str):
-                continue
-            stripped_key = key.strip()
-            if not stripped_key:
-                continue
-            normalized_key = _normalize_label(stripped_key)
-            if normalized_key in _DEPENDENCY_TYPE_ALIASES:
-                nested_values.append(value)
-                continue
-            if dependent_label is None:
-                dependent_label = stripped_key
-            else:
-                additional_labels.append(stripped_key)
-
-        if dependent_label:
-            add_label(dependent_label)
-        for label in additional_labels:
-            add_label(label)
-        for nested_value in nested_values:
-            _collect_nested_labels(nested_value, add_label)
+    _collect_leaf_labels(specifics, add_label)
 
     return ordered
 
