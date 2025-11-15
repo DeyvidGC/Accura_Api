@@ -227,17 +227,86 @@ def _iter_dependency_specifics(rule_config: Any) -> list[Mapping[str, Any]]:
     return [entry for entry in specifics if isinstance(entry, Mapping)]
 
 
-def _collect_nested_labels(value: Any, add_label: Callable[[str], None]) -> None:
-    """Collect nested header labels from arbitrary rule payloads."""
+def _is_leaf_value(value: Any) -> bool:
+    """Return True when the provided value represents a leaf node."""
+
+    if isinstance(value, Mapping):
+        return False
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        if not value:
+            return True
+        return not any(
+            isinstance(entry, Mapping)
+            or (
+                isinstance(entry, Sequence)
+                and not isinstance(entry, (str, bytes))
+            )
+            for entry in value
+        )
+    return True
+
+
+def _collect_leaf_labels(value: Any, add_label: Callable[[str], None]) -> None:
+    """Collect leaf labels from the provided dependency configuration."""
 
     if isinstance(value, Mapping):
         for key, nested in value.items():
-            if isinstance(key, str):
-                add_label(key)
-            _collect_nested_labels(nested, add_label)
+            if not isinstance(key, str):
+                _collect_leaf_labels(nested, add_label)
+                continue
+
+            candidate = key.strip()
+            if not candidate:
+                _collect_leaf_labels(nested, add_label)
+                continue
+
+            if _is_leaf_value(nested):
+                add_label(candidate)
+            else:
+                _collect_leaf_labels(nested, add_label)
     elif isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
         for entry in value:
-            _collect_nested_labels(entry, add_label)
+            _collect_leaf_labels(entry, add_label)
+
+
+def _extract_dependency_leaf_labels(rule_block: Any) -> list[str]:
+    """Return the leaf labels that exist in the dependency specifics block."""
+
+    if isinstance(rule_block, Sequence) and not isinstance(rule_block, (str, bytes)):
+        collected: list[str] = []
+        seen: set[str] = set()
+        for entry in rule_block:
+            nested_labels = _extract_dependency_leaf_labels(entry)
+            for label in nested_labels:
+                normalized = _normalize_for_matching(label)
+                if normalized in seen:
+                    continue
+                seen.add(normalized)
+                collected.append(label)
+        return collected
+
+    specifics = _iter_dependency_specifics(rule_block)
+    if not specifics:
+        return []
+
+    seen: set[str] = set()
+    ordered: list[str] = []
+
+    def add_label(label: str) -> None:
+        if not isinstance(label, str):
+            return
+        candidate = label.strip()
+        if not candidate:
+            return
+        normalized = _normalize_for_matching(candidate)
+        if normalized in seen:
+            return
+        seen.add(normalized)
+        ordered.append(candidate)
+
+    _collect_leaf_labels(specifics, add_label)
+
+    return ordered
 
 
 def _extract_dependency_header_fields(rule_config: Any) -> list[str]:
@@ -290,53 +359,7 @@ def _infer_dependency_headers(payload: Mapping[str, Any]) -> list[str]:
     if not isinstance(rule_block, Mapping):
         return []
 
-    specifics = _iter_dependency_specifics(rule_block)
-    if not specifics:
-        return []
-
-    seen: set[str] = set()
-    ordered: list[str] = []
-
-    def add_label(label: str) -> None:
-        if not isinstance(label, str):
-            return
-        candidate = label.strip()
-        if not candidate:
-            return
-        normalized = _normalize_for_matching(candidate)
-        if normalized in seen:
-            return
-        seen.add(normalized)
-        ordered.append(candidate)
-
-    for entry in specifics:
-        dependent_label: str | None = None
-        nested_values: list[Any] = []
-        additional_labels: list[str] = []
-
-        for key, value in entry.items():
-            if not isinstance(key, str):
-                continue
-            stripped_key = key.strip()
-            if not stripped_key:
-                continue
-            normalized_key = _normalize_for_matching(stripped_key)
-            if normalized_key in _DEPENDENCY_TYPE_ALIASES:
-                nested_values.append(value)
-                continue
-            if dependent_label is None:
-                dependent_label = stripped_key
-            else:
-                additional_labels.append(stripped_key)
-
-        if dependent_label:
-            add_label(dependent_label)
-        for label in additional_labels:
-            add_label(label)
-        for nested_value in nested_values:
-            _collect_nested_labels(nested_value, add_label)
-
-    return ordered
+    return _extract_dependency_leaf_labels(rule_block)
 
 
 def _infer_header_rule(payload: Mapping[str, Any]) -> list[str]:
@@ -621,7 +644,9 @@ class StructuredChatService:
             "correspondientes según el tipo de dato. "
             "Cuando definas reglas del tipo 'Dependencia', omite la propiedad 'Nombre dependiente'. "
             "En 'Header' incluye únicamente las propiedades configurables de la regla "
-            "(por ejemplo: 'Tipo de documento', 'Longitud mínima', 'Longitud máxima'). "
+            "(por ejemplo: 'Tipo de documento', 'Longitud mínima', 'Longitud máxima') "
+            "recorriendo las claves finales (hojas) definidas dentro de 'reglas especifica'. "
+            "No agregues etiquetas que no existan literalmente como claves finales dentro de ese bloque. "
             "En 'Header rule' registra primero la propiedad condicionante y luego la propiedad dependiente "
             "(por ejemplo: 'Tipo de documento', 'Número de documento'). "
             "Dentro de 'Regla', cada elemento de 'reglas especifica' debe definir el valor del campo condicionante y, "
@@ -796,39 +821,45 @@ class StructuredChatService:
             if not isinstance(payload[field], str) or not payload[field].strip():
                 raise OpenAIServiceError(f"'{field}' debe ser una cadena no vacía.")
 
-        header = payload.get("Header")
-        if not isinstance(header, list) or not header:
-            raise OpenAIServiceError("'Header' debe ser una lista con al menos un elemento.")
-        for index, entry in enumerate(header, start=1):
-            if not isinstance(entry, str) or not entry.strip():
-                raise OpenAIServiceError(
-                    "Cada elemento de 'Header' debe ser una cadena no vacía. "
-                    f"Elemento inválido en la posición {index}."
-                )
+        header_entries = _deduplicate_headers(
+            _extract_header_entries(payload.get("Header"))
+        )
 
         expected_header_list: list[str] | None = None
 
         if tipo == "Lista compleja":
             derived_header = _extract_composite_header_fields(payload.get("Regla"))
             if derived_header:
-                payload["Header"] = derived_header
-                header = derived_header
+                header_entries = derived_header
+
+        if tipo == "Dependencia":
+            inferred_header = _infer_dependency_headers(payload)
+            if inferred_header:
+                header_entries = inferred_header
 
         expected_simple_headers = _SIMPLE_RULE_HEADERS.get(tipo)
         if expected_simple_headers is not None:
-            normalized_header = [_normalize_for_matching(item) for item in header]
+            normalized_header = [
+                _normalize_for_matching(item) for item in header_entries
+            ]
             expected_list = list(expected_simple_headers)
             normalized_expected = [_normalize_for_matching(item) for item in expected_list]
             if normalized_header != normalized_expected:
                 logger.debug(
                     "Normalizando header para el tipo '%s': recibido=%s, esperado=%s",
                     tipo,
-                    header,
+                    header_entries,
                     expected_list,
                 )
-                payload["Header"] = expected_list
-                header = expected_list
+                header_entries = expected_list
             expected_header_list = expected_list
+
+        if not header_entries:
+            raise OpenAIServiceError(
+                "'Header' debe contener al menos una etiqueta válida derivada de la regla."
+            )
+
+        payload["Header"] = header_entries
 
         header_rule_entries = payload.get("Header rule")
         if isinstance(header_rule_entries, list):
@@ -843,7 +874,7 @@ class StructuredChatService:
             header_rule_entries = list(expected_header_list)
 
         if not header_rule_entries:
-            header_rule_entries = _deduplicate_headers(header)
+            header_rule_entries = _deduplicate_headers(header_entries)
 
         if not header_rule_entries:
             raise OpenAIServiceError(

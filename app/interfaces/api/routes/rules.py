@@ -140,18 +140,61 @@ def _extract_dependency_specifics(rule_block: Mapping[str, Any]) -> list[Mapping
     return _iter_specifics(rule_block)
 
 
-def _collect_nested_labels(value: Any, add_label: Callable[[str], None]) -> None:
+def _is_leaf_value(value: Any) -> bool:
+    if isinstance(value, Mapping):
+        return False
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        if not value:
+            return True
+        return not any(
+            isinstance(entry, Mapping)
+            or (
+                isinstance(entry, Sequence)
+                and not isinstance(entry, (str, bytes))
+            )
+            for entry in value
+        )
+    return True
+
+
+def _collect_leaf_labels(value: Any, add_label: Callable[[str], None]) -> None:
     if isinstance(value, Mapping):
         for key, nested in value.items():
-            if isinstance(key, str):
-                add_label(key)
-            _collect_nested_labels(nested, add_label)
+            if not isinstance(key, str):
+                _collect_leaf_labels(nested, add_label)
+                continue
+
+            candidate = key.strip()
+            if not candidate:
+                _collect_leaf_labels(nested, add_label)
+                continue
+
+            if _is_leaf_value(nested):
+                add_label(candidate)
+            else:
+                _collect_leaf_labels(nested, add_label)
     elif isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
         for entry in value:
-            _collect_nested_labels(entry, add_label)
+            _collect_leaf_labels(entry, add_label)
 
 
-def _infer_dependency_headers_from_block(rule_block: Mapping[str, Any]) -> list[str]:
+def _infer_dependency_headers_from_block(rule_block: Mapping[str, Any] | Sequence[Any]) -> list[str]:
+    if isinstance(rule_block, Sequence) and not isinstance(rule_block, (str, bytes)):
+        collected: list[str] = []
+        seen: set[str] = set()
+        for entry in rule_block:
+            nested_labels = _infer_dependency_headers_from_block(entry)  # type: ignore[arg-type]
+            for label in nested_labels:
+                normalized = _normalize_label(label)
+                if normalized in seen:
+                    continue
+                seen.add(normalized)
+                collected.append(label)
+        return collected
+
+    if not isinstance(rule_block, Mapping):
+        return []
+
     specifics = _extract_dependency_specifics(rule_block)
     if not specifics:
         return []
@@ -171,32 +214,7 @@ def _infer_dependency_headers_from_block(rule_block: Mapping[str, Any]) -> list[
         seen.add(normalized)
         ordered.append(candidate)
 
-    for entry in specifics:
-        dependent_label: str | None = None
-        nested_values: list[Any] = []
-        additional_labels: list[str] = []
-
-        for key, value in entry.items():
-            if not isinstance(key, str):
-                continue
-            stripped_key = key.strip()
-            if not stripped_key:
-                continue
-            normalized_key = _normalize_label(stripped_key)
-            if normalized_key in _DEPENDENCY_TYPE_ALIASES:
-                nested_values.append(value)
-                continue
-            if dependent_label is None:
-                dependent_label = stripped_key
-            else:
-                additional_labels.append(stripped_key)
-
-        if dependent_label:
-            add_label(dependent_label)
-        for label in additional_labels:
-            add_label(label)
-        for nested_value in nested_values:
-            _collect_nested_labels(nested_value, add_label)
+    _collect_leaf_labels(specifics, add_label)
 
     return ordered
 
@@ -359,6 +377,14 @@ def list_rules_by_type_endpoint(
                 header_entries = _deduplicate_headers(
                     _extract_header_entries(definition.get("Header"))
                 )
+                rule_block = definition.get("Regla")
+                inferred_dependency_header: list[str] = []
+                if isinstance(rule_block, Mapping):
+                    inferred_dependency_header = _infer_dependency_headers_from_block(
+                        rule_block
+                    )
+                if definition_type == "dependencia" and inferred_dependency_header:
+                    header_entries = _deduplicate_headers(inferred_dependency_header)
                 explicit_header_rule = _deduplicate_headers(
                     _extract_header_entries(definition.get("Header rule"))
                 )
@@ -471,10 +497,9 @@ def read_rule_headers(
 
         explicit_headers = _extract_header_entries(definition.get("Header"))
         if inferred_headers:
-            if explicit_headers:
-                explicit_headers = _deduplicate_headers(explicit_headers + inferred_headers)
-            else:
-                explicit_headers = inferred_headers
+            explicit_headers = _deduplicate_headers(inferred_headers)
+        else:
+            explicit_headers = _deduplicate_headers(explicit_headers)
 
         headers.extend(explicit_headers)
         explicit = _deduplicate_headers(

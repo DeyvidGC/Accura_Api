@@ -90,10 +90,7 @@ def _build_rule_summary(rule_id: int, definition: Mapping[str, Any], type_label:
     if normalized_type == "dependencia":
         inferred_headers = _infer_dependency_headers(definition)
         if inferred_headers:
-            if header_entries:
-                header_entries = _deduplicate_headers(header_entries + inferred_headers)
-            else:
-                header_entries = inferred_headers
+            header_entries = _deduplicate_headers(inferred_headers)
     if header_entries:
         summary["Header"] = header_entries
     elif "Header" in definition:
