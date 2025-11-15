@@ -100,6 +100,15 @@ def _original_storage_filename(load_id: int, original_filename: str, extension: 
     return f"load_{load_id}_{core}{extension}"
 
 
+def _original_download_name(load: Load, extension: str) -> str:
+    original_name = Path(load.file_name).name
+    if original_name:
+        return original_name
+    if load.id is None:
+        raise ValueError("Identificador de carga inválido")
+    return f"carga_{load.id}{extension}"
+
+
 def _build_report_blob_path(
     table_name: str, template_id: int, user_id: int, filename: str
 ) -> str:
@@ -449,6 +458,11 @@ def get_load_original_file(
     load = get_load(session, load_id=load_id, current_user=current_user)
     template = _get_template(session, load.template_id)
 
+    temporary_original = _build_temporary_original_file(load, template)
+    if temporary_original is not None:
+        path, filename = temporary_original
+        return load, path, filename
+
     suffix = Path(load.file_name).suffix.lower()
     extension = ".csv" if suffix == ".csv" else ".xlsx"
 
@@ -466,8 +480,33 @@ def get_load_original_file(
     except FileNotFoundError as exc:
         raise FileNotFoundError("Archivo original no disponible para esta carga") from exc
 
-    download_name = Path(load.file_name).name or f"carga_{load.id}{extension}"
+    path = _clean_blob_original_file(path, extension)
+    download_name = _original_download_name(load, extension)
     return load, path, download_name
+
+
+def _clean_blob_original_file(path: Path, extension: str) -> Path:
+    """Remove validation columns from the downloaded original file when possible."""
+
+    try:
+        pd = _get_pandas_module()
+        if extension == ".csv":
+            dataframe = pd.read_csv(path, dtype=object)
+        else:
+            dataframe = pd.read_excel(path, dtype=object)
+    except Exception:  # pragma: no cover - fallback for unexpected formats
+        return path
+
+    cleaned = _prepare_original_dataframe(dataframe)
+    if extension == ".csv":
+        cleaned.to_csv(path, index=False, encoding="utf-8")
+    else:
+        buffer = BytesIO()
+        cleaned.to_excel(buffer, index=False)
+        buffer.seek(0)
+        with path.open("wb") as handle:
+            handle.write(buffer.getvalue())
+    return path
 
 
 def _get_template(session: Session, template_id: int) -> Template:
@@ -956,6 +995,38 @@ def _build_temporary_table_report(
         handle.write(buffer.getvalue())
 
     filename = _report_display_filename(template.name)
+    return destination, filename
+
+
+def _build_temporary_original_file(
+    load: Load, template: Template
+) -> tuple[Path, str] | None:
+    if load.id is None:
+        return None
+
+    dataframe = _fetch_temporary_table_dataframe(
+        template, operation_number=load.id
+    )
+    if dataframe is None or not len(dataframe.columns):
+        return None
+
+    clean_df = _prepare_original_dataframe(dataframe)
+    suffix = Path(load.file_name).suffix.lower()
+    extension = ".csv" if suffix == ".csv" else ".xlsx"
+
+    _DOWNLOAD_DIRECTORY.mkdir(parents=True, exist_ok=True)
+    destination = _DOWNLOAD_DIRECTORY / f"{uuid4().hex}{extension}"
+
+    if extension == ".csv":
+        clean_df.to_csv(destination, index=False, encoding="utf-8")
+    else:
+        buffer = BytesIO()
+        clean_df.to_excel(buffer, index=False)
+        buffer.seek(0)
+        with destination.open("wb") as handle:
+            handle.write(buffer.getvalue())
+
+    filename = _original_download_name(load, extension)
     return destination, filename
 
 
