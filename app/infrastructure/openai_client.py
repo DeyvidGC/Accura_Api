@@ -269,6 +269,46 @@ def _collect_leaf_labels(value: Any, add_label: Callable[[str], None]) -> None:
             _collect_leaf_labels(entry, add_label)
 
 
+def _extract_dependency_leaf_labels(rule_block: Any) -> list[str]:
+    """Return the leaf labels that exist in the dependency specifics block."""
+
+    if isinstance(rule_block, Sequence) and not isinstance(rule_block, (str, bytes)):
+        collected: list[str] = []
+        seen: set[str] = set()
+        for entry in rule_block:
+            nested_labels = _extract_dependency_leaf_labels(entry)
+            for label in nested_labels:
+                normalized = _normalize_for_matching(label)
+                if normalized in seen:
+                    continue
+                seen.add(normalized)
+                collected.append(label)
+        return collected
+
+    specifics = _iter_dependency_specifics(rule_block)
+    if not specifics:
+        return []
+
+    seen: set[str] = set()
+    ordered: list[str] = []
+
+    def add_label(label: str) -> None:
+        if not isinstance(label, str):
+            return
+        candidate = label.strip()
+        if not candidate:
+            return
+        normalized = _normalize_for_matching(candidate)
+        if normalized in seen:
+            return
+        seen.add(normalized)
+        ordered.append(candidate)
+
+    _collect_leaf_labels(specifics, add_label)
+
+    return ordered
+
+
 def _extract_dependency_header_fields(rule_config: Any) -> list[str]:
     """Infer header combinations for dependency rules."""
 
@@ -319,28 +359,7 @@ def _infer_dependency_headers(payload: Mapping[str, Any]) -> list[str]:
     if not isinstance(rule_block, Mapping):
         return []
 
-    specifics = _iter_dependency_specifics(rule_block)
-    if not specifics:
-        return []
-
-    seen: set[str] = set()
-    ordered: list[str] = []
-
-    def add_label(label: str) -> None:
-        if not isinstance(label, str):
-            return
-        candidate = label.strip()
-        if not candidate:
-            return
-        normalized = _normalize_for_matching(candidate)
-        if normalized in seen:
-            return
-        seen.add(normalized)
-        ordered.append(candidate)
-
-    _collect_leaf_labels(specifics, add_label)
-
-    return ordered
+    return _extract_dependency_leaf_labels(rule_block)
 
 
 def _infer_header_rule(payload: Mapping[str, Any]) -> list[str]:

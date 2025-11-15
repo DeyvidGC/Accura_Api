@@ -178,7 +178,23 @@ def _collect_leaf_labels(value: Any, add_label: Callable[[str], None]) -> None:
             _collect_leaf_labels(entry, add_label)
 
 
-def _infer_dependency_headers_from_block(rule_block: Mapping[str, Any]) -> list[str]:
+def _infer_dependency_headers_from_block(rule_block: Mapping[str, Any] | Sequence[Any]) -> list[str]:
+    if isinstance(rule_block, Sequence) and not isinstance(rule_block, (str, bytes)):
+        collected: list[str] = []
+        seen: set[str] = set()
+        for entry in rule_block:
+            nested_labels = _infer_dependency_headers_from_block(entry)  # type: ignore[arg-type]
+            for label in nested_labels:
+                normalized = _normalize_label(label)
+                if normalized in seen:
+                    continue
+                seen.add(normalized)
+                collected.append(label)
+        return collected
+
+    if not isinstance(rule_block, Mapping):
+        return []
+
     specifics = _extract_dependency_specifics(rule_block)
     if not specifics:
         return []
