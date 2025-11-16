@@ -26,7 +26,7 @@ Antes de emitir una llamada al modelo:
 ## 5. Construcción del prompt y uso de contexto
 El prompt consta de:
 - **System prompt**: obliga al modelo a responder exclusivamente con JSON válido.【F:app/infrastructure/openai_client.py†L675-L678】
-- **Instrucciones de tarea**: describen el dominio InsurTech, enumeran los campos obligatorios y dan reglas específicas para dependencias, headers y ejemplos realistas.【F:app/infrastructure/openai_client.py†L680-L704】
+- **Instrucciones de tarea**: describen el dominio InsurTech, enumeran los campos obligatorios y dan reglas específicas para dependencias y listas complejas, dejando claro que el modelo no debe inventar el `Header` cuando esas secciones pueden reconstruirse desde `Regla`.【F:app/infrastructure/openai_client.py†L680-L707】
 - **Ajustes dinámicos**: si el mensaje fue truncado o pide catálogos extensos, se añaden instrucciones complementarias que limitan el alcance y piden explicaciones adicionales.【F:app/infrastructure/openai_client.py†L707-L724】
 - **Contexto reciente**: cuando hay reglas recientes, se inyectan como mensajes adicionales para que el modelo respete terminología y evite duplicados.【F:app/infrastructure/openai_client.py†L722-L790】
 - **Schema enforcement**: cuando el SDK lo permite se pasa `response_format` con el JSON Schema; de lo contrario se incluye el schema en texto para que el modelo cumpla las restricciones manualmente.【F:app/infrastructure/openai_client.py†L731-L767】
@@ -36,7 +36,7 @@ Tras obtener la respuesta:
 1. **Normalización de JSON**. Se eliminan fences de Markdown y comas residuales antes de decodificar.【F:app/infrastructure/openai_client.py†L806-L821】
 2. **Campos obligatorios**. Se verifica que existan los nueve campos principales y que textos críticos no estén vacíos.【F:app/infrastructure/openai_client.py†L825-L866】
 3. **Tipificación**. Solo se aceptan los tipos enumerados (`Texto`, `Número`, `Dependencia`, etc.) definidos en el schema.【F:app/infrastructure/openai_client.py†L844-L858】【F:app/schemas/regla_de_campo.schema.json†L19-L33】
-4. **Headers**. Para cada tipo simple se forzan encabezados estándar (por ejemplo, `Longitud mínima` / `Longitud máxima` en texto). En reglas de dependencia se infieren hojas finales para asegurar que el header coincide con las claves configurables reales.【F:app/infrastructure/openai_client.py†L867-L905】【F:app/infrastructure/openai_client.py†L873-L884】
+4. **Headers**. Para cada tipo simple se forzan encabezados estándar (por ejemplo, `Longitud mínima` / `Longitud máxima` en texto). En reglas de lista compleja se reconstruyen las columnas a partir del primer bloque de combinaciones y en dependencias se infieren hojas finales para asegurar que el header coincide con las claves configurables reales.【F:app/infrastructure/openai_client.py†L867-L905】【F:app/infrastructure/openai_client.py†L873-L884】
 5. **Header rule**. Si el modelo no la genera, se reconstruye en función del tipo (lista compleja, dependencia, validación conjunta, duplicados) y se valida que contenga al menos un elemento.【F:app/infrastructure/openai_client.py†L910-L928】
 6. **Regla**. Se garantiza que el bloque `Regla` sea un objeto JSON; el contenido específico se valida posteriormente contra el schema cuando la regla se persiste.【F:app/infrastructure/openai_client.py†L930-L935】【F:app/schemas/regla_de_campo.schema.json†L50-L418】
 
