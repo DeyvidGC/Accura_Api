@@ -50,17 +50,27 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     needs: build
-    
+    permissions:
+      id-token: write #This is required for requesting the JWT
+      contents: read #This is required for actions/checkout
+
     steps:
       - name: Download artifact from build job
         uses: actions/download-artifact@v4
         with:
           name: python-app
       
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_3A4D0F0EF3974692AAADF0CCF40FD6D9 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_3BE4E09300A1495BB45B397F506F081A }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_258B9C3952564FACA2A9FC3F1BC7ADDD }}
+
       - name: 'Deploy to Azure Web App'
         uses: azure/webapps-deploy@v3
         id: deploy-to-webapp
         with:
           app-name: 'accura-api'
           slot-name: 'Production'
-          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_232255EE603E4F1096ECD67DDACCF6BF }}
+          
