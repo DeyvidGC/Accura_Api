@@ -405,6 +405,16 @@ def _infer_dependency_headers(payload: Mapping[str, Any]) -> list[str]:
     return _extract_dependency_leaf_labels(rule_block)
 
 
+def _generate_dependency_headers(payload: Mapping[str, Any]) -> list[str]:
+    """Return a normalized list of headers derived from dependency leaves."""
+
+    inferred_headers = _infer_dependency_headers(payload)
+    if not inferred_headers:
+        return []
+
+    return _deduplicate_headers(inferred_headers)
+
+
 def _infer_header_rule(payload: Mapping[str, Any]) -> list[str]:
     """Infer the header rule labels based on the rule definition."""
 
@@ -686,10 +696,11 @@ class StructuredChatService:
             "Asegúrate de definir todas las propiedades requeridas y de que 'Regla' siga las restricciones "
             "correspondientes según el tipo de dato. "
             "Cuando definas reglas del tipo 'Dependencia', omite la propiedad 'Nombre dependiente'. "
-            "En 'Header' incluye únicamente las propiedades configurables de la regla "
-            "(por ejemplo: 'Tipo de documento', 'Longitud mínima', 'Longitud máxima') "
-            "recorriendo las claves finales (hojas) definidas dentro de 'reglas especifica'. "
-            "No agregues etiquetas que no existan literalmente como claves finales dentro de ese bloque. "
+            "Nunca inventes manualmente el contenido de 'Header': recorre 'reglas especifica' y "
+            "extrae únicamente las propiedades configurables que aparezcan como hojas "
+            "(por ejemplo: 'Tipo de documento', 'Longitud mínima', 'Longitud máxima'), "
+            "respetando sus nombres exactos y sin traducirlos ni agregar etiquetas nuevas. "
+            "Si el modelo no encuentra hojas, deja el arreglo vacío y el sistema completará el valor. "
             "En 'Header rule' registra primero la propiedad condicionante y luego la propiedad dependiente "
             "(por ejemplo: 'Tipo de documento', 'Número de documento'). "
             "Dentro de 'Regla', cada elemento de 'reglas especifica' debe definir el valor del campo condicionante y, "
@@ -875,13 +886,10 @@ class StructuredChatService:
             if derived_header:
                 header_entries = derived_header
 
-        leaf_headers: list[str] = []
         if tipo == "Dependencia":
-            leaf_headers = _infer_dependency_headers(payload)
-            if leaf_headers:
-                header_entries = _filter_headers_to_dependency_leaves(
-                    header_entries, leaf_headers
-                )
+            dependency_headers = _generate_dependency_headers(payload)
+            if dependency_headers:
+                header_entries = dependency_headers
 
         expected_simple_headers = _SIMPLE_RULE_HEADERS.get(tipo)
         if expected_simple_headers is not None:
