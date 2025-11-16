@@ -405,6 +405,16 @@ def _infer_dependency_headers(payload: Mapping[str, Any]) -> list[str]:
     return _extract_dependency_leaf_labels(rule_block)
 
 
+def _generate_dependency_headers(payload: Mapping[str, Any]) -> list[str]:
+    """Return a normalized list of headers derived from dependency leaves."""
+
+    inferred_headers = _infer_dependency_headers(payload)
+    if not inferred_headers:
+        return []
+
+    return _deduplicate_headers(inferred_headers)
+
+
 def _infer_header_rule(payload: Mapping[str, Any]) -> list[str]:
     """Infer the header rule labels based on the rule definition."""
 
@@ -875,13 +885,10 @@ class StructuredChatService:
             if derived_header:
                 header_entries = derived_header
 
-        leaf_headers: list[str] = []
         if tipo == "Dependencia":
-            leaf_headers = _infer_dependency_headers(payload)
-            if leaf_headers:
-                header_entries = _filter_headers_to_dependency_leaves(
-                    header_entries, leaf_headers
-                )
+            dependency_headers = _generate_dependency_headers(payload)
+            if dependency_headers:
+                header_entries = dependency_headers
 
         expected_simple_headers = _SIMPLE_RULE_HEADERS.get(tipo)
         if expected_simple_headers is not None:
