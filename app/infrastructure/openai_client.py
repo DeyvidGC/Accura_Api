@@ -309,49 +309,6 @@ def _extract_dependency_leaf_labels(rule_block: Any) -> list[str]:
     return ordered
 
 
-def _filter_headers_to_dependency_leaves(
-    headers: Sequence[str], leaf_headers: Sequence[str]
-) -> list[str]:
-    """Restrict the provided headers to those that match the collected leaves."""
-
-    clean_leaf_headers: list[str] = []
-    allowed: set[str] = set()
-    for label in leaf_headers:
-        if not isinstance(label, str):
-            continue
-        candidate = label.strip()
-        if not candidate:
-            continue
-        normalized = _normalize_for_matching(candidate)
-        if normalized in allowed:
-            continue
-        allowed.add(normalized)
-        clean_leaf_headers.append(candidate)
-
-    if not allowed:
-        return [
-            header.strip()
-            for header in headers
-            if isinstance(header, str) and header.strip()
-        ]
-
-    filtered: list[str] = []
-    seen: set[str] = set()
-    for header in headers:
-        if not isinstance(header, str):
-            continue
-        candidate = header.strip()
-        if not candidate:
-            continue
-        normalized = _normalize_for_matching(candidate)
-        if normalized not in allowed or normalized in seen:
-            continue
-        seen.add(normalized)
-        filtered.append(candidate)
-
-    return filtered if filtered else clean_leaf_headers
-
-
 def _extract_dependency_header_fields(rule_config: Any) -> list[str]:
     """Infer header combinations for dependency rules."""
 
@@ -403,6 +360,13 @@ def _infer_dependency_headers(payload: Mapping[str, Any]) -> list[str]:
         return []
 
     return _extract_dependency_leaf_labels(rule_block)
+
+
+def _generate_dependency_headers(payload: Mapping[str, Any]) -> list[str]:
+    """Return a normalized list of headers derived from dependency leaves."""
+
+    inferred_headers = _infer_dependency_headers(payload)
+    return _deduplicate_headers(inferred_headers) if inferred_headers else []
 
 
 def _infer_header_rule(payload: Mapping[str, Any]) -> list[str]:
@@ -686,10 +650,15 @@ class StructuredChatService:
             "Asegúrate de definir todas las propiedades requeridas y de que 'Regla' siga las restricciones "
             "correspondientes según el tipo de dato. "
             "Cuando definas reglas del tipo 'Dependencia', omite la propiedad 'Nombre dependiente'. "
-            "En 'Header' incluye únicamente las propiedades configurables de la regla "
-            "(por ejemplo: 'Tipo de documento', 'Longitud mínima', 'Longitud máxima') "
-            "recorriendo las claves finales (hojas) definidas dentro de 'reglas especifica'. "
-            "No agregues etiquetas que no existan literalmente como claves finales dentro de ese bloque. "
+            "Nunca inventes manualmente el contenido de 'Header': recorre 'reglas especifica' y "
+            "extrae únicamente las propiedades configurables que aparezcan como hojas "
+            "(por ejemplo: 'Tipo de documento', 'Longitud mínima', 'Longitud máxima'), "
+            "respetando sus nombres exactos y sin traducirlos ni agregar etiquetas nuevas. "
+            "Si el modelo no encuentra hojas, deja el arreglo vacío y el sistema completará el valor. "
+            "Para las reglas 'Lista compleja' aplica la misma lógica: toma los encabezados "
+            "directamente de las columnas declaradas dentro de 'Lista compleja' en el primer "
+            "bloque disponible y, si no detectas columnas válidas, deja 'Header' vacío para "
+            "que el backend lo reconstruya automáticamente. "
             "En 'Header rule' registra primero la propiedad condicionante y luego la propiedad dependiente "
             "(por ejemplo: 'Tipo de documento', 'Número de documento'). "
             "Dentro de 'Regla', cada elemento de 'reglas especifica' debe definir el valor del campo condicionante y, "
@@ -875,13 +844,8 @@ class StructuredChatService:
             if derived_header:
                 header_entries = derived_header
 
-        leaf_headers: list[str] = []
         if tipo == "Dependencia":
-            leaf_headers = _infer_dependency_headers(payload)
-            if leaf_headers:
-                header_entries = _filter_headers_to_dependency_leaves(
-                    header_entries, leaf_headers
-                )
+            header_entries = _generate_dependency_headers(payload)
 
         expected_simple_headers = _SIMPLE_RULE_HEADERS.get(tipo)
         if expected_simple_headers is not None:
