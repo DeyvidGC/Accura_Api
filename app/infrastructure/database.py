@@ -11,7 +11,7 @@ from urllib.parse import quote_plus
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
-from app.config import get_settings
+from app.config import Settings, get_settings
 
 
 class Base(DeclarativeBase):
@@ -83,42 +83,15 @@ def _ensure_sql_server_driver(raw_connection: str) -> str:
     )
 
 
-def _looks_like_odbc_dsn(value: str) -> bool:
-    """Heuristically determine whether a string is an ODBC connection string."""
+def _build_sqlalchemy_database_url(settings: "Settings") -> str:
+    """Construct the SQLAlchemy URL for the configured SQL Server instance."""
 
-    normalized = value.strip().lower()
-    if not normalized:
-        return False
-
-    if "driver=" in normalized:
-        return True
-
-    # Treat newline separated values the same as semicolons to support multi-line secrets.
-    candidate = normalized.replace("\n", ";")
-    segments = [segment for segment in candidate.split(";") if segment.strip()]
-    if len(segments) < 2:
-        return False
-
-    key_value_pairs = sum(1 for segment in segments if "=" in segment)
-    return key_value_pairs >= 2
+    odbc_connection = _ensure_sql_server_driver(settings.odbc_connection_string)
+    return f"mssql+pyodbc:///?odbc_connect={quote_plus(odbc_connection)}"
 
 
-def _resolve_database_url(raw_url: str) -> str:
-    """Return a SQLAlchemy-compatible URL for the configured database."""
-
-    normalized = raw_url.strip()
-    if _looks_like_odbc_dsn(normalized):
-        normalized = _ensure_sql_server_driver(normalized)
-        return f"mssql+pyodbc:///?odbc_connect={quote_plus(normalized)}"
-    return raw_url
-
-
-database_url = _resolve_database_url(settings.database_url)
-connect_args: dict[str, object] = {}
-if database_url.startswith("sqlite"):
-    connect_args = {"check_same_thread": False}
-
-engine = create_engine(database_url, pool_pre_ping=True, connect_args=connect_args)
+database_url = _build_sqlalchemy_database_url(settings)
+engine = create_engine(database_url, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 

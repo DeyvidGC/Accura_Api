@@ -1,6 +1,7 @@
 """Application configuration settings."""
 
 from functools import lru_cache
+from urllib.parse import quote_plus
 
 try:  # pragma: no cover - compatibility shim for pydantic v1/v2
     from pydantic_settings import BaseSettings, SettingsConfigDict  # type: ignore
@@ -14,11 +15,24 @@ from pydantic import Field
 class Settings(BaseSettings):
     """Application configuration values loaded from environment variables."""
 
-    database_url: str = Field(
-        description=(
-            "Database connection URL. Accepts either a standard SQLAlchemy URL or "
-            "a raw Azure SQL ODBC connection string like the default example."
-        ),
+    db_driver: str = Field(
+        description="ODBC driver name to use when connecting to Azure SQL or SQL Server",
+    )
+    db_server: str = Field(
+        description="Fully qualified SQL Server host name (for Azure SQL include .database.windows.net)",
+    )
+    db_port: int = Field(
+        default=1433,
+        description="SQL Server port number",
+    )
+    db_name: str = Field(
+        description="Database name to connect to",
+    )
+    db_user: str = Field(
+        description="Database login or user name",
+    )
+    db_password: str = Field(
+        description="Password for the configured database user",
     )
     secret_key: str = Field(
         description="Secret key for signing JWT tokens"
@@ -63,6 +77,27 @@ class Settings(BaseSettings):
             " timestamps like created_at, updated_at and deleted_at."
         ),
     )
+
+    @property
+    def odbc_connection_string(self) -> str:
+        """Return the Azure SQL/SQL Server ODBC connection string."""
+
+        return (
+            f"Driver={{{self.db_driver}}};"
+            f"Server=tcp:{self.db_server},{self.db_port};"
+            f"Database={self.db_name};"
+            f"Uid={self.db_user};"
+            f"Pwd={self.db_password};"
+            "Encrypt=yes;"
+            "TrustServerCertificate=no;"
+            "Connection Timeout=30;"
+        )
+
+    @property
+    def sqlalchemy_database_url(self) -> str:
+        """Return the SQLAlchemy URL for the configured SQL Server instance."""
+
+        return f"mssql+pyodbc:///?odbc_connect={quote_plus(self.odbc_connection_string)}"
 
     if "SettingsConfigDict" in globals() and SettingsConfigDict is not None:
         model_config = SettingsConfigDict(
