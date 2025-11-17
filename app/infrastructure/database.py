@@ -8,8 +8,6 @@ import logging
 import re
 from urllib.parse import quote_plus
 
-from urllib.parse import quote_plus
-
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
@@ -85,12 +83,31 @@ def _ensure_sql_server_driver(raw_connection: str) -> str:
     )
 
 
+def _looks_like_odbc_dsn(value: str) -> bool:
+    """Heuristically determine whether a string is an ODBC connection string."""
+
+    normalized = value.strip().lower()
+    if not normalized:
+        return False
+
+    if "driver=" in normalized:
+        return True
+
+    # Treat newline separated values the same as semicolons to support multi-line secrets.
+    candidate = normalized.replace("\n", ";")
+    segments = [segment for segment in candidate.split(";") if segment.strip()]
+    if len(segments) < 2:
+        return False
+
+    key_value_pairs = sum(1 for segment in segments if "=" in segment)
+    return key_value_pairs >= 2
+
+
 def _resolve_database_url(raw_url: str) -> str:
     """Return a SQLAlchemy-compatible URL for the configured database."""
 
     normalized = raw_url.strip()
-    if normalized.lower().startswith("driver="):
-        # Allow plain ODBC connection strings such as those provided by Azure SQL.
+    if _looks_like_odbc_dsn(normalized):
         normalized = _ensure_sql_server_driver(normalized)
         return f"mssql+pyodbc:///?odbc_connect={quote_plus(normalized)}"
     return raw_url
