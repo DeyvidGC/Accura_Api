@@ -15,6 +15,13 @@ from pydantic import Field
 class Settings(BaseSettings):
     """Application configuration values loaded from environment variables."""
 
+    database_url: str | None = Field(
+        default=None,
+        description=(
+            "Deprecated single-string database URL. Provided for backwards compatibility "
+            "while migrating to the fine-grained Azure SQL settings."
+        ),
+    )
     db_driver: str = Field(
         ...,
         description="ODBC driver name to use when connecting to Azure SQL or SQL Server",
