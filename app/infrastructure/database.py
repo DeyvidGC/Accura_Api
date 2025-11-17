@@ -6,7 +6,7 @@ from collections.abc import Generator, Sequence
 
 import logging
 import re
-from urllib.parse import quote_plus
+import urllib.parse
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
@@ -83,11 +83,27 @@ def _ensure_sql_server_driver(raw_connection: str) -> str:
     )
 
 
+def build_odbc_conn_str(settings: Settings) -> str:
+    """Build an Azure SQL / SQL Server ODBC connection string from settings."""
+
+    return (
+        f"Driver={{{settings.db_driver}}};"
+        f"Server=tcp:{settings.db_server},{settings.db_port};"
+        f"Database={settings.db_name};"
+        f"Uid={settings.db_user};"
+        f"Pwd={settings.db_password};"
+        "Encrypt=yes;"
+        "TrustServerCertificate=no;"
+        "Connection Timeout=30;"
+    )
+
+
 def _build_sqlalchemy_database_url(settings: "Settings") -> str:
     """Construct the SQLAlchemy URL for the configured SQL Server instance."""
 
-    odbc_connection = _ensure_sql_server_driver(settings.odbc_connection_string)
-    return f"mssql+pyodbc:///?odbc_connect={quote_plus(odbc_connection)}"
+    odbc_connection = _ensure_sql_server_driver(build_odbc_conn_str(settings))
+    params = urllib.parse.quote_plus(odbc_connection)
+    return f"mssql+pyodbc:///?odbc_connect={params}"
 
 
 database_url = _build_sqlalchemy_database_url(settings)
