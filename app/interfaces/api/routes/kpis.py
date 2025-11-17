@@ -29,6 +29,9 @@ def _client_report_to_read_model(report: ClientKPIReport) -> ClientKPIReportRead
     return ClientKPIReportRead.from_orm(report)
 
 
+# Accept both `/kpis/` and `/kpis` to avoid automatic redirects that
+# interfere with browsers enforcing CORS.
+@router.get("", response_model=KPIReportRead, include_in_schema=False)
 @router.get("/", response_model=KPIReportRead)
 def read_kpis(
     db: Session = Depends(get_db),
