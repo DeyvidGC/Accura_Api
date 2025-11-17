@@ -23,7 +23,7 @@ def create_app() -> FastAPI:
     # Autoriza peticiones desde la aplicación cliente (Angular en localhost:4200).
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:4200"],
+        allow_origins=["http://localhost:4200,accura-frontend.azurewebsites.net"],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
