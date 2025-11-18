@@ -1,10 +1,9 @@
 """Use case for registering the last login of a user."""
 
-from datetime import datetime
-
 from sqlalchemy.orm import Session
 
 from app.infrastructure.repositories import UserRepository
+from app.utils import now_in_app_timezone
 
 
 def record_login(session: Session, user_id: int) -> None:
@@ -15,5 +14,5 @@ def record_login(session: Session, user_id: int) -> None:
     if not user:
         return
 
-    user.last_login = datetime.utcnow()
+    user.last_login = now_in_app_timezone()
     repository.update(user)

@@ -1,11 +1,15 @@
 """Persistence layer for user data."""
 
+from __future__ import annotations
+
 from collections.abc import Sequence
 
+from sqlalchemy import false
 from sqlalchemy.orm import Session, joinedload
 
 from app.domain.entities import Role, User
-from app.infrastructure.models import UserModel
+from app.infrastructure.models import RoleModel, UserModel
+from app.utils import ensure_app_naive_datetime, now_in_app_timezone
 
 
 class UserRepository:
@@ -14,14 +18,25 @@ class UserRepository:
     def __init__(self, session: Session) -> None:
         self.session = session
 
-    def list(self, skip: int = 0, limit: int = 100) -> Sequence[User]:
+    def list(
+        self,
+        skip: int = 0,
+        limit: int = 100,
+        *,
+        creator_id: int | None = None,
+    ) -> Sequence[User]:
         query = (
             self.session.query(UserModel)
             .options(joinedload(UserModel.role))
-            .filter(UserModel.is_active.is_(True))
-            .offset(skip)
-            .limit(limit)
+            .filter(UserModel.deleted == false())
         )
+        if creator_id is not None:
+            query = query.filter(UserModel.created_by == creator_id)
+        query = query.order_by(UserModel.created_at.desc(), UserModel.id.desc())
+        if skip:
+            query = query.offset(skip)
+        if limit is not None:
+            query = query.limit(limit)
         return [self._to_entity(model) for model in query.all()]
 
     def get(self, user_id: int) -> User | None:
@@ -55,14 +70,52 @@ class UserRepository:
             self.session.refresh(model, attribute_names=["role"])
         return self._to_entity(model)
 
-    def delete(self, user_id: int) -> None:
+    def delete(self, user_id: int, *, deleted_by: int | None = None) -> None:
         model = self._get_model(id=user_id)
         if not model:
             msg = f"User with id {user_id} not found"
             raise ValueError(msg)
 
-        self.session.delete(model)
+        if model.deleted:
+            return
+
+        now = ensure_app_naive_datetime(now_in_app_timezone())
+        # Preserve the existing password reset requirement flag when deleting the user.
+        original_must_change_password = model.must_change_password
+        model.deleted = True
+        model.deleted_by = deleted_by
+        model.deleted_at = now
+        model.is_active = False
+        model.updated_by = deleted_by
+        model.updated_at = now
+        model.must_change_password = original_must_change_password
+        self.session.add(model)
         self.session.commit()
+
+    def list_ids_by_role_alias(self, alias: str) -> list[int]:
+        query = (
+            self.session.query(UserModel.id)
+            .join(RoleModel, UserModel.role_id == RoleModel.id)
+            .filter(UserModel.deleted == false())
+            .filter(RoleModel.alias.ilike(alias))
+        )
+        return [user_id for (user_id,) in query.all()]
+
+    def get_map_by_ids(
+        self, user_ids: Sequence[int], *, include_deleted: bool = False
+    ) -> dict[int, User]:
+        if not user_ids:
+            return {}
+
+        unique_ids = {int(user_id) for user_id in user_ids}
+        query = (
+            self.session.query(UserModel)
+            .options(joinedload(UserModel.role))
+            .filter(UserModel.id.in_(unique_ids))
+        )
+        if not include_deleted:
+            query = query.filter(UserModel.deleted == false())
+        return {model.id: self._to_entity(model) for model in query.all()}
 
     @staticmethod
     def _to_entity(model: UserModel) -> User:
@@ -70,20 +123,24 @@ class UserRepository:
             id=model.id,
             role=UserRepository._role_to_entity(model.role),
             name=model.name,
-            alias=model.alias,
             email=model.email,
             password=model.password,
             must_change_password=model.must_change_password,
-            last_login=model.last_login,
+            last_login=ensure_app_naive_datetime(model.last_login),
             created_by=model.created_by,
-            created_at=model.created_at,
+            created_at=ensure_app_naive_datetime(model.created_at),
             updated_by=model.updated_by,
-            updated_at=model.updated_at,
+            updated_at=ensure_app_naive_datetime(model.updated_at),
             is_active=model.is_active,
+            deleted=model.deleted,
+            deleted_by=model.deleted_by,
+            deleted_at=ensure_app_naive_datetime(model.deleted_at),
         )
 
-    def _get_model(self, **filters) -> UserModel | None:
+    def _get_model(self, include_deleted: bool = False, **filters) -> UserModel | None:
         query = self.session.query(UserModel).options(joinedload(UserModel.role))
+        if not include_deleted:
+            query = query.filter(UserModel.deleted == false())
         return query.filter_by(**filters).first()
 
     @staticmethod
@@ -92,18 +149,23 @@ class UserRepository:
     ) -> None:
         if include_creation_fields:
             model.created_by = user.created_by
-            model.created_at = user.created_at
+            model.created_at = (
+                ensure_app_naive_datetime(user.created_at)
+                or ensure_app_naive_datetime(now_in_app_timezone())
+            )
         model.role_id = user.role.id
         model.name = user.name
-        model.alias = user.alias
         model.email = user.email
         model.password = user.password
         model.must_change_password = user.must_change_password
-        model.last_login = user.last_login
+        model.last_login = ensure_app_naive_datetime(user.last_login)
         if not include_creation_fields:
             model.updated_by = user.updated_by
-            model.updated_at = user.updated_at
+            model.updated_at = ensure_app_naive_datetime(user.updated_at)
         model.is_active = user.is_active
+        model.deleted = user.deleted
+        model.deleted_by = user.deleted_by
+        model.deleted_at = ensure_app_naive_datetime(user.deleted_at)
 
     @staticmethod
     def _role_to_entity(model_role) -> Role:

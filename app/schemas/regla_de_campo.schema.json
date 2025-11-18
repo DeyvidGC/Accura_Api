@@ -1,0 +1,419 @@
+{
+  "title": "Regla de Campo",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "Nombre de la regla",
+    "Tipo de dato",
+    "Campo obligatorio",
+    "Header",
+    "Header rule",
+    "Mensaje de error",
+    "Descripción",
+    "Ejemplo",
+    "Regla"
+  ],
+  "properties": {
+    "Nombre de la regla": { "type": "string", "minLength": 1 },
+    "Tipo de dato": {
+      "type": "string",
+      "enum": [
+        "Texto",
+        "Número",
+        "Documento",
+        "Lista",
+        "Lista compleja",
+        "Teléfono",
+        "Correo",
+        "Fecha",
+        "Dependencia",
+        "Validación conjunta",
+        "Duplicados"
+      ]
+    },
+    "Campo obligatorio": { "type": "boolean" },
+    "Mensaje de error": { "type": "string" },
+    "Descripción": { "type": "string" },
+    "Ejemplo": {},
+    "Header": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "Header rule": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "Regla": {}
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "Tipo de dato": { "const": "Texto" } } },
+      "then": {
+        "properties": {
+          "Regla": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["Longitud mínima", "Longitud máxima"],
+            "properties": {
+              "Longitud mínima": { "type": "integer", "minimum": 0 },
+              "Longitud máxima": { "type": "integer", "minimum": 0 }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "Tipo de dato": { "const": "Número" } } },
+      "then": {
+        "properties": {
+          "Regla": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["Valor mínimo", "Valor máximo", "Número de decimales"],
+            "properties": {
+              "Valor mínimo": { "type": ["number", "null"] },
+              "Valor máximo": { "type": ["number", "null"] },
+              "Número de decimales": { "type": "integer", "minimum": 0 }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "Tipo de dato": { "const": "Documento" } } },
+      "then": {
+        "properties": {
+          "Regla": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["Longitud mínima", "Longitud máxima"],
+            "properties": {
+              "Longitud mínima": { "type": "integer", "minimum": 1 },
+              "Longitud máxima": { "type": "integer", "minimum": 1 }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "Tipo de dato": { "const": "Lista" } } },
+      "then": {
+        "properties": {
+          "Regla": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["Lista"],
+            "properties": {
+              "Lista": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "Tipo de dato": { "const": "Lista compleja" } } },
+      "then": {
+        "properties": {
+          "Regla": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["Lista compleja"],
+            "properties": {
+              "Lista compleja": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "minProperties": 1,
+                  "additionalProperties": {
+                    "oneOf": [
+                      { "type": "string", "minLength": 1 },
+                      { "type": "number" }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "Tipo de dato": { "const": "Teléfono" } } },
+      "then": {
+        "properties": {
+          "Regla": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["Longitud mínima", "Código de país"],
+            "properties": {
+              "Longitud mínima": { "type": "integer", "minimum": 1 },
+              "Código de país": { "type": "string", "pattern": "^\\+\\d{1,3}$" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "Tipo de dato": { "const": "Correo" } } },
+      "then": {
+        "properties": {
+          "Regla": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["Formato", "Longitud máxima"],
+            "properties": {
+              "Formato": { "type": "string" },
+              "Longitud máxima": { "type": "integer", "minimum": 1 }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "Tipo de dato": { "const": "Fecha" } } },
+      "then": {
+        "properties": {
+          "Regla": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["Formato", "Fecha mínima", "Fecha máxima"],
+            "properties": {
+              "Formato": { "type": "string", "enum": ["yyyy-MM-dd", "dd/MM/yyyy", "MM-dd-yyyy"] },
+              "Fecha mínima": { "type": "string", "minLength": 1 },
+              "Fecha máxima": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "Tipo de dato": { "const": "Dependencia" } } },
+      "then": {
+        "properties": {
+          "Regla": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["reglas especifica"],
+            "properties": {
+              "reglas especifica": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "minProperties": 2,
+                  "properties": {
+                    "Texto": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["Longitud mínima", "Longitud máxima"],
+                      "properties": {
+                        "Longitud mínima": { "type": "integer", "minimum": 0 },
+                        "Longitud máxima": { "type": "integer", "minimum": 0 }
+                      }
+                    },
+                    "Número": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["Valor mínimo", "Valor máximo", "Número de decimales"],
+                      "properties": {
+                        "Valor mínimo": { "type": ["number", "null"] },
+                        "Valor máximo": { "type": ["number", "null"] },
+                        "Número de decimales": { "type": "integer", "minimum": 0 }
+                      }
+                    },
+                    "Documento": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["Longitud mínima", "Longitud máxima"],
+                      "properties": {
+                        "Longitud mínima": { "type": "integer", "minimum": 1 },
+                        "Longitud máxima": { "type": "integer", "minimum": 1 }
+                      }
+                    },
+                    "Lista": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["Lista"],
+                      "properties": {
+                        "Lista": {
+                          "type": "array",
+                          "minItems": 1,
+                          "items": { "type": "string", "minLength": 1 }
+                        }
+                      }
+                    },
+                    "Lista compleja": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["Lista compleja"],
+                      "properties": {
+                        "Lista compleja": {
+                          "type": "array",
+                          "minItems": 1,
+                          "items": {
+                            "type": "object",
+                            "minProperties": 1,
+                            "additionalProperties": {
+                              "anyOf": [
+                                { "type": "string", "minLength": 1 },
+                                { "type": "number" }
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "Teléfono": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["Longitud mínima", "Código de país"],
+                      "properties": {
+                        "Longitud mínima": { "type": "integer", "minimum": 1 },
+                        "Código de país": { "type": "string", "pattern": "^\\+\\d{1,3}$" }
+                      }
+                    },
+                    "Correo": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["Formato", "Longitud máxima"],
+                      "properties": {
+                        "Formato": { "type": "string", "minLength": 1 },
+                        "Longitud máxima": { "type": "integer", "minimum": 1 }
+                      }
+                    },
+                    "Fecha": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["Formato", "Fecha mínima", "Fecha máxima"],
+                      "properties": {
+                        "Formato": { "type": "string", "enum": ["yyyy-MM-dd", "dd/MM/yyyy", "MM-dd-yyyy"] },
+                        "Fecha mínima": { "type": "string", "minLength": 1 },
+                        "Fecha máxima": { "type": "string", "minLength": 1 }
+                      }
+                    }
+                  },
+                  "patternProperties": {
+                    "^(?!(Texto|Número|Documento|Lista|Lista compleja|Teléfono|Correo|Fecha)$).+": {
+                      "anyOf": [
+                        { "type": "string", "minLength": 1 },
+                        { "type": "number" },
+                        { "type": "boolean" },
+                        {
+                          "type": "array",
+                          "minItems": 1,
+                          "items": {
+                            "anyOf": [
+                              { "type": "string", "minLength": 1 },
+                              { "type": "number" },
+                              { "type": "boolean" },
+                              {
+                                "type": "array",
+                                "minItems": 1,
+                                "items": {
+                                  "anyOf": [
+                                    { "type": "string", "minLength": 1 },
+                                    { "type": "number" },
+                                    { "type": "boolean" }
+                                  ]
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "additionalProperties": false,
+                  "anyOf": [
+                    { "required": ["Texto"] },
+                    { "required": ["Número"] },
+                    { "required": ["Documento"] },
+                    { "required": ["Lista"] },
+                    { "required": ["Lista compleja"] },
+                    { "required": ["Teléfono"] },
+                    { "required": ["Correo"] },
+                    { "required": ["Fecha"] }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "Tipo de dato": { "const": "Validación conjunta" } } },
+      "then": {
+        "properties": {
+          "Regla": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["Nombre de campos"],
+            "properties": {
+              "Nombre de campos": {
+                "type": "array",
+                "minItems": 1,
+                "items": { "type": "string", "minLength": 1 }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "Tipo de dato": { "const": "Duplicados" } } },
+      "then": {
+        "properties": {
+          "Regla": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "Campos": {
+                "type": "array",
+                "minItems": 1,
+                "items": { "type": "string", "minLength": 1 }
+              },
+              "Columnas": {
+                "type": "array",
+                "minItems": 1,
+                "items": { "type": "string", "minLength": 1 }
+              },
+              "Fields": {
+                "type": "array",
+                "minItems": 1,
+                "items": { "type": "string", "minLength": 1 }
+              },
+              "fields": {
+                "type": "array",
+                "minItems": 1,
+                "items": { "type": "string", "minLength": 1 }
+              },
+              "Ignorar vacios": { "type": "boolean" },
+              "Ignorar vacíos": { "type": "boolean" },
+              "Ignorar vacias": { "type": "boolean" },
+              "Ignorar vacías": { "type": "boolean" },
+              "Ignore empty": { "type": "boolean" },
+              "Ignore empties": { "type": "boolean" }
+            },
+            "anyOf": [
+              { "required": ["Campos"] },
+              { "required": ["Columnas"] },
+              { "required": ["Fields"] },
+              { "required": ["fields"] }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,13 +1,14 @@
 """Use case for updating user information."""
 
 from dataclasses import replace
-from datetime import datetime
 
 from sqlalchemy.orm import Session
 
 from app.domain.entities import User
 from app.infrastructure.repositories import RoleRepository, UserRepository
 from app.infrastructure.security import get_password_hash
+from app.utils import now_in_app_timezone
+from .validators import ensure_valid_gmail
 
 
 def update_user(
@@ -16,7 +17,6 @@ def update_user(
     user_id: int,
     name: str | None = None,
     email: str | None = None,
-    alias: str | None = None,
     must_change_password: bool | None = None,
     is_active: bool | None = None,
     password: str | None = None,
@@ -33,24 +33,31 @@ def update_user(
 
     new_email = current_user.email
     if email is not None and email != current_user.email:
-        existing_with_email = repository.get_by_email(email)
+        normalized_email = ensure_valid_gmail(email)
+        existing_with_email = repository.get_by_email(normalized_email)
         if existing_with_email and existing_with_email.id != user_id:
             raise ValueError("El correo electrónico ya está registrado")
-        new_email = email
+        new_email = normalized_email
+
+    allowed_roles = role_repository.list_aliases()
 
     new_role = current_user.role
     if role_id is not None and role_id != current_user.role.id:
         role = role_repository.get(role_id)
         if role is None:
             raise ValueError("Rol no encontrado")
+        if role.alias.lower() not in allowed_roles:
+            raise ValueError("Rol no permitido")
         new_role = role
+
+    if current_user.role.alias.lower() not in allowed_roles:
+        raise ValueError("Rol no permitido")
 
     updated_user = replace(
         current_user,
         role=new_role,
         name=name if name is not None else current_user.name,
         email=new_email,
-        alias=alias if alias is not None else current_user.alias,
         must_change_password=(
             must_change_password
             if must_change_password is not None
@@ -58,7 +65,10 @@ def update_user(
         ),
         is_active=is_active if is_active is not None else current_user.is_active,
         updated_by=updated_by if updated_by is not None else current_user.updated_by,
-        updated_at=datetime.utcnow(),
+        updated_at=now_in_app_timezone(),
+        deleted=current_user.deleted,
+        deleted_by=current_user.deleted_by,
+        deleted_at=current_user.deleted_at,
     )
 
     if password:

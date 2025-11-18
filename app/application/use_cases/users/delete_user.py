@@ -5,12 +5,14 @@ from sqlalchemy.orm import Session
 from app.infrastructure.repositories import UserRepository
 
 
-def delete_user(session: Session, user_id: int) -> None:
+def delete_user(
+    session: Session, user_id: int, *, deleted_by: int | None = None
+) -> None:
     """Delete the specified user from the system."""
 
     repository = UserRepository(session)
     user = repository.get(user_id)
     if user is None:
         raise ValueError("Usuario no encontrado")
-    repository.delete(user_id)
+    repository.delete(user_id, deleted_by=deleted_by)
 

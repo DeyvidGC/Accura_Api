@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
-from collections.abc import Generator
+from collections.abc import Generator, Sequence
+
+import logging
+import re
+import urllib.parse
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
-from app.config import get_settings
+from app.config import Settings, get_settings
 
 
 class Base(DeclarativeBase):
@@ -15,13 +19,95 @@ class Base(DeclarativeBase):
 
 
 settings = get_settings()
-connect_args: dict[str, object] = {}
-if settings.database_url.startswith("sqlite"):
-    connect_args = {"check_same_thread": False}
 
-engine = create_engine(
-    settings.database_url, pool_pre_ping=True, connect_args=connect_args
-)
+logger = logging.getLogger(__name__)
+
+_ODBC_DRIVER_PATTERN = re.compile(r"(?i)driver\s*=\s*(\{[^}]+\}|[^;]+)")
+
+
+def _pick_best_sql_server_driver(installed: Sequence[str]) -> str | None:
+    """Return the newest installed SQL Server ODBC driver."""
+
+    if not installed:
+        return None
+
+    def driver_sort_key(name: str) -> tuple[int, str]:
+        version_match = re.search(r"(\d+)", name)
+        version = int(version_match.group(1)) if version_match else -1
+        return (version, name)
+
+    return sorted(installed, key=driver_sort_key)[-1]
+
+
+def _ensure_sql_server_driver(raw_connection: str) -> str:
+    """Ensure the ODBC driver referenced in the connection string exists locally."""
+
+    driver_match = _ODBC_DRIVER_PATTERN.search(raw_connection)
+    if not driver_match:
+        return raw_connection
+
+    driver_token = driver_match.group(1).strip()
+    brace_wrapped = driver_token.startswith("{") and driver_token.endswith("}")
+    driver_name = driver_token[1:-1] if brace_wrapped else driver_token
+
+    try:  # pragma: no cover - pyodbc not installed in unit tests
+        import pyodbc
+    except ModuleNotFoundError:  # pragma: no cover - fallback when pyodbc missing
+        return raw_connection
+
+    installed_drivers = pyodbc.drivers()
+    lookup = {d.lower(): d for d in installed_drivers}
+    normalized_name = driver_name.lower()
+    if normalized_name in lookup:
+        return raw_connection
+
+    sql_server_drivers = [d for d in installed_drivers if "sql server" in d.lower()]
+    replacement = _pick_best_sql_server_driver(sql_server_drivers)
+    if replacement is None:
+        raise RuntimeError(
+            "The configured ODBC driver '%s' is not installed. Install it or update the connection string to use a "
+            "driver that exists on this machine." % driver_name
+        )
+
+    logger.warning(
+        "Configured ODBC driver '%s' is not installed. Falling back to '%s'.",
+        driver_name,
+        replacement,
+    )
+
+    replacement_token = f"{{{replacement}}}" if brace_wrapped else replacement
+    return (
+        raw_connection[: driver_match.start(1)]
+        + replacement_token
+        + raw_connection[driver_match.end(1) :]
+    )
+
+
+def build_odbc_conn_str(settings: Settings) -> str:
+    """Build an Azure SQL / SQL Server ODBC connection string from settings."""
+
+    return (
+        f"Driver={{{settings.db_driver}}};"
+        f"Server=tcp:{settings.db_server},{settings.db_port};"
+        f"Database={settings.db_name};"
+        f"Uid={settings.db_user};"
+        f"Pwd={settings.db_password};"
+        "Encrypt=yes;"
+        "TrustServerCertificate=no;"
+        "Connection Timeout=30;"
+    )
+
+
+def _build_sqlalchemy_database_url(settings: "Settings") -> str:
+    """Construct the SQLAlchemy URL for the configured SQL Server instance."""
+
+    odbc_connection = _ensure_sql_server_driver(build_odbc_conn_str(settings))
+    params = urllib.parse.quote_plus(odbc_connection)
+    return f"mssql+pyodbc:///?odbc_connect={params}"
+
+
+database_url = _build_sqlalchemy_database_url(settings)
+engine = create_engine(database_url, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 

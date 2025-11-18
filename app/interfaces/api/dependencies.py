@@ -1,5 +1,7 @@
 """FastAPI dependency utilities."""
 
+from hashlib import sha256
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
@@ -8,6 +10,10 @@ from app.domain.entities import User
 from app.infrastructure.database import get_db
 from app.infrastructure.repositories import UserRepository
 from app.infrastructure.security import decode_access_token
+from app.infrastructure.openai_client import (
+    OpenAIConfigurationError,
+    StructuredChatService,
+)
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
 
@@ -27,7 +33,14 @@ def get_current_user(
         ) from exc
 
     email: str | None = payload.get("sub")
-    if email is None:
+    password_signature_claim = payload.get("pwd_sig")
+    if email is None or password_signature_claim is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Credenciales inválidas",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    if not isinstance(password_signature_claim, str):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Credenciales inválidas",
@@ -39,6 +52,16 @@ def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Usuario no encontrado",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    expected_signature = sha256(
+        f"{user.password}:{int(user.is_active)}".encode()
+    ).hexdigest()
+    if password_signature_claim != expected_signature:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Credenciales inválidas",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -65,3 +88,15 @@ def require_admin(current_user: User = Depends(get_current_active_user)) -> User
             detail="No autorizado",
         )
     return current_user
+
+
+def get_structured_chat_service() -> StructuredChatService:
+    """Return a configured instance of :class:`StructuredChatService`."""
+
+    try:
+        return StructuredChatService()
+    except OpenAIConfigurationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc

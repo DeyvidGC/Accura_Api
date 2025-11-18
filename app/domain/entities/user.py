@@ -14,7 +14,6 @@ class User:
     id: int | None
     role: Role
     name: str
-    alias: str | None
     email: str
     password: str
     must_change_password: bool
@@ -24,6 +23,9 @@ class User:
     updated_by: int | None
     updated_at: datetime | None
     is_active: bool
+    deleted: bool
+    deleted_by: int | None
+    deleted_at: datetime | None
 
     def has_role(self, alias: str) -> bool:
         """Return ``True`` when the user's role alias matches ``alias``."""

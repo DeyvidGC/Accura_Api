@@ -54,7 +54,7 @@ def _extract_sendgrid_error_details(body: Any) -> str | None:
                 return "; ".join(messages)
         # Fall back to a JSON string for unrecognised payloads
         try:
-            return json.dumps(parsed)
+            return json.dumps(parsed, ensure_ascii=False)
         except (TypeError, ValueError):
             return None
 
@@ -140,6 +140,62 @@ def send_new_user_credentials_email(email: str, password: str) -> bool:
         "<p>Tu usuario ha sido creado correctamente.</p>"
         f"<p><strong>Correo:</strong> {email}<br><strong>Contraseña:</strong> {password}</p>"
         "<p>Por favor, inicia sesión y actualiza tu contraseña lo antes posible.</p>"
+    )
+    return send_email(subject, html_content, email)
+
+
+def send_user_credentials_update_email(
+    email: str,
+    password: str | None,
+    *,
+    email_changed: bool,
+    password_changed: bool,
+) -> bool:
+    """Notify a user about changes to their credentials."""
+
+    subject = "Actualización de credenciales de Accura"
+    messages: list[str] = ["<p>Hola,</p>"]
+
+    if email_changed:
+        messages.append(
+            "<p>Tu correo electrónico de acceso ha sido actualizado correctamente.</p>"
+        )
+
+    if password_changed:
+        if password is not None:
+            messages.append(
+                (
+                    "<p>Se generó una nueva contraseña temporal para tu cuenta.</p>"
+                    f"<p><strong>Contraseña:</strong> {password}</p>"
+                )
+            )
+        else:
+            messages.append(
+                "<p>Tu contraseña fue actualizada correctamente.</p>"
+            )
+    else:
+        messages.append(
+            "<p>Tu contraseña se mantiene sin cambios.</p>"
+        )
+
+    messages.append(
+        "<p>Si tú no solicitaste esta actualización, por favor comunícate con el administrador.</p>"
+    )
+    html_content = "".join(messages)
+    return send_email(subject, html_content, email)
+
+
+def send_user_password_reset_email(email: str, password: str) -> bool:
+    """Send a password reset email with the generated credentials."""
+
+    subject = "Restablecimiento de contraseña de Accura"
+    html_content = "".join(
+        (
+            "<p>Hola,</p>",
+            "<p>Se generó una nueva contraseña temporal para tu cuenta.</p>",
+            f"<p><strong>Contraseña:</strong> {password}</p>",
+            "<p>Por seguridad, inicia sesión y actualiza tu contraseña lo antes posible.</p>",
+        )
     )
     return send_email(subject, html_content, email)
 

@@ -24,21 +24,16 @@ class RoleRead(BaseModel):
 
 class UserBase(BaseModel):
     name: str = Field(..., max_length=50)
-    alias: str | None = Field(default=None, max_length=50)
     email: EmailStr
-    must_change_password: bool = False
 
 
 class UserCreate(UserBase):
-    password: str = Field(..., min_length=8)
     role_id: int = Field(..., ge=1)
 
 
 class UserUpdate(BaseModel):
     name: str | None = Field(default=None, max_length=50)
-    alias: str | None = Field(default=None, max_length=50)
     email: EmailStr | None = None
-    must_change_password: bool | None = None
     password: str | None = Field(default=None, min_length=8)
     is_active: bool | None = None
     role_id: int | None = None
@@ -53,14 +48,28 @@ class UserUpdate(BaseModel):
 class UserRead(BaseModel):
     id: int
     name: str
-    alias: str | None
     email: EmailStr
     must_change_password: bool
     last_login: datetime | None
     created_at: datetime | None
     updated_at: datetime | None
     is_active: bool
+    deleted: bool
+    deleted_by: int | None
+    deleted_at: datetime | None
     role: RoleRead
+
+    if ConfigDict is not None:  # pragma: no branch - runtime configuration
+        model_config = ConfigDict(from_attributes=True)
+    else:  # pragma: no cover - compatibility path for pydantic v1
+        class Config:
+            orm_mode = True
+
+
+class UserSummaryRead(BaseModel):
+    id: int
+    name: str
+    email: EmailStr
 
     if ConfigDict is not None:  # pragma: no branch - runtime configuration
         model_config = ConfigDict(from_attributes=True)

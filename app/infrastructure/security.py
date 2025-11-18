@@ -1,45 +1,64 @@
-# app/infrastructure/security.py
+"""Security helpers for hashing and token generation."""
 
-from datetime import datetime, timedelta
-from jose import jwt, JWTError
+from datetime import timedelta
+import secrets
+import string
+
+from jose import JWTError, jwt
+from passlib.context import CryptContext
+
 from app.config import get_settings
+from app.utils import now_in_app_timezone
 
-# 👉 Parchea bcrypt ANTES de importar passlib
-try:
-    import bcrypt  # type: ignore
-except ImportError:
-    bcrypt = None  # type: ignore
-else:
-    # En bcrypt>=4 ya no viene __about__; Passlib viejo lo busca.
-    if bcrypt is not None and not hasattr(bcrypt, "__about__"):
-        class _About: __version__ = getattr(bcrypt, "__version__", "")
-        bcrypt.__about__ = _About()  # type: ignore[attr-defined]
-
-from passlib.context import CryptContext  # <-- ahora sí
-
-# ---- Hashing recomendado ----
+# ---- Hashing con UNA SOLA LIBRERÍA (passlib) ----
+# Ajusta "rounds" según tu presupuesto de CPU. 310000 es una buena base hoy.
 pwd_context = CryptContext(
-    schemes=["bcrypt_sha256", "bcrypt"],  # bcrypt_sha256 por defecto
+    schemes=["pbkdf2_sha256"],
     deprecated="auto",
-    bcrypt_sha256__default_rounds=12,
-    bcrypt__truncate_error=False,         # evita el error de 72 bytes si algo usa bcrypt “puro”
+    pbkdf2_sha256__rounds=310_000,
 )
 
+
 def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password, scheme="bcrypt_sha256")
+    return pwd_context.hash(password)  # usa pbkdf2_sha256
+
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
+
 # ---- JWT ----
 settings = get_settings()
 
+
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
-    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=settings.access_token_expire_minutes))
+    expire = now_in_app_timezone() + (
+        expires_delta or timedelta(minutes=settings.access_token_expire_minutes)
+    )
     return jwt.encode({**data, "exp": expire}, settings.secret_key, algorithm="HS256")
+
 
 def decode_access_token(token: str) -> dict:
     try:
         return jwt.decode(token, settings.secret_key, algorithms=["HS256"])
     except JWTError as exc:
         raise ValueError("Could not validate credentials") from exc
+
+
+def generate_secure_password() -> str:
+    """Generate a random password between 8 and 12 characters."""
+
+    alphabet = string.ascii_letters + string.digits + string.punctuation
+    length = secrets.choice(range(8, 13))
+
+    while True:
+        password = "".join(secrets.choice(alphabet) for _ in range(length))
+        if (
+            any(char.islower() for char in password)
+            and any(char.isupper() for char in password)
+            and any(char.isdigit() for char in password)
+            and any(char in string.punctuation for char in password)
+        ):
+            return password
+
+
