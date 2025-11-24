@@ -353,16 +353,20 @@ def _contains_complex_structure(value: Any, dependent_label: str | None) -> bool
             ]
             if len(keys) == 1 and dep_keys:
                 return _contains_complex_structure(value[dep_keys[0]], None)
-        return True
+
+        has_nested_values = False
+        for nested_value in value.values():
+            if isinstance(nested_value, Mapping) or (
+                isinstance(nested_value, Sequence)
+                and not isinstance(nested_value, (str, bytes))
+            ):
+                has_nested_values = True
+                if _contains_complex_structure(nested_value, dependent_label):
+                    return True
+        return has_nested_values
 
     if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
-        if not value:
-            return False
-        return any(
-            _contains_complex_structure(item, dependent_label)
-            or isinstance(item, Mapping)
-            for item in value
-        )
+        return any(_contains_complex_structure(item, dependent_label) for item in value)
 
     return False
 
@@ -615,7 +619,7 @@ def _generate_dependency_headers(payload: Mapping[str, Any]) -> list[str]:
 
     parameter_labels = [
         label
-        for label in (structural_parameters or inferred_headers)
+        for label in structural_parameters
         if (
             (not conditioned_normalized or _normalize_for_matching(label) != conditioned_normalized)
             and (not dependent_normalized or _normalize_for_matching(label) != dependent_normalized)
@@ -624,20 +628,36 @@ def _generate_dependency_headers(payload: Mapping[str, Any]) -> list[str]:
     parameter_labels = _deduplicate_headers(parameter_labels)
 
     if not has_complex_rules:
-        # Fallback: if we inferred any rule-like fields beyond the conditioned
-        # column and the dependent label, treat the dependency as complex. This
-        # guards against payloads where nested constraints exist but the
-        # detection above could not match the dependent label (e.g. aliases or
-        # inconsistent naming).
-        has_extra_fields = False
+        # Fallback: if we inferred any parameter-like fields beyond the
+        # conditioned column and the dependent label, treat the dependency as
+        # complex. This guards against payloads where nested constraints exist
+        # but the detection above could not match the dependent label (e.g.
+        # aliases or inconsistent naming).
+        has_parameter_like_fields = False
         for label in inferred_headers:
             normalized = _normalize_for_matching(label)
             if normalized == conditioned_normalized or normalized == dependent_normalized:
                 continue
-            has_extra_fields = True
-            break
-        if has_extra_fields:
+            if normalized in _PARAMETER_LABEL_MARKERS:
+                has_parameter_like_fields = True
+                break
+        if has_parameter_like_fields:
             has_complex_rules = True
+
+    if has_complex_rules and not parameter_labels:
+        # As a last resort for complex dependencies, derive candidate parameter
+        # labels from the inferred leaves (excluding conditioned/dependent
+        # columns) so the backend can rebuild the correct Header when markers
+        # are unconventional.
+        fallback_parameters = [
+            label
+            for label in inferred_headers
+            if (
+                (not conditioned_normalized or _normalize_for_matching(label) != conditioned_normalized)
+                and (not dependent_normalized or _normalize_for_matching(label) != dependent_normalized)
+            )
+        ]
+        parameter_labels = _deduplicate_headers(fallback_parameters)
 
     # If we can detect any internal parameters beyond the conditioned and
     # dependent labels, treat the dependency as complex and exclude the
@@ -650,7 +670,24 @@ def _generate_dependency_headers(payload: Mapping[str, Any]) -> list[str]:
     else:
         if dependent_label:
             headers.append(dependent_label)
-        headers.extend(inferred_headers)
+        if not dependent_label:
+            headers.extend(inferred_headers)
+
+        # Avoid introducing leaf keys from nested value lists (por ejemplo,
+        # llaves como "code" dentro de listas de opciones) when a dependent
+        # column is already defined; those should remain inside the dependent
+        # object and not surface as headers.
+        if dependent_label and headers:
+            normalized_conditioned = _normalize_for_matching(headers[0])
+            normalized_dependent = _normalize_for_matching(dependent_label)
+            headers = _deduplicate_headers(
+                [
+                    label
+                    for label in headers
+                    if _normalize_for_matching(label)
+                    in {normalized_conditioned, normalized_dependent}
+                ]
+            )
 
     return _deduplicate_headers(headers)
 
@@ -940,11 +977,16 @@ class StructuredChatService:
             "extrae únicamente las propiedades configurables que aparezcan como hojas "
             "(por ejemplo: 'Tipo de documento', 'Longitud mínima', 'Longitud máxima'), "
             "respetando sus nombres exactos y sin traducirlos ni agregar etiquetas nuevas. "
-            "Normaliza y deduplica esos encabezados antes de responder. Si el campo dependiente "
-            "tiene parámetros internos (longitudes, mínimos, máximos, rangos), incluye solo la "
-            "columna condicionante y esos parámetros en 'Header'; nunca incluyas el nombre del "
-            "campo dependiente en ese caso. "
-            "Si el modelo no encuentra hojas, deja el arreglo vacío y el sistema completará el valor. "
+            "Recuerda que el backend recalcula 'Header' basándose solo en 'Regla': "
+            "si el dependiente tiene parámetros internos (longitudes, mínimos, máximos, rangos), "
+            "define esos parámetros dentro del objeto del dependiente y asegúrate de que las hojas "
+            "incluyan únicamente la columna condicionante y los nombres de esos parámetros; "
+            "nunca mezcles el nombre del dependiente en ese caso. "
+            "Si la dependencia solo usa listas de valores permitidos (sin parámetros internos), "
+            "mantén dos columnas claras (condicionante y dependiente) y conserva el dependiente "
+            "dentro de las listas sin añadir parámetros. Normaliza y deduplica los encabezados "
+            "antes de responder. Si el modelo no encuentra hojas, deja el arreglo vacío y el "
+            "sistema completará el valor. "
             "Para las reglas 'Lista compleja' aplica la misma lógica: toma los encabezados "
             "directamente de las columnas declaradas dentro de 'Lista compleja' en el primer "
             "bloque disponible y, si no detectas columnas válidas, deja 'Header' vacío para "
