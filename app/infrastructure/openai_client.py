@@ -453,6 +453,16 @@ def _generate_dependency_headers(payload: Mapping[str, Any]) -> list[str]:
     conditioned_label = header_rule_entries[0] if header_rule_entries else None
     dependent_label = header_rule_entries[1] if len(header_rule_entries) > 1 else None
 
+    # If the payload does not provide clear conditioned/dependent labels, try to
+    # infer them from the dependency definition itself.
+    if not conditioned_label or not dependent_label:
+        inferred_rule_headers = _extract_dependency_header_fields(payload.get("Regla"))
+        if inferred_rule_headers:
+            if not conditioned_label:
+                conditioned_label = inferred_rule_headers[0]
+            if not dependent_label and len(inferred_rule_headers) > 1:
+                dependent_label = inferred_rule_headers[1]
+
     headers: list[str] = []
     if conditioned_label:
         headers.append(conditioned_label)
@@ -482,6 +492,24 @@ def _generate_dependency_headers(payload: Mapping[str, Any]) -> list[str]:
             has_extra_fields = True
             break
         if has_extra_fields:
+            has_complex_rules = True
+
+    # If we can detect any internal parameters beyond the conditioned and
+    # dependent labels, treat the dependency as complex and exclude the
+    # dependent label from the final Header list.
+    if not has_complex_rules:
+        extra_parameters = [
+            label
+            for label in inferred_headers
+            if (
+                (not conditioned_label or _normalize_for_matching(label) != conditioned_normalized)
+                and (
+                    not dependent_label
+                    or _normalize_for_matching(label) != dependent_normalized
+                )
+            )
+        ]
+        if extra_parameters:
             has_complex_rules = True
 
     if has_complex_rules:
