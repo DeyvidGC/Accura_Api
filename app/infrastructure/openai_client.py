@@ -309,6 +309,88 @@ def _extract_dependency_leaf_labels(rule_block: Any) -> list[str]:
     return ordered
 
 
+def _contains_complex_structure(value: Any, dependent_label: str | None) -> bool:
+    """Detect whether a dependency value contains nested rules beyond simple lists."""
+
+    if isinstance(value, Mapping):
+        keys = [key for key in value.keys() if isinstance(key, str)]
+        if dependent_label:
+            normalized_dep = _normalize_for_matching(dependent_label)
+            dep_keys = [
+                key for key in keys if _normalize_for_matching(key) == normalized_dep
+            ]
+            if len(keys) == 1 and dep_keys:
+                return _contains_complex_structure(value[dep_keys[0]], None)
+        return True
+
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        if not value:
+            return False
+        return any(
+            _contains_complex_structure(item, dependent_label)
+            or isinstance(item, Mapping)
+            for item in value
+        )
+
+    return False
+
+
+def _dependency_has_complex_rules(
+    specifics: Sequence[Mapping[str, Any]], dependent_label: str | None
+) -> bool:
+    """Return True when the dependent column includes nested constraints."""
+
+    if not specifics:
+        return False
+
+    normalized_dep = (
+        _normalize_for_matching(dependent_label) if dependent_label else None
+    )
+
+    for entry in specifics:
+        if not isinstance(entry, Mapping):
+            continue
+
+        if normalized_dep:
+            for key, value in entry.items():
+                if not isinstance(key, str):
+                    continue
+                if _normalize_for_matching(key) != normalized_dep:
+                    continue
+                if _contains_complex_structure(value, dependent_label):
+                    return True
+
+        for key, value in entry.items():
+            if not isinstance(key, str):
+                continue
+            normalized_key = _normalize_for_matching(key)
+            if normalized_key not in _DEPENDENCY_TYPE_ALIASES:
+                continue
+
+            if (
+                normalized_dep
+                and isinstance(value, Mapping)
+                and any(
+                    isinstance(nested_key, str)
+                    and _normalize_for_matching(nested_key) == normalized_dep
+                    for nested_key in value.keys()
+                )
+            ):
+                for nested_key, nested_value in value.items():
+                    if not isinstance(nested_key, str):
+                        continue
+                    if _normalize_for_matching(nested_key) != normalized_dep:
+                        continue
+                    if _contains_complex_structure(nested_value, dependent_label):
+                        return True
+                    break
+
+            if _contains_complex_structure(value, dependent_label):
+                return True
+
+    return False
+
+
 def _extract_dependency_header_fields(rule_config: Any) -> list[str]:
     """Infer header combinations for dependency rules."""
 
@@ -366,7 +448,38 @@ def _generate_dependency_headers(payload: Mapping[str, Any]) -> list[str]:
     """Return a normalized list of headers derived from dependency leaves."""
 
     inferred_headers = _infer_dependency_headers(payload)
-    return _deduplicate_headers(inferred_headers) if inferred_headers else []
+
+    header_rule_entries = _extract_header_entries(payload.get("Header rule"))
+    conditioned_label = header_rule_entries[0] if header_rule_entries else None
+    dependent_label = header_rule_entries[1] if len(header_rule_entries) > 1 else None
+
+    headers: list[str] = []
+    if conditioned_label:
+        headers.append(conditioned_label)
+
+    rule_block = payload.get("Regla") if isinstance(payload, Mapping) else None
+    specifics = _iter_dependency_specifics(rule_block)
+    has_complex_rules = _dependency_has_complex_rules(specifics, dependent_label)
+
+    if has_complex_rules:
+        filtered = []
+        normalized_dependent = (
+            _normalize_for_matching(dependent_label) if dependent_label else None
+        )
+        for label in inferred_headers:
+            if (
+                normalized_dependent
+                and _normalize_for_matching(label) == normalized_dependent
+            ):
+                continue
+            filtered.append(label)
+        headers.extend(filtered)
+    else:
+        if dependent_label:
+            headers.append(dependent_label)
+        headers.extend(inferred_headers)
+
+    return _deduplicate_headers(headers)
 
 
 def _infer_header_rule(payload: Mapping[str, Any]) -> list[str]:
