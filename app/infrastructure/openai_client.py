@@ -55,6 +55,25 @@ _SIMPLE_RULE_HEADERS: dict[str, tuple[str, ...]] = {
     "Fecha": ("Formato", "Fecha mínima", "Fecha máxima"),
 }
 
+_PARAMETER_LABEL_MARKERS: set[str] = {
+    _normalize_for_matching(label)
+    for values in _SIMPLE_RULE_HEADERS.values()
+    for label in values
+}
+_PARAMETER_LABEL_MARKERS.update(
+    {
+        "minimo",
+        "maximo",
+        "minima",
+        "maxima",
+        "rango permitido",
+        "rango minimo",
+        "rango maximo",
+        "rango",
+        "valores permitidos",
+    }
+)
+
 _DEPENDENCY_TYPE_ALIASES: set[str] = {
     "texto",
     "numero",
@@ -269,6 +288,18 @@ def _collect_leaf_labels(value: Any, add_label: Callable[[str], None]) -> None:
             _collect_leaf_labels(entry, add_label)
 
 
+def _collect_leaf_label_list(value: Any) -> list[str]:
+    """Return the list of leaf labels found in the provided value."""
+
+    collected: list[str] = []
+
+    def _append(label: str) -> None:
+        collected.append(label)
+
+    _collect_leaf_labels(value, _append)
+    return collected
+
+
 def _extract_dependency_leaf_labels(rule_block: Any) -> list[str]:
     """Return the leaf labels that exist in the dependency specifics block."""
 
@@ -391,6 +422,98 @@ def _dependency_has_complex_rules(
     return False
 
 
+def _detect_internal_parameter_labels(
+    rule_block: Any, conditioned_label: str | None
+) -> tuple[list[str], str | None]:
+    """Return parameter labels and a candidate dependent column when present."""
+
+    specifics = _iter_dependency_specifics(rule_block)
+    if not specifics:
+        return [], None
+
+    conditioned_normalized = (
+        _normalize_for_matching(conditioned_label) if conditioned_label else None
+    )
+
+    seen_params: set[str] = set()
+    parameter_labels: list[str] = []
+    dependent_candidate: str | None = None
+
+    def maybe_add_param(label: str) -> None:
+        normalized = _normalize_for_matching(label)
+        if normalized in seen_params:
+            return
+        seen_params.add(normalized)
+        parameter_labels.append(label)
+
+    def inspect_mapping(mapping: Mapping[str, Any]) -> None:
+        nonlocal dependent_candidate
+
+        for key, value in mapping.items():
+            if not isinstance(key, str):
+                if isinstance(value, Mapping):
+                    inspect_mapping(value)
+                elif isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+                    for item in value:
+                        if isinstance(item, Mapping):
+                            inspect_mapping(item)
+                continue
+
+            stripped_key = key.strip()
+            if not stripped_key:
+                if isinstance(value, Mapping):
+                    inspect_mapping(value)
+                elif isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+                    for item in value:
+                        if isinstance(item, Mapping):
+                            inspect_mapping(item)
+                continue
+
+            normalized_key = _normalize_for_matching(stripped_key)
+            if normalized_key in _DEPENDENCY_TYPE_ALIASES:
+                if isinstance(value, Mapping):
+                    inspect_mapping(value)
+                elif isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+                    for item in value:
+                        if isinstance(item, Mapping):
+                            inspect_mapping(item)
+                continue
+
+            if conditioned_normalized and normalized_key == conditioned_normalized:
+                if isinstance(value, Mapping):
+                    inspect_mapping(value)
+                elif isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+                    for item in value:
+                        if isinstance(item, Mapping):
+                            inspect_mapping(item)
+                continue
+
+            if isinstance(value, Mapping):
+                leaf_labels = _collect_leaf_label_list(value)
+                has_marker = any(
+                    _normalize_for_matching(label) in _PARAMETER_LABEL_MARKERS
+                    for label in leaf_labels
+                )
+                if has_marker and dependent_candidate is None:
+                    dependent_candidate = stripped_key
+
+                for label in leaf_labels:
+                    if _normalize_for_matching(label) in _PARAMETER_LABEL_MARKERS:
+                        maybe_add_param(label)
+
+                inspect_mapping(value)
+            elif isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+                for item in value:
+                    if isinstance(item, Mapping):
+                        inspect_mapping(item)
+
+    for entry in specifics:
+        if isinstance(entry, Mapping):
+            inspect_mapping(entry)
+
+    return parameter_labels, dependent_candidate
+
+
 def _extract_dependency_header_fields(rule_config: Any) -> list[str]:
     """Infer header combinations for dependency rules."""
 
@@ -473,6 +596,15 @@ def _generate_dependency_headers(payload: Mapping[str, Any]) -> list[str]:
         rule_block, specifics, dependent_label
     )
 
+    structural_parameters, dependent_from_structure = _detect_internal_parameter_labels(
+        rule_block, conditioned_label
+    )
+    if not dependent_label and dependent_from_structure:
+        dependent_label = dependent_from_structure
+        has_complex_rules = _dependency_has_complex_rules(
+            rule_block, specifics, dependent_label
+        )
+
     conditioned_normalized = (
         _normalize_for_matching(conditioned_label) if conditioned_label else None
     )
@@ -482,12 +614,13 @@ def _generate_dependency_headers(payload: Mapping[str, Any]) -> list[str]:
 
     parameter_labels = [
         label
-        for label in inferred_headers
+        for label in (structural_parameters or inferred_headers)
         if (
             (not conditioned_normalized or _normalize_for_matching(label) != conditioned_normalized)
             and (not dependent_normalized or _normalize_for_matching(label) != dependent_normalized)
         )
     ]
+    parameter_labels = _deduplicate_headers(parameter_labels)
 
     if not has_complex_rules:
         # Fallback: if we inferred any rule-like fields beyond the conditioned
