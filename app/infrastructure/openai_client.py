@@ -336,12 +336,9 @@ def _contains_complex_structure(value: Any, dependent_label: str | None) -> bool
 
 
 def _dependency_has_complex_rules(
-    specifics: Sequence[Mapping[str, Any]], dependent_label: str | None
+    rule_block: Any, specifics: Sequence[Mapping[str, Any]], dependent_label: str | None
 ) -> bool:
     """Return True when the dependent column includes nested constraints."""
-
-    if not specifics:
-        return False
 
     normalized_dep = (
         _normalize_for_matching(dependent_label) if dependent_label else None
@@ -387,6 +384,9 @@ def _dependency_has_complex_rules(
 
             if _contains_complex_structure(value, dependent_label):
                 return True
+
+    if not specifics and _contains_complex_structure(rule_block, dependent_label):
+        return True
 
     return False
 
@@ -459,7 +459,30 @@ def _generate_dependency_headers(payload: Mapping[str, Any]) -> list[str]:
 
     rule_block = payload.get("Regla") if isinstance(payload, Mapping) else None
     specifics = _iter_dependency_specifics(rule_block)
-    has_complex_rules = _dependency_has_complex_rules(specifics, dependent_label)
+    has_complex_rules = _dependency_has_complex_rules(
+        rule_block, specifics, dependent_label
+    )
+    if not has_complex_rules:
+        # Fallback: if we inferred any rule-like fields beyond the conditioned
+        # column and the dependent label, treat the dependency as complex. This
+        # guards against payloads where nested constraints exist but the
+        # detection above could not match the dependent label (e.g. aliases or
+        # inconsistent naming).
+        conditioned_normalized = (
+            _normalize_for_matching(conditioned_label) if conditioned_label else None
+        )
+        dependent_normalized = (
+            _normalize_for_matching(dependent_label) if dependent_label else None
+        )
+        has_extra_fields = False
+        for label in inferred_headers:
+            normalized = _normalize_for_matching(label)
+            if normalized == conditioned_normalized or normalized == dependent_normalized:
+                continue
+            has_extra_fields = True
+            break
+        if has_extra_fields:
+            has_complex_rules = True
 
     if has_complex_rules:
         filtered = []
