@@ -20,6 +20,14 @@ from app.schemas import load_regla_de_campo_schema
 
 logger = logging.getLogger(__name__)
 
+
+def _normalize_for_matching(text: str) -> str:
+    """Return a lowercase, accent-free version of the text."""
+
+    normalized = unicodedata.normalize("NFD", text.lower())
+    return "".join(ch for ch in normalized if unicodedata.category(ch) != "Mn")
+
+
 _RELEVANT_KEYWORDS: tuple[str, ...] = (
     "regla",
     "reglas",
@@ -54,6 +62,25 @@ _SIMPLE_RULE_HEADERS: dict[str, tuple[str, ...]] = {
     "Correo": ("Formato", "Longitud máxima"),
     "Fecha": ("Formato", "Fecha mínima", "Fecha máxima"),
 }
+
+_PARAMETER_LABEL_MARKERS: set[str] = {
+    _normalize_for_matching(label)
+    for values in _SIMPLE_RULE_HEADERS.values()
+    for label in values
+}
+_PARAMETER_LABEL_MARKERS.update(
+    {
+        "minimo",
+        "maximo",
+        "minima",
+        "maxima",
+        "rango permitido",
+        "rango minimo",
+        "rango maximo",
+        "rango",
+        "valores permitidos",
+    }
+)
 
 _DEPENDENCY_TYPE_ALIASES: set[str] = {
     "texto",
@@ -109,13 +136,6 @@ def _is_broad_catalog_request(message: str) -> bool:
         "catalogo",
     )
     return any(keyword in normalized for keyword in catalog_keywords)
-
-
-def _normalize_for_matching(text: str) -> str:
-    """Return a lowercase, accent-free version of the text."""
-
-    normalized = unicodedata.normalize("NFD", text.lower())
-    return "".join(ch for ch in normalized if unicodedata.category(ch) != "Mn")
 
 
 def _extract_composite_header_fields(rule_config: Any) -> list[str]:
@@ -269,6 +289,18 @@ def _collect_leaf_labels(value: Any, add_label: Callable[[str], None]) -> None:
             _collect_leaf_labels(entry, add_label)
 
 
+def _collect_leaf_label_list(value: Any) -> list[str]:
+    """Return the list of leaf labels found in the provided value."""
+
+    collected: list[str] = []
+
+    def _append(label: str) -> None:
+        collected.append(label)
+
+    _collect_leaf_labels(value, _append)
+    return collected
+
+
 def _extract_dependency_leaf_labels(rule_block: Any) -> list[str]:
     """Return the leaf labels that exist in the dependency specifics block."""
 
@@ -391,6 +423,98 @@ def _dependency_has_complex_rules(
     return False
 
 
+def _detect_internal_parameter_labels(
+    rule_block: Any, conditioned_label: str | None
+) -> tuple[list[str], str | None]:
+    """Return parameter labels and a candidate dependent column when present."""
+
+    specifics = _iter_dependency_specifics(rule_block)
+    if not specifics:
+        return [], None
+
+    conditioned_normalized = (
+        _normalize_for_matching(conditioned_label) if conditioned_label else None
+    )
+
+    seen_params: set[str] = set()
+    parameter_labels: list[str] = []
+    dependent_candidate: str | None = None
+
+    def maybe_add_param(label: str) -> None:
+        normalized = _normalize_for_matching(label)
+        if normalized in seen_params:
+            return
+        seen_params.add(normalized)
+        parameter_labels.append(label)
+
+    def inspect_mapping(mapping: Mapping[str, Any]) -> None:
+        nonlocal dependent_candidate
+
+        for key, value in mapping.items():
+            if not isinstance(key, str):
+                if isinstance(value, Mapping):
+                    inspect_mapping(value)
+                elif isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+                    for item in value:
+                        if isinstance(item, Mapping):
+                            inspect_mapping(item)
+                continue
+
+            stripped_key = key.strip()
+            if not stripped_key:
+                if isinstance(value, Mapping):
+                    inspect_mapping(value)
+                elif isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+                    for item in value:
+                        if isinstance(item, Mapping):
+                            inspect_mapping(item)
+                continue
+
+            normalized_key = _normalize_for_matching(stripped_key)
+            if normalized_key in _DEPENDENCY_TYPE_ALIASES:
+                if isinstance(value, Mapping):
+                    inspect_mapping(value)
+                elif isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+                    for item in value:
+                        if isinstance(item, Mapping):
+                            inspect_mapping(item)
+                continue
+
+            if conditioned_normalized and normalized_key == conditioned_normalized:
+                if isinstance(value, Mapping):
+                    inspect_mapping(value)
+                elif isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+                    for item in value:
+                        if isinstance(item, Mapping):
+                            inspect_mapping(item)
+                continue
+
+            if isinstance(value, Mapping):
+                leaf_labels = _collect_leaf_label_list(value)
+                has_marker = any(
+                    _normalize_for_matching(label) in _PARAMETER_LABEL_MARKERS
+                    for label in leaf_labels
+                )
+                if has_marker and dependent_candidate is None:
+                    dependent_candidate = stripped_key
+
+                for label in leaf_labels:
+                    if _normalize_for_matching(label) in _PARAMETER_LABEL_MARKERS:
+                        maybe_add_param(label)
+
+                inspect_mapping(value)
+            elif isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+                for item in value:
+                    if isinstance(item, Mapping):
+                        inspect_mapping(item)
+
+    for entry in specifics:
+        if isinstance(entry, Mapping):
+            inspect_mapping(entry)
+
+    return parameter_labels, dependent_candidate
+
+
 def _extract_dependency_header_fields(rule_config: Any) -> list[str]:
     """Infer header combinations for dependency rules."""
 
@@ -453,6 +577,16 @@ def _generate_dependency_headers(payload: Mapping[str, Any]) -> list[str]:
     conditioned_label = header_rule_entries[0] if header_rule_entries else None
     dependent_label = header_rule_entries[1] if len(header_rule_entries) > 1 else None
 
+    # If the payload does not provide clear conditioned/dependent labels, try to
+    # infer them from the dependency definition itself.
+    if not conditioned_label or not dependent_label:
+        inferred_rule_headers = _extract_dependency_header_fields(payload.get("Regla"))
+        if inferred_rule_headers:
+            if not conditioned_label:
+                conditioned_label = inferred_rule_headers[0]
+            if not dependent_label and len(inferred_rule_headers) > 1:
+                dependent_label = inferred_rule_headers[1]
+
     headers: list[str] = []
     if conditioned_label:
         headers.append(conditioned_label)
@@ -462,18 +596,39 @@ def _generate_dependency_headers(payload: Mapping[str, Any]) -> list[str]:
     has_complex_rules = _dependency_has_complex_rules(
         rule_block, specifics, dependent_label
     )
+
+    structural_parameters, dependent_from_structure = _detect_internal_parameter_labels(
+        rule_block, conditioned_label
+    )
+    if not dependent_label and dependent_from_structure:
+        dependent_label = dependent_from_structure
+        has_complex_rules = _dependency_has_complex_rules(
+            rule_block, specifics, dependent_label
+        )
+
+    conditioned_normalized = (
+        _normalize_for_matching(conditioned_label) if conditioned_label else None
+    )
+    dependent_normalized = (
+        _normalize_for_matching(dependent_label) if dependent_label else None
+    )
+
+    parameter_labels = [
+        label
+        for label in (structural_parameters or inferred_headers)
+        if (
+            (not conditioned_normalized or _normalize_for_matching(label) != conditioned_normalized)
+            and (not dependent_normalized or _normalize_for_matching(label) != dependent_normalized)
+        )
+    ]
+    parameter_labels = _deduplicate_headers(parameter_labels)
+
     if not has_complex_rules:
         # Fallback: if we inferred any rule-like fields beyond the conditioned
         # column and the dependent label, treat the dependency as complex. This
         # guards against payloads where nested constraints exist but the
         # detection above could not match the dependent label (e.g. aliases or
         # inconsistent naming).
-        conditioned_normalized = (
-            _normalize_for_matching(conditioned_label) if conditioned_label else None
-        )
-        dependent_normalized = (
-            _normalize_for_matching(dependent_label) if dependent_label else None
-        )
         has_extra_fields = False
         for label in inferred_headers:
             normalized = _normalize_for_matching(label)
@@ -484,19 +639,14 @@ def _generate_dependency_headers(payload: Mapping[str, Any]) -> list[str]:
         if has_extra_fields:
             has_complex_rules = True
 
+    # If we can detect any internal parameters beyond the conditioned and
+    # dependent labels, treat the dependency as complex and exclude the
+    # dependent label from the final Header list.
+    if parameter_labels:
+        has_complex_rules = True
+
     if has_complex_rules:
-        filtered = []
-        normalized_dependent = (
-            _normalize_for_matching(dependent_label) if dependent_label else None
-        )
-        for label in inferred_headers:
-            if (
-                normalized_dependent
-                and _normalize_for_matching(label) == normalized_dependent
-            ):
-                continue
-            filtered.append(label)
-        headers.extend(filtered)
+        headers.extend(parameter_labels)
     else:
         if dependent_label:
             headers.append(dependent_label)
@@ -790,6 +940,10 @@ class StructuredChatService:
             "extrae únicamente las propiedades configurables que aparezcan como hojas "
             "(por ejemplo: 'Tipo de documento', 'Longitud mínima', 'Longitud máxima'), "
             "respetando sus nombres exactos y sin traducirlos ni agregar etiquetas nuevas. "
+            "Normaliza y deduplica esos encabezados antes de responder. Si el campo dependiente "
+            "tiene parámetros internos (longitudes, mínimos, máximos, rangos), incluye solo la "
+            "columna condicionante y esos parámetros en 'Header'; nunca incluyas el nombre del "
+            "campo dependiente en ese caso. "
             "Si el modelo no encuentra hojas, deja el arreglo vacío y el sistema completará el valor. "
             "Para las reglas 'Lista compleja' aplica la misma lógica: toma los encabezados "
             "directamente de las columnas declaradas dentro de 'Lista compleja' en el primer "
