@@ -20,6 +20,14 @@ from app.schemas import load_regla_de_campo_schema
 
 logger = logging.getLogger(__name__)
 
+
+def _normalize_for_matching(text: str) -> str:
+    """Return a lowercase, accent-free version of the text."""
+
+    normalized = unicodedata.normalize("NFD", text.lower())
+    return "".join(ch for ch in normalized if unicodedata.category(ch) != "Mn")
+
+
 _RELEVANT_KEYWORDS: tuple[str, ...] = (
     "regla",
     "reglas",
@@ -128,13 +136,6 @@ def _is_broad_catalog_request(message: str) -> bool:
         "catalogo",
     )
     return any(keyword in normalized for keyword in catalog_keywords)
-
-
-def _normalize_for_matching(text: str) -> str:
-    """Return a lowercase, accent-free version of the text."""
-
-    normalized = unicodedata.normalize("NFD", text.lower())
-    return "".join(ch for ch in normalized if unicodedata.category(ch) != "Mn")
 
 
 def _extract_composite_header_fields(rule_config: Any) -> list[str]:
@@ -939,6 +940,10 @@ class StructuredChatService:
             "extrae únicamente las propiedades configurables que aparezcan como hojas "
             "(por ejemplo: 'Tipo de documento', 'Longitud mínima', 'Longitud máxima'), "
             "respetando sus nombres exactos y sin traducirlos ni agregar etiquetas nuevas. "
+            "Normaliza y deduplica esos encabezados antes de responder. Si el campo dependiente "
+            "tiene parámetros internos (longitudes, mínimos, máximos, rangos), incluye solo la "
+            "columna condicionante y esos parámetros en 'Header'; nunca incluyas el nombre del "
+            "campo dependiente en ese caso. "
             "Si el modelo no encuentra hojas, deja el arreglo vacío y el sistema completará el valor. "
             "Para las reglas 'Lista compleja' aplica la misma lógica: toma los encabezados "
             "directamente de las columnas declaradas dentro de 'Lista compleja' en el primer "
