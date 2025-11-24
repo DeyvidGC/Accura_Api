@@ -453,6 +453,16 @@ def _generate_dependency_headers(payload: Mapping[str, Any]) -> list[str]:
     conditioned_label = header_rule_entries[0] if header_rule_entries else None
     dependent_label = header_rule_entries[1] if len(header_rule_entries) > 1 else None
 
+    # If the payload does not provide clear conditioned/dependent labels, try to
+    # infer them from the dependency definition itself.
+    if not conditioned_label or not dependent_label:
+        inferred_rule_headers = _extract_dependency_header_fields(payload.get("Regla"))
+        if inferred_rule_headers:
+            if not conditioned_label:
+                conditioned_label = inferred_rule_headers[0]
+            if not dependent_label and len(inferred_rule_headers) > 1:
+                dependent_label = inferred_rule_headers[1]
+
     headers: list[str] = []
     if conditioned_label:
         headers.append(conditioned_label)
@@ -462,18 +472,29 @@ def _generate_dependency_headers(payload: Mapping[str, Any]) -> list[str]:
     has_complex_rules = _dependency_has_complex_rules(
         rule_block, specifics, dependent_label
     )
+
+    conditioned_normalized = (
+        _normalize_for_matching(conditioned_label) if conditioned_label else None
+    )
+    dependent_normalized = (
+        _normalize_for_matching(dependent_label) if dependent_label else None
+    )
+
+    parameter_labels = [
+        label
+        for label in inferred_headers
+        if (
+            (not conditioned_normalized or _normalize_for_matching(label) != conditioned_normalized)
+            and (not dependent_normalized or _normalize_for_matching(label) != dependent_normalized)
+        )
+    ]
+
     if not has_complex_rules:
         # Fallback: if we inferred any rule-like fields beyond the conditioned
         # column and the dependent label, treat the dependency as complex. This
         # guards against payloads where nested constraints exist but the
         # detection above could not match the dependent label (e.g. aliases or
         # inconsistent naming).
-        conditioned_normalized = (
-            _normalize_for_matching(conditioned_label) if conditioned_label else None
-        )
-        dependent_normalized = (
-            _normalize_for_matching(dependent_label) if dependent_label else None
-        )
         has_extra_fields = False
         for label in inferred_headers:
             normalized = _normalize_for_matching(label)
@@ -484,19 +505,14 @@ def _generate_dependency_headers(payload: Mapping[str, Any]) -> list[str]:
         if has_extra_fields:
             has_complex_rules = True
 
+    # If we can detect any internal parameters beyond the conditioned and
+    # dependent labels, treat the dependency as complex and exclude the
+    # dependent label from the final Header list.
+    if parameter_labels:
+        has_complex_rules = True
+
     if has_complex_rules:
-        filtered = []
-        normalized_dependent = (
-            _normalize_for_matching(dependent_label) if dependent_label else None
-        )
-        for label in inferred_headers:
-            if (
-                normalized_dependent
-                and _normalize_for_matching(label) == normalized_dependent
-            ):
-                continue
-            filtered.append(label)
-        headers.extend(filtered)
+        headers.extend(parameter_labels)
     else:
         if dependent_label:
             headers.append(dependent_label)
